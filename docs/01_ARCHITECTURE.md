@@ -1,4 +1,4 @@
-# SupportGPT Enterprise 技术架构设计
+# SupportGPT 智能客服 Agent 技术架构设计
 
 > 本文从工程实现角度说明当前系统的技术架构。它描述的是已落地的实现与明确未采用的方案，不将规划能力写成现状。项目整体背景、Mock 边界和业务流程以 `00_PROJECT_CONTEXT.md` 为准。
 
@@ -189,7 +189,7 @@ stateDiagram-v2
 | 可替代方案 | 将工单任务、子任务、计划版本、重试计数和执行状态拆为 `TaskState` |
 | 工程权衡 | 独立 TaskState 更适合动态 Planner 和多子任务编排；当前引入会增加状态同步、Schema 演进和恢复兼容成本 |
 
-如果未来引入动态 Planner、多步骤调查或异步任务队列，再将 `AgentState` 拆分为 `TaskState + ExecutionState`。在此之前，不得在 API、文档或简历中声称已有 `TaskState`。
+如果未来引入动态 Planner、多步骤调查或异步任务队列，再将 `AgentState` 拆分为 `TaskState + ExecutionState`。在此之前，不得在 API、文档或对外介绍中声称已有 `TaskState`。
 
 ## 5. Agent 编排、Planner 与 Selector
 
@@ -352,7 +352,7 @@ Policy 在 Action 创建时冻结版本、Tool 版本、角色、风险、允许
 | 节点消费 | Analyzer 用于显式指代和意图延续；Retriever 只取历史 User 问题和实体；Resolver 注入带信任边界的上下文；QA 使用已解析实体 |
 | 设计原因 | SQL 保证耐久和审计，Redis 降低热会话读取成本，有界组装控制 Token 和历史污染 |
 | 可替代方案 | 仅 SQL、仅 Redis、向量化长期记忆、事件流存储 |
-| 最终取舍 | V1 优先可预测的短期/结构化 Memory，不为简历效果提前引入向量长期记忆 |
+| 最终取舍 | V1 优先可预测的短期/结构化 Memory，不提前引入向量长期记忆 |
 
 **重要限制**：当前摘要和实体提取是确定性 V1，仅识别显式订单/运单标识；没有长期语义召回、用户偏好学习、独立多轮评测门禁或真实终端用户身份体系。Checkpoint 仍与用户 Memory 分离。
 

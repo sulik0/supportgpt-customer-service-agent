@@ -162,7 +162,7 @@ export default function App() {
             <ArrowLeft size={15} /> 返回用户咨询
           </button>
           <div className="staff-login-heading">
-            <h1><Sparkles color="#8b5cf6" size={24} /> SupportGPT</h1>
+            <h1><Sparkles color="#8b5cf6" size={24} /> SupportGPT 智能客服 Agent</h1>
             <p>客服员工后台</p>
           </div>
 
@@ -193,7 +193,7 @@ export default function App() {
       <aside className="app-sidebar">
         <div className="sidebar-brand">
           <span className="brand-mark"><Sparkles size={20} /></span>
-          <div><strong>SupportGPT</strong><small>客服员工后台</small></div>
+          <div><strong>SupportGPT</strong><small>智能客服 Agent 后台</small></div>
         </div>
 
         <nav className="sidebar-nav" aria-label="主要功能">

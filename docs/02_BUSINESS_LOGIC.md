@@ -1,4 +1,4 @@
-# SupportGPT Enterprise 业务流程说明
+# SupportGPT 智能客服 Agent 业务流程说明
 
 > 本文只描述客服 Agent 的业务处理逻辑、决策条件和人工协作方式，不介绍代码实现。系统的技术架构与技术决策分别以 `01_ARCHITECTURE.md` 和 `04_DECISIONS.md` 为准。
 

@@ -1,4 +1,4 @@
-# SupportGPT Enterprise
+# SupportGPT 智能客服 Agent
 
 [![CI](https://github.com/sulik0/support-gpt-enterprise-resume/actions/workflows/ci.yml/badge.svg)](https://github.com/sulik0/support-gpt-enterprise-resume/actions/workflows/ci.yml)
 [![Release Gate](https://github.com/sulik0/support-gpt-enterprise-resume/actions/workflows/release-quality-gate.yml/badge.svg)](https://github.com/sulik0/support-gpt-enterprise-resume/actions/workflows/release-quality-gate.yml)
@@ -7,7 +7,7 @@
 [![FastAPI](https://img.shields.io/badge/FastAPI-0.110%2B-green)](https://fastapi.tiangolo.com/)
 [![LangGraph](https://img.shields.io/badge/LangGraph-workflow-orange)](https://github.com/langchain-ai/langgraph)
 
-SupportGPT Enterprise 是面向售后客服场景的 Agent 平台。系统将初版 FAQ 问答升级为支持工单理解、业务 Tool 联动、Hybrid RAG、安全风控、回复校验、Human-in-the-loop 审批、OpenTelemetry 可观测和离线评测的 LangGraph Workflow。
+SupportGPT 智能客服 Agent 面向售后服务场景，能够理解用户问题、查询业务信息和知识库、生成并检查回复，并在需要时转交人工处理。项目基于 LangGraph Workflow，包含 Tool 调用、Hybrid RAG、安全治理、审批、OpenTelemetry 可观测和离线评测能力。
 
 ## 核心能力
 

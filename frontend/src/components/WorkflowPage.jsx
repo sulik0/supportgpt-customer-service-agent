@@ -55,7 +55,7 @@ export default function WorkflowPage({ onBack }) {
 
   return <section className="wf-page">
     {onBack && <button className="wf-back" type="button" onClick={onBack}><ArrowLeft size={16} /> 返回用户咨询</button>}
-    <div className="wf-hero"><div><span className="wf-eyebrow"><GitBranch size={16} /> SupportGPT · 处理流程演示</span><h1>用户提问后，Agent 怎样完成处理？</h1><p>Agent 先理解问题，再查询业务和知识、生成并检查回复，最后决定直接返回结果还是等待人工确认。</p></div><span className="wf-demo-label">流程示例，不会实际运行 Agent</span></div>
+    <div className="wf-hero"><div><span className="wf-eyebrow"><GitBranch size={16} /> SupportGPT 智能客服 Agent · 处理流程演示</span><h1>用户提问后，Agent 怎样完成处理？</h1><p>Agent 先理解问题，再查询业务和知识、生成并检查回复，最后决定直接返回结果还是等待人工确认。</p></div><span className="wf-demo-label">流程示例，不会实际运行 Agent</span></div>
     <div className="wf-overview">{[['7', 'LangGraph 流程节点'], ['6', 'Skill 处理能力'], ['9', '已注册的业务工具'], ['OTel', '记录调用过程与运行指标']].map(([value, label]) => <div key={label}><strong>{value}</strong><span>{label}</span></div>)}</div>
     <section className="wf-scenarios" aria-label="演示场景">
       <div className="wf-section-heading"><div><h2>选一个场景，逐步查看系统怎样处理</h2><p>点击“下一步”查看处理顺序。演示只在当前页面运行，不向后端提交请求，不调用模型，也不展示真实客户数据或耗时。</p></div></div>

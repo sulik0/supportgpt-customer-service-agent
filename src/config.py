@@ -10,7 +10,7 @@ class Settings(BaseSettings):
     """集中定义应用运行配置，并支持通过环境变量覆盖默认值。"""
 
     # API Settings
-    APP_NAME: str = Field(default="SupportGPT-Enterprise")
+    APP_NAME: str = Field(default="SupportGPT 智能客服 Agent")
     APP_ENV: str = Field(default="development")
     DEBUG: bool = Field(default=True)
     LOG_LEVEL: str = Field(default="INFO")
