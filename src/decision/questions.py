@@ -3,7 +3,7 @@
 from src.models.intents import IntentType
 
 
-INTENT_QUESTION_SET_VERSION = "supportgpt-jev-intent-v1"
+INTENT_QUESTION_SET_VERSION = "supportgpt-jev-intent-v1.1"
 QA_QUESTION_SET_VERSION = "supportgpt-jev-qa-v1"
 
 
@@ -61,6 +61,20 @@ def intent_questions() -> dict[str, dict]:
                 "action": "Perform or initiate a concrete business operation.",
                 "information": "Explain information, policy, status, or navigation.",
                 "unclear": "The requested outcome is not sufficiently specified.",
+            },
+        },
+        "support_scope": {
+            "type": "choice",
+            "instructions": (
+                "Judge only the current Description, not unrelated previous conversation. "
+                "Does this request belong to customer support for orders, refunds, billing, "
+                "accounts, warranties, delivery or API/service incidents? Missing business "
+                "facts or an unavailable knowledge article do not make a support request out of scope."
+            ),
+            "criteria": {
+                "support": "A customer support request, including policy, navigation and business operations.",
+                "benign_out_of_scope": "Exclusively a harmless unrelated request, such as weather, general knowledge, creative writing or travel ideas, without a business action or safety concern.",
+                "uncertain": "The request is ambiguous, mixed with support, unsafe, or cannot be confidently classified.",
             },
         },
         "needs_clarification": {

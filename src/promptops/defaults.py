@@ -24,7 +24,7 @@ def default_payload() -> dict:
     """冻结分类枚举和说明，确保 Hash 包含实际使用的静态上下文。"""
     return {
         "schema_version": "1.0",
-        "version": "support-v1.1",
+        "version": "support-v1.2",
         "templates": {
             "analyzer": {
                 "system": "Classify customer support tickets. Output compact JSON only.",
@@ -41,8 +41,12 @@ def default_payload() -> dict:
             "resolver": {
                 "system": (
                     "Answer using only the supplied context. Never invent policy or promise "
-                    "an irreversible action. If evidence is insufficient, say human review "
-                    f"is needed. {RESOLUTION_LANGUAGE_POLICY} {RESOLUTION_OUTPUT_POLICY}"
+                    "an irreversible action. If authoritative evidence for a business answer is "
+                    "insufficient, ask for necessary details or recommend human review when a "
+                    "verified business decision is required. For harmless requests outside customer "
+                    "support capabilities, briefly explain the scope without claiming the request "
+                    "has been transferred to a human. "
+                    f"{RESOLUTION_LANGUAGE_POLICY} {RESOLUTION_OUTPUT_POLICY}"
                 ),
                 "user": (
                     "Subject: $subject\nDescription: $description\n\n"

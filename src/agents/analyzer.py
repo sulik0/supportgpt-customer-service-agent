@@ -4,6 +4,7 @@ import time
 from typing import Any, Dict
 
 from src.decision import decision_service
+from src.agents.scope import has_support_topic, out_of_scope_reason, scope_context_updates
 from src.guardrails.jailbreak_detection import detect_jailbreak
 from src.guardrails.pii_detection import anonymize_pii
 from src.guardrails.prompt_injection import analyze_prompt_injection
@@ -161,6 +162,28 @@ class TicketAnalyzerAgent:
                 ],
             )
 
+        # 明确无关的新问题不继承历史业务实体，也不需要业务意图模型判断。
+        scope_reason = out_of_scope_reason(clean_description or clean_subject)
+        if (
+            scope_reason
+            and not semantic_result.degraded
+            and not state.get("risk_requires_human")
+        ):
+            next_state = {
+                **state,
+                "description": clean_description,
+                "subject": clean_subject,
+                "intent": IntentType.INFORMATION_REQUEST,
+                "department": "general",
+                "priority": "low",
+                "sentiment": "neutral",
+                "analyzer_confidence": 0.95,
+                "analyzer_strategy": "rule",
+                **scope_context_updates(scope_reason, "rule"),
+            }
+            assessment = risk_engine.assess(next_state, stage="input")
+            return {**next_state, **assessment.state_updates()}
+
         # 5. 规则生成可回退候选，Jev 启用时优先做封闭语义决策。
         try:
             rule_analysis = (
@@ -250,6 +273,14 @@ class TicketAnalyzerAgent:
                 "decision_records": decision_records,
                 "errors": state.get("errors", []),
             }
+            if (
+                strategy == "jev"
+                and analysis.get("request_scope") == "out_of_scope"
+                and normalized_intent == IntentType.INFORMATION_REQUEST
+                and not has_support_topic(clean_description or clean_subject)
+                and not semantic_result.degraded
+            ):
+                next_state.update(scope_context_updates("no_support_capability", "jev"))
             assessment = risk_engine.assess(next_state, stage="input")
             return {**next_state, **assessment.state_updates()}
         except Exception as e:

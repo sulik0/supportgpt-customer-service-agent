@@ -123,6 +123,7 @@ LangGraph 使用 `AgentState` 作为节点间共享状态。关键字段分为�
 - Skill 快照：`skill_name`、`skill_version`、`selection_strategy`、`skill_registry_id`、必需/缺失槽位、Tool Allowlist/Forbidden List 和 RAG 类别。
 - 权限与工具：`operator_role`、`tool_context`、`tool_calls`。
 - RAG 与回复：`context_citations`、`resolution_evidence`、`suggested_response`。`resolution_evidence` 保存本次生成回复实际使用的精简证据，QA 原样复用，不重新挑选上下文。
+- 能力范围：`request_scope`、`scope_reason`、`scope_strategy` 和 `response_kind`。无害但超出客服能力的问题可正常结束，不因缺少这类问题的知识或 Tool 而自动转人工。
 - 安全与风险：`security_threat_detected`、`security_risk_score`、`security_findings`、`semantic_guard_label`、`semantic_guard_categories`、`semantic_guard_checks`、`semantic_guard_degraded`、`risk_level`、`risk_score`、`risk_reasons`、`risk_requires_human`、`risk_block_automation`。
 - 质量结果：`qa_score`、`hallucination_detected`、`citation_verified`、`errors`。
 - 性能策略：`analyzer_strategy`、`qa_strategy`，用于区分规则短路、Jev 决策与 LLM 评估；`decision_records` 保存问题集版本、模型、类型化结果、置信度和回退原因。
@@ -139,7 +140,10 @@ analyzer
   |-- 命中 Prompt Injection / Jailbreak
   |      `--> escalation --> approval_gate
   |
-  `-- 正常请求
+  |-- 无害但超出客服能力
+  |      `--> resolver（说明能力范围）--> qa --> escalation --> approval_gate
+  |
+  `-- 客服业务请求
          `--> skill_selector --> context_enrichment
                 |-- tooling（并行）
                 `-- retriever（并行）
@@ -157,6 +161,8 @@ approval_gate
    - 先执行多层 Prompt Injection 和 Jailbreak 检测。
    - 命中安全风险时写入 `errors`，设置紧急优先级和拒绝回复，不执行后续 Tooling、RAG、Resolver 和 QA。
    - 正常请求先对 PII 脱敏并生成规则候选；Jev 启用时优先执行封闭 Intent 决策，低置信度或故障时，有候选则回退规则，无候选才回退 Analyzer LLM。
+   - 安全检查通过后，明确的天气、创作和常识等无关请求先按规则标记为 `out_of_scope`；其余请求可在同一次 Jev 分类中判断 `support_scope`，只有普通信息请求且判断置信度达到原有门槛时才采用。业务操作、混合意图和不确定请求保留业务路径。
+   - `out_of_scope` 请求只隔离本轮无关 Memory，不删除会话历史；直接进入 Resolver，不选择 Skill 或查询 Tool / RAG。
 2. **Skill Selector**
    - 基于归一化 `IntentType` 使用确定性规则选择 Skill，V1 不调用 LLM。
    - 固定本次请求的 Skill 版本、Registry Hash、Tool 边界和缺失槽位，并写入 State、Trace 与 Metrics。
@@ -173,10 +179,12 @@ approval_gate
    - citation 在交给 Resolver 前扫描间接 Prompt Injection；命中后清空 citation 并短路。
    - 与 Tooling 并行执行，由 Context Enrichment 统一合并结果；风险信号只升不降。
 5. **Resolver**
+   - 对已确认的无害范围外请求直接生成能力说明，设置 `response_kind=capability_boundary`，不调用业务生成模型、不声称已转人工。
    - 只选取最高相关的 Top-2 citation 与必要 Tool 字段，优先保留当前业务查询的状态、异常和下一步；Tool JSON 按完整字段裁剪，不截成半份数据。
    - 将 Tool、KB 和有界会话内容保存为 `resolution_evidence`，并把这份证据交给生成模型。KB 保留 `[S1]` 等编号、来源和版本。
    - 回复先说明当前状态、异常和下一步，只有问题需要时才补充政策。默认输出上限为 480 tokens；遇到 `finish_reason=length` 时，使用同一证据重新生成一次更短的完整回复。再次截断则转入已有人工降级流程，不返回半句话。
 6. **QA**
+   - 验证纯能力说明时不要求天气等外部知识依据；仅接受可验证的能力说明，附加“今天晴、25 度”等事实仍进入正常 QA，不能靠范围外标签免检。
    - 规则校验和 Jev / LLM Judge 都读取 Resolver 保存的 `resolution_evidence`，不再次裁剪或从原始 State 拼装另一份证据。旧 Checkpoint 没有该字段时才使用共同构造器补齐。
    - 空回复、输出泄露或完全缺少依据等确定性失败优先使用规则判断，不调用 LLM。
    - 安全硬失败、澄清和安全限制回复仍由规则短路；正向 Grounding 候选和其余非确定请求在 Jev 启用时合并评判 Grounding、完成度、citation 与未授权承诺。Jev 不可用时，前者回退规则，后者回退轻量 LLM Judge。
@@ -365,6 +373,7 @@ resolved / closed --reopen--> in_progress
 - Human-in-the-Loop 审批与工单状态机。
 - OpenTelemetry 统一 Trace / Metrics 采集、OTLP Collector、LangSmith Trace 后端和 Prometheus / Grafana 指标展示。
 - Trace 问题修复：Resolver / QA 共享生成证据；截断回复最多重写一次；Tool Span 显示具体工具名和重试/降级状态；脱敏保留合法时间戳和系统观测 ID，对外观测/决策内容使用稳定业务 ID 别名，不影响内部 Memory 的订单号提取。
+- 无害范围外请求：天气等明确主题按规则处理，规则外主题可由同一次 Jev 分类识别；生成能力说明后正常完成，不查无关业务数据，不自动创建审批。安全、业务证据不足和真实依赖故障继续执行原有风险规则。
 - Docker Compose、Kubernetes manifests、分层 requirements、Python 3.11 GitHub Actions 全量 CI、两级 Evaluation Quality Gate 与 GHCR CD。
 - RAGAS / DeepEval Adapter、本地评测降级和 JSON 报告输出。
 - Dataset + Workflow Replay 离线评测，统一输出 RAG / Agent / Security 指标并关联 Trace ID。

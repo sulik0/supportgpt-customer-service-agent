@@ -5,6 +5,7 @@ from typing import Dict, Any
 from src.llm.provider import llm_provider
 from src.observability.metrics import AGENT_EXECUTION_DURATION_SECONDS
 from src.agents.evidence import build_resolution_evidence, compact_tool_context
+from src.agents.scope import is_scope_boundary_request, scope_boundary_response
 
 logger = logging.getLogger("supportgpt.agents.resolver")
 
@@ -21,6 +22,16 @@ class ResolutionAgent:
 
         if "Security threat" in "".join(state.get("errors", [])):
             return state
+
+        if is_scope_boundary_request(state):
+            return {
+                **state,
+                "suggested_response": scope_boundary_response(state),
+                "response_kind": "capability_boundary",
+                "resolution_evidence": [],
+                "tool_context": {},
+                "context_citations": [],
+            }
 
         subject = state.get("subject", "")
         description = state.get("description", "")

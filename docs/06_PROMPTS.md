@@ -80,7 +80,7 @@ Memory 通过现有 Analyzer `text`、Resolver `context` 和 QA `query/context` 
 
 - 只输出最终客服回复，不输出思考过程、评分、节点名或内部策略。
 - 不得超出 Tool/RAG 证据做退款、赔偿、时效或保修承诺。
-- 证据不足时明确说明需要补充信息或人工处理。
+- 业务证据不足时说明需要补充信息或人工核实；无害但超出客服能力的问题说明能力范围，不把缺少天气知识等同于需要人工。
 - 保持专业、简洁，使用当前输入语言。
 - 用 3–4 句短句先说明当前状态、当前异常和有依据的下一步；不展开无关历史或未来假设，政策只在需要时补充。`next_step` 表示处理建议，不代表系统已经执行该动作。
 - `LLM_RESOLVER_MAX_TOKENS` 默认为 480。环境里显式配置了 320 时不会自动覆盖，部署时需要自行检查。
@@ -106,6 +106,8 @@ Memory 通过现有 Analyzer `text`、Resolver `context` 和 QA `query/context` 
 
 QA 评判的依据是 `resolution_evidence`，包含生成时实际可见的 Tool 事实和 KB 片段。例如物流查询中的 `in_transit`、`delivery_delayed`、`carrier_investigation` 必须在这份证据中同时保留。不能因 QA 自己重新拼装证据而把正确回答判成无依据；真正不受支持的回答仍按原 Jev / Risk 阈值处理。
 
+`capability_boundary` 表示已经确认的无害范围外请求。Resolver 直接生成能力说明，QA 验证这段内容不包含天气等外部事实，因此不需要天气 KB。范围标签不能让附加事实免检，声称“今天晴、25 度”仍按普通 grounding 规则处理。Jev 意图问题集 `supportgpt-jev-intent-v1.1` 在原分类调用中增加 `support_scope`，不会额外发起一次模型调用；缺少这个答案时保持旧分类兼容。
+
 ## Tool Calling Prompt 边界
 
 ToolRegistry 中每个 Tool 定义 `name`、`description`、`schema`、`permission`、`risk_level` 和 handler。LLM 只能在已按意图、角色与风险过滤的候选中选择，参数必须通过 Pydantic Schema。高风险写操作不能仅靠 Prompt 约束，必须由 RBAC、Risk Engine 和 HITL 在代码层阻断。
@@ -129,7 +131,7 @@ RAG Context 是不可信数据，不是系统指令：
 - AgentRun、Evaluation Report 和 OpenTelemetry Span 保存模型、Token、延迟和版本信息。
 - LangSmith 的 LLM Span 可记录脱敏、截断后的节点输入输出；是否开启受 `LANGSMITH_CAPTURE_LLM_CONTENT` 控制。
 - Trace 内容不得包含 API Key、Authorization、Cookie、密码或未脱敏 PII。
-- 新安装的默认 Bundle 版本为 `support-v1.1`。已有 Bundle 和 production pointer 不自动替换；Provider 对已有 Resolver 模板补充同一简洁输出约束，Trace 用 `resolver.output_policy=concise-v1` 标记，实际请求 Prompt 仍可在脱敏后查看。后续正式模板发布仍走现有成对评测流程。
+- 新安装的默认 Bundle 版本为 `support-v1.2`，将业务证据不足与范围外能力说明分开。已有 Bundle 和 production pointer 不自动替换；确认范围外的请求不调用 Resolver 模型，因此旧 Bundle 也不会把天气请求写成“已转人工”。Provider 对已有 Resolver 模板补充同一简洁输出约束，Trace 用 `resolver.output_policy=concise-v1` 标记，实际请求 Prompt 仍可在脱敏后查看。后续正式模板发布仍走现有成对评测流程。
 - Tool Span 使用具体工具名，例如 `tool.shipping.get_shipments`；失败、重试或降级会在名称中注明，并保留状态、次数、耗时和现有 Resilience 子 Span。
 - 合法 ISO 时间戳、request / trace / span ID 不按手机号脱敏。对外 Trace / Jev 请求里的业务 ID 使用进程内稳定别名，内部 Memory 保留真实业务实体；密钥、手机号和邮箱仍过滤。别名不用于跨重启关联。
 

@@ -109,6 +109,7 @@ stateDiagram-v2
     [*] --> Analyzer
     Analyzer --> Escalation: Prompt Injection / Jailbreak
     Analyzer --> SkillSelector: 正常请求
+    Analyzer --> Resolver: 无害但超出客服能力，生成能力说明
     SkillSelector --> ContextFork: Intent 确定性选择
     state ContextFork <<fork>>
     ContextFork --> Tooling
@@ -168,6 +169,8 @@ stateDiagram-v2
 `AgentState.intent` 使用统一 `IntentType`，规则表、OpenAI-compatible/Azure Prompt、Mock Provider、Tooling、Risk Engine 和 Agent Evaluation 共用同一套 8 个枚举值。Provider 不遵守约束时，未知值会归一化为 `information_request`，同时将分类置信度上限降至 `0.5`，使 Risk Engine 触发受控人工处理。
 
 Resolver 与 QA 共用 `src/agents/evidence.py` 的证据构造器。Resolver 在现有安全扫描之后只构造一次证据，保存为 State 中的字符串列表，再把相同内容传给生成模型。QA 直接读取这个列表，规则校验也从列表中解析 Tool JSON 和 citation，不另取后来更新的 Tool / KB 内容。旧 State 缺少该字段时才重新构造，保持历史 Checkpoint 兼容。Jev 出站前仍会过滤敏感字段，但同一业务 ID 在问题、证据、回答和 Trace 中使用同一个别名；状态、异常、下一步和引用编号不会因此丢失。
+
+`src/agents/scope.py` 处理明确的客服能力范围外请求。Analyzer 在安全检查后用规则或现有 Jev 分类结果标记范围，当前轮不使用无关历史实体。Graph 只增加 Analyzer 到现有 Resolver 的条件边；Resolver 生成不含外部事实的能力说明，QA 验证后仍经过 Escalation 和 Approval Gate。没有新增节点或服务，也不修改风险阈值。Trace 保存范围、判断方式、回复类型和最终完成状态。
 
 **这个状态用来做什么**：在节点之间传递结构化的上下文，并保留必要信息供审计。
 

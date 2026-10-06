@@ -46,6 +46,8 @@
 
 ## 必须保持的设计
 
+范围外请求修复：Analyzer 的安全检查仍首先执行。天气等明确无关主题按规则识别，其他普通请求可由同一次 Jev 分类的 `support_scope` 判断。只有高置信度的普通信息请求可采用范围外结果，业务关键词、实际操作和不确定结果保留原路径。确认后从 Analyzer 直接进入 Resolver，隔离本轮 Memory，生成 `capability_boundary`，再经 QA、Escalation 和 Approval Gate 正常结束。不能给范围外标签增加跳过安全或业务风险检查的特权。
+
 1. 默认 Mock 模式必须能在无 API Key、无 Redis、无 Collector 时启动和测试。
 2. CRM、OMS、Ticketing 与 Refund 仍是 Mock Adapter，不得写成已接入真实企业系统。
 3. 所有业务 Tool 必须经过 ToolRegistry，不得从 Agent 直接调 Adapter。

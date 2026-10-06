@@ -5,6 +5,7 @@ import time
 from typing import Dict, Any
 
 from src.agents.evidence import build_resolution_evidence
+from src.agents.scope import is_verified_scope_response
 from src.decision import decision_service
 from src.llm.provider import llm_provider
 from src.guardrails.response_filter import filter_response
@@ -64,14 +65,26 @@ class QualityAssuranceAgent:
                 if text.startswith("[TOOL] "):
                     evidence_tools = json.loads(text[len("[TOOL] ") :])
             # 确定性安全结论直接短路，正向证据结论交给 Jev 复核。
-            rule_result, rule_terminal = self._rule_evaluation(
-                query=query,
-                raw_response=raw_response,
-                filtered_response=filtered_response_text,
-                citations=evidence_citations,
-                tool_context=evidence_tools,
-                context_texts=context_texts,
-            )
+            if filtered_response_text == raw_response and is_verified_scope_response(
+                state, raw_response
+            ):
+                # 能力说明没有外部事实，不要求天气证据，也不免除真实业务断言校验。
+                rule_result, rule_terminal = {
+                    "score": 0.95,
+                    "hallucination_detected": False,
+                    "citation_verified": False,
+                    "response_grounded": True,
+                    "response_requires_human": False,
+                }, True
+            else:
+                rule_result, rule_terminal = self._rule_evaluation(
+                    query=query,
+                    raw_response=raw_response,
+                    filtered_response=filtered_response_text,
+                    citations=evidence_citations,
+                    tool_context=evidence_tools,
+                    context_texts=context_texts,
+                )
             decision_records = list(state.get("decision_records", []))
             if not rule_terminal:
                 decision = await decision_service.judge_response(

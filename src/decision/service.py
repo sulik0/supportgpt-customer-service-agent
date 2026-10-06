@@ -91,6 +91,16 @@ class DecisionService:
             )
         intent = normalize_intent(raw_intent)
         defaults = intent_defaults(intent)
+        scope = result.answers.get("support_scope")
+        outside_support = bool(
+            intent == IntentType.INFORMATION_REQUEST
+            and str(operation_mode.value) == "information"
+            and scope is not None
+            and scope.kind == "choice"
+            and scope.value == "benign_out_of_scope"
+            and float(scope.confidence or 0.0)
+            >= settings.JEV_INTENT_CONFIDENCE_THRESHOLD
+        )
         return TicketIntentDecision(
             result=result,
             accepted=True,
@@ -104,6 +114,14 @@ class DecisionService:
                     else "positive" if intent is IntentType.FEEDBACK else "neutral"
                 ),
                 "confidence_score": confidence,
+                **(
+                    {
+                        "request_scope": "out_of_scope",
+                        "scope_reason": "no_support_capability",
+                    }
+                    if outside_support
+                    else {}
+                ),
             },
         )
 

@@ -8,6 +8,7 @@
 - [x] 将 `/chat`、`/suggest-response` 的执行快照与 OpenTelemetry Trace ID 关联。
 - [x] 修复 Resolver / QA 证据不一致：保存生成时实际使用的 `resolution_evidence`，让 QA 复用物流事实和同一组 KB 引用，不降低质量或风险阈值。
 - [x] 对截断回复增加一次有界重写；具体 Tool 名称、失败/重试/降级状态进入 Trace；修复 ISO 时间戳误脱敏，并保证业务别名不会影响内部 Memory。
+- [x] 无害范围外请求正常结束：规则 / 同次 Jev 分类判断能力范围，避免无关 Memory 和 Tool / RAG 查询；QA 验证能力说明，业务高风险和真实故障仍升级人工。
 - [x] 增加基于 `agent_run_id + feedback_token` 的用户评价 API。
 - [x] 将人工审批通过、修改或拒绝的结果自动保存为反馈事件。
 - [x] 将在线与离线 Evaluation 结果关联到 Agent Run。

@@ -15,6 +15,7 @@ from src.agents.quality_assurance import quality_assurance_agent
 from src.agents.resolver import resolution_agent
 from src.agents.retriever import knowledge_retriever_agent
 from src.agents.skill_selector import skill_selector_agent
+from src.agents.scope import is_scope_boundary_request
 from src.agents.tooling import tooling_agent
 from src.config import settings
 from src.models.intents import DEFAULT_INTENT, IntentType
@@ -77,6 +78,10 @@ class AgentState(TypedDict):
     department: str
     analyzer_confidence: float
     analyzer_strategy: str
+    request_scope: str
+    scope_reason: Optional[str]
+    scope_strategy: str
+    response_kind: str
     skill_name: str
     skill_version: str
     selection_strategy: str
@@ -230,6 +235,9 @@ async def analyze_node(state: AgentState) -> Dict[str, Any]:
             span,
             {
                 "analyzer.strategy": result.get("analyzer_strategy", "unknown"),
+                "request.scope": result.get("request_scope", "support"),
+                "request.scope_reason": result.get("scope_reason"),
+                "request.scope_strategy": result.get("scope_strategy", "not_run"),
                 **_latest_decision_trace_attrs(result),
             },
         )
@@ -467,8 +475,13 @@ async def context_enrichment_node(state: AgentState) -> Dict[str, Any]:
 
 
 async def resolve_node(state: AgentState) -> Dict[str, Any]:
-    with observed_span(tracer, "agent.resolver", _trace_attrs(state, node="resolver")):
+    with observed_span(
+        tracer, "agent.resolver", _trace_attrs(state, node="resolver")
+    ) as span:
         result = await _run_node("llm_generation", resolution_agent.resolve, state)
+        set_span_attributes(
+            span, {"response.kind": result.get("response_kind", "business_answer")}
+        )
         logger.info(
             "generation completed",
             extra={
@@ -575,6 +588,10 @@ def _trace_attrs(state: Dict[str, Any], node: str) -> Dict[str, Any]:
     return {
         **langsmith_span_attributes("chain"),
         "agent.node": node,
+        "request.scope": state.get("request_scope", "support"),
+        "request.scope_reason": state.get("scope_reason"),
+        "request.scope_strategy": state.get("scope_strategy", "not_run"),
+        "response.kind": state.get("response_kind", "business_answer"),
         "request.id": state.get("request_id"),
         "ticket.id": state.get("ticket_id"),
         "kb.version": state.get("kb_version"),
@@ -641,6 +658,8 @@ def route_after_analyzer(state: AgentState) -> str:
     """输入安全检查失败时直接进入人工升级。"""
     if _is_automation_blocked(state):
         return "escalation"
+    if is_scope_boundary_request(state):
+        return "resolver"
     return "skill_selector"
 
 
@@ -673,6 +692,7 @@ def create_agent_graph(
         route_after_analyzer,
         {
             "skill_selector": "skill_selector",
+            "resolver": "resolver",
             "escalation": "escalation",
         },
     )
@@ -740,6 +760,10 @@ def build_ticket_state(initial_state: Dict[str, Any]) -> AgentState:
         "department": "general",
         "analyzer_confidence": 1.0,
         "analyzer_strategy": "not_run",
+        "request_scope": "support",
+        "scope_reason": None,
+        "scope_strategy": "not_run",
+        "response_kind": "business_answer",
         "skill_name": "unselected",
         "skill_version": "unselected",
         "selection_strategy": "not_run",
@@ -837,7 +861,7 @@ async def _run_agent_workflow_pinned(initial_state: Dict[str, Any]) -> Dict[str,
                     ),
                 },
                 root=True,
-            ):
+            ) as span:
                 final_output = await compiled_graph.ainvoke(
                     state_input, config=graph_config
                 )
@@ -845,6 +869,20 @@ async def _run_agent_workflow_pinned(initial_state: Dict[str, Any]) -> Dict[str,
                     final_output, graph_config
                 )
                 final_output["trace_id"] = get_current_trace_id()
+                set_span_attributes(span, {
+                    "request.scope": final_output.get("request_scope", "support"),
+                    "request.scope_reason": final_output.get("scope_reason"),
+                    "request.scope_strategy": final_output.get("scope_strategy", "not_run"),
+                    "response.kind": final_output.get(
+                        "response_kind", "business_answer"
+                    ),
+                    "risk.level": final_output.get("risk_level", "low"),
+                    "risk.requires_human": final_output.get("risk_requires_human", False),
+                    "agent.approval_required": final_output.get("approval_required", False),
+                    "agent.execution_status": final_output.get(
+                        "execution_status", "completed"
+                    ),
+                })
                 set_agent_trace_id(final_output["trace_id"])
         try:
             request_status = (

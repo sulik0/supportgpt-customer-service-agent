@@ -121,6 +121,8 @@ Prometheus + OpenTelemetry 覆盖 API、Agent、工具、RAG 和审批过程。
 
 Resolver 在生成前保存 `resolution_evidence`，QA 的规则和 Jev / LLM 评判直接复用这份证据。它包含必要 Tool 事实和带编号、来源、版本的 KB 片段，不是整个 State 的 dump。回复优先说明当前状态、异常和下一步；默认输出上限 480 tokens，截断时最多用同一证据重写一次，仍失败则转人工。这些机制避免证据遗漏和半句话输出，但不代表已经验证了真实 Jev 在所有业务上的判断准确率。
 
+系统已区分“无害但超出客服能力”与“业务回答或执行存在风险”。天气等明确主题先按规则处理，其余主题可由同一次 Jev 分类中的范围判断识别。确认范围外后直接生成能力说明，不查无关 Tool / RAG，不使用上一轮订单实体；QA 验证纯能力说明后正常结束。业务、安全、真实依赖故障和 unsupported business claim 仍执行原有人工升级规则，没有降低 QA、Risk 或 Jev 阈值。规则未覆盖且 Jev 不可用/不确定时继续走原有保守路径，尚不保证识别所有泛化问题。
+
 ## 8.1 Skill Framework
 
 Skill Framework V1 共有 **6 个 Skill**：`refund_support`、`order_support`、`account_support`、`api_incident_triage`、`warranty_support`、`general_support`，覆盖全部 8 个 `IntentType`。`SkillDefinition` 保存版本、输入/输出 Schema、Tool Allowlist/Forbidden List、RAG 类别、必需槽位与最低角色；`SkillRegistry` 拒绝重复 Intent 注册，并为整份 Registry 生成内容 Hash。
