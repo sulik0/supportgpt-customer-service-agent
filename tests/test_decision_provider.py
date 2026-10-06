@@ -135,7 +135,9 @@ async def test_jev_provider_calls_system_one_and_sanitizes_state(monkeypatch):
     request_json = client.calls[0][1]["json"]
     assert "ORDER-123" not in str(request_json)
     assert "alice@example.com" not in str(request_json)
-    assert request_json["state"]["order_id"] == "[FILTERED]"
+    alias = request_json["state"]["order_id"]
+    assert alias.startswith("[BUSINESS_ID_")
+    assert alias in request_json["state"]["message"]
     assert request_json["questions"]["intent"]["type"] == "choice"
 
 

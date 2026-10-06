@@ -20,7 +20,7 @@ from src.observability.metrics import (
     DECISION_CONFIDENCE,
     DECISION_TOKENS_TOTAL,
 )
-from src.observability.sanitization import redact_text, sanitize_value
+from src.observability.sanitization import sanitize_value
 from src.observability.tracing import (
     get_tracer,
     langsmith_span_attributes,
@@ -34,9 +34,6 @@ from src.resilience.policies import decision_policy
 
 logger = logging.getLogger("supportgpt.decision.provider")
 tracer = get_tracer(__name__)
-_BUSINESS_IDENTIFIER = re.compile(
-    r"(?i)\b(?:ORD|ORDER|CUST|CUSTOMER|TKT|TICKET|TRK|TRACKING|SESSION)[-_][A-Z0-9-]+\b"
-)
 
 
 class DecisionProvider(ABC):
@@ -381,27 +378,7 @@ class JevDecisionProvider(DecisionProvider):
 
 def _sanitize_decision_state(value: Any) -> Any:
     """对外部决策输入脱敏，同一业务 ID 保留等值关系。"""
-    aliases: dict[str, str] = {}
-
-    def clean(item: Any) -> Any:
-        if isinstance(item, str):
-            text = redact_text(item)
-
-            def replace_identifier(match: re.Match[str]) -> str:
-                identifier = match.group(0).upper()
-                if identifier not in aliases:
-                    aliases[identifier] = f"[BUSINESS_ID_{len(aliases) + 1}]"
-                return aliases[identifier]
-
-            return _BUSINESS_IDENTIFIER.sub(replace_identifier, text)
-        if isinstance(item, dict):
-            safe = sanitize_value(item)
-            return {str(key): clean(child) for key, child in safe.items()}
-        if isinstance(item, (list, tuple, set)):
-            return [clean(child) for child in item]
-        return sanitize_value(item)
-
-    return clean(value)
+    return sanitize_value(value, preserve_entity_links=True)
 
 
 def _validate_questions(

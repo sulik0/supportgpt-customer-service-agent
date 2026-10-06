@@ -150,11 +150,12 @@ class ToolRegistry:
         skill_name: Optional[str] = None,
         skill_version: Optional[str] = None,
     ) -> Dict[str, Any]:
+        trace_tool_name = name if self.get_definition(name) else "unregistered_tool"
         with observed_span(
             tracer,
-            "supportgpt.tool.call",
+            f"tool.{trace_tool_name}",
             {
-                **langsmith_span_attributes("tool"),
+                **langsmith_span_attributes("tool", trace_name=trace_tool_name),
                 "gen_ai.tool.name": name,
                 "tool.name": name,
                 "tool.role": role,
@@ -217,8 +218,35 @@ class ToolRegistry:
                     "tool.has_error": bool(result.get("error")),
                     "tool.audit_id": audit_record["id"],
                     "tool.action_id": action_id,
+                    "tool.attempts": result.get("attempts", 0),
+                    "tool.retry_count": max(int(result.get("attempts") or 0) - 1, 0),
+                    "tool.degradation_level": result.get("degradation_level", "none"),
+                    "tool.error_type": result.get("error_type"),
                 },
             )
+            # 业务层捕获的失败也标红；名称直接展示重试或降级结果。
+            try:
+                from opentelemetry.trace import Status, StatusCode
+
+                status = str(result.get("status") or "unknown")
+                retries = max(int(result.get("attempts") or 0) - 1, 0)
+                markers = []
+                if status != "success":
+                    markers.append(status)
+                    span.set_status(Status(StatusCode.ERROR, status))
+                if retries:
+                    markers.append(f"retry {retries}")
+                if result.get("degradation_level", "none") != "none":
+                    markers.append("degraded")
+                label = trace_tool_name + (
+                    f" [{', '.join(markers)}]" if markers else ""
+                )
+                span.update_name(f"tool.{label}")
+                set_span_attributes(
+                    span, langsmith_span_attributes("tool", trace_name=label)
+                )
+            except Exception:
+                pass
             return result
 
     async def _call_tool_impl(

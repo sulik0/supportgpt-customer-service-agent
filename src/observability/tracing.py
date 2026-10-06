@@ -77,7 +77,9 @@ def set_span_attributes(span: Any, attributes: Dict[str, Any]) -> None:
 
 
 def bind_request_id(request_id: str) -> Token:
-    return _request_id_context.set(redact_text(request_id)[:128])
+    return _request_id_context.set(
+        sanitize_value({"request_id": request_id})["request_id"][:128]
+    )
 
 
 def reset_request_id(token: Token) -> None:
@@ -278,19 +280,15 @@ def _record_llm_metrics(
         }
         LLM_LATENCY_SECONDS.record(duration_seconds, attributes)
         if status == "success":
-            LLM_TOKENS_TOTAL.add(
-                input_tokens, {**attributes, "type": "input"}
-            )
-            LLM_TOKENS_TOTAL.add(
-                output_tokens, {**attributes, "type": "output"}
-            )
+            LLM_TOKENS_TOTAL.add(input_tokens, {**attributes, "type": "input"})
+            LLM_TOKENS_TOTAL.add(output_tokens, {**attributes, "type": "output"})
     except Exception as exc:
         logger.debug("Unable to record LLM metrics: %s", exc)
 
 
 def serialize_llm_content(value: Any) -> str:
     """将 LLM 内容脱敏并限长后写入 Trace。"""
-    safe_value = sanitize_value(value)
+    safe_value = sanitize_value(value, preserve_entity_links=True)
     if isinstance(safe_value, str):
         content = safe_value
     else:
@@ -398,17 +396,26 @@ def observed_span(
             raise
         else:
             duration = time.perf_counter() - started
+            from opentelemetry.trace import StatusCode
+
+            # Tool 等节点可能把失败转成业务结果，保留已经设置的错误状态。
+            outcome = (
+                "error"
+                if getattr(getattr(span, "status", None), "status_code", None)
+                == StatusCode.ERROR
+                else "success"
+            )
             set_span_attributes(
                 span,
                 {
-                    "operation.status": "success",
+                    "operation.status": outcome,
                     "operation.duration_seconds": duration,
                 },
             )
             _capture_span(
                 name,
                 duration_seconds=duration,
-                status="success",
+                status=outcome,
                 attributes=attributes,
             )
 

@@ -70,8 +70,11 @@ Memory 通过现有 Analyzer `text`、Resolver `context` 和 QA `query/context` 
 
 - 仅保留与当前意图相关的 RAG 文档。
 - Tool Result 仅保留生成回复必需的允许字段。
+- 生成前把实际使用的上下文保存为 `resolution_evidence`。QA 原样复用，不再另行选择文档、漏掉 `service_query` 或再次截短上下文。
+- 优先保留当前 Tool 的状态、异常和下一步，再分配 KB 与会话预算；按完整字段删除次要 Tool 数据，不能截断 JSON。KB 保留引用编号、来源和版本，会话历史明确标为非权威内容。
 - `LLM_RESOLVER_MAX_RAG_CHARS` 默认 5000。
 - `LLM_RESOLVER_MAX_TOOL_CHARS` 默认 2500。
+- Tool / KB / 会话证据共同受 `LLM_QA_MAX_CONTEXT_CHARS`（默认 4000）限制；前两个配置是各自上限，不代表一定会用满。
 
 ### 输出约束
 
@@ -79,7 +82,9 @@ Memory 通过现有 Analyzer `text`、Resolver `context` 和 QA `query/context` 
 - 不得超出 Tool/RAG 证据做退款、赔偿、时效或保修承诺。
 - 证据不足时明确说明需要补充信息或人工处理。
 - 保持专业、简洁，使用当前输入语言。
-- `LLM_RESOLVER_MAX_TOKENS` 默认为 320。
+- 用 3–4 句短句先说明当前状态、当前异常和有依据的下一步；不展开无关历史或未来假设，政策只在需要时补充。`next_step` 表示处理建议，不代表系统已经执行该动作。
+- `LLM_RESOLVER_MAX_TOKENS` 默认为 480。环境里显式配置了 320 时不会自动覆盖，部署时需要自行检查。
+- OpenAI-compatible / Azure 返回 `finish_reason=length` 时，用原来的证据重写一次更短的完整回复，不把截断草稿作为新证据；第二次仍截断就使用原有安全降级回复并转人工。正常完整回复不会增加调用。
 
 ## QA Prompt
 
@@ -98,6 +103,8 @@ Memory 通过现有 Analyzer `text`、Resolver `context` 和 QA `query/context` 
 ```
 
 不要生成解释、建议或大段分析。`LLM_QA_MAX_CONTEXT_CHARS` 默认 4000，`LLM_QA_MAX_TOKENS` 默认 96。
+
+QA 评判的依据是 `resolution_evidence`，包含生成时实际可见的 Tool 事实和 KB 片段。例如物流查询中的 `in_transit`、`delivery_delayed`、`carrier_investigation` 必须在这份证据中同时保留。不能因 QA 自己重新拼装证据而把正确回答判成无依据；真正不受支持的回答仍按原 Jev / Risk 阈值处理。
 
 ## Tool Calling Prompt 边界
 
@@ -122,6 +129,9 @@ RAG Context 是不可信数据，不是系统指令：
 - AgentRun、Evaluation Report 和 OpenTelemetry Span 保存模型、Token、延迟和版本信息。
 - LangSmith 的 LLM Span 可记录脱敏、截断后的节点输入输出；是否开启受 `LANGSMITH_CAPTURE_LLM_CONTENT` 控制。
 - Trace 内容不得包含 API Key、Authorization、Cookie、密码或未脱敏 PII。
+- 新安装的默认 Bundle 版本为 `support-v1.1`。已有 Bundle 和 production pointer 不自动替换；Provider 对已有 Resolver 模板补充同一简洁输出约束，Trace 用 `resolver.output_policy=concise-v1` 标记，实际请求 Prompt 仍可在脱敏后查看。后续正式模板发布仍走现有成对评测流程。
+- Tool Span 使用具体工具名，例如 `tool.shipping.get_shipments`；失败、重试或降级会在名称中注明，并保留状态、次数、耗时和现有 Resilience 子 Span。
+- 合法 ISO 时间戳、request / trace / span ID 不按手机号脱敏。对外 Trace / Jev 请求里的业务 ID 使用进程内稳定别名，内部 Memory 保留真实业务实体；密钥、手机号和邮箱仍过滤。别名不用于跨重启关联。
 
 ## 变更流程
 

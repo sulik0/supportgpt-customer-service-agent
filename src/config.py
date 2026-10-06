@@ -79,7 +79,7 @@ class Settings(BaseSettings):
     LLM_ANALYZER_MODEL_NAME: Optional[str] = Field(default=None)
     LLM_QA_MODEL_NAME: Optional[str] = Field(default=None)
     LLM_ANALYZER_MAX_TOKENS: int = Field(default=120, ge=32, le=512)
-    LLM_RESOLVER_MAX_TOKENS: int = Field(default=320, ge=64, le=2048)
+    LLM_RESOLVER_MAX_TOKENS: int = Field(default=480, ge=64, le=2048)
     LLM_QA_MAX_TOKENS: int = Field(default=96, ge=32, le=512)
     LLM_RESOLVER_MAX_RAG_CHARS: int = Field(default=5000, ge=500, le=20000)
     LLM_RESOLVER_MAX_TOOL_CHARS: int = Field(default=2500, ge=500, le=10000)

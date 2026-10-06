@@ -115,6 +115,7 @@ class AgentState(TypedDict):
     tool_context: Dict[str, Any]
     tool_calls: List[Dict[str, Any]]
     context_citations: List[Any]
+    resolution_evidence: List[str]
     suggested_response: str
     qa_score: float
     hallucination_detected: bool

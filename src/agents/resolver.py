@@ -1,11 +1,10 @@
-import json
 import time
 import logging
 from typing import Dict, Any
 
-from src.config import settings
 from src.llm.provider import llm_provider
 from src.observability.metrics import AGENT_EXECUTION_DURATION_SECONDS
+from src.agents.evidence import build_resolution_evidence, compact_tool_context
 
 logger = logging.getLogger("supportgpt.agents.resolver")
 
@@ -25,20 +24,10 @@ class ResolutionAgent:
 
         subject = state.get("subject", "")
         description = state.get("description", "")
-        citations = state.get("context_citations", [])
-        tool_context = state.get("tool_context", {})
-        memory_context = str(state.get("memory_prompt_context", "")).strip()
-
-        # 只向模型提供 Top RAG 证据和必要业务字段。
-        kb_context = self._compact_rag_context(citations)
-        business_context = self._compact_tool_context(tool_context)
-        combined_context = (
-            f"KB evidence:\n{kb_context}\n\nBusiness facts:\n{business_context}"
-        )
-        if memory_context:
-            combined_context = (
-                f"{combined_context}\n\nConversation context:\n{memory_context}"
-            )
+        # 记录实际发给生成模型的证据，QA 不再重新挑选或裁剪。
+        evidence = build_resolution_evidence(state)
+        state = {**state, "resolution_evidence": evidence}
+        combined_context = "\n\n".join(evidence) or "No relevant evidence."
 
         try:
             # Generate the text from LLM provider
@@ -82,65 +71,9 @@ class ResolutionAgent:
             }
 
     @staticmethod
-    def _compact_rag_context(citations: list[Any]) -> str:
-        """限制 RAG 文档数量和总字符数，保留 citation 来源。"""
-        remaining = settings.LLM_RESOLVER_MAX_RAG_CHARS
-        blocks = []
-        for index, citation in enumerate(citations[:2], start=1):
-            source = str(getattr(citation, "source", f"doc-{index}"))
-            text = str(getattr(citation, "text", ""))
-            prefix = f"[S{index}] {source}: "
-            available = max(remaining - len(prefix), 0)
-            if available <= 0:
-                break
-            block = prefix + text[:available]
-            blocks.append(block)
-            remaining -= len(block)
-        return "\n".join(blocks) if blocks else "No relevant KB evidence."
-
-    @staticmethod
     def _compact_tool_context(tool_context: Dict[str, Any]) -> str:
         """移除 Tool 审计等生成阶段无需字段。"""
-        if not tool_context:
-            return "No relevant business facts."
-        profile = tool_context.get("customer_profile") or {}
-        compact = {
-            "service_query": tool_context.get("service_query", {}),
-            "resolved_request_entities": tool_context.get(
-                "resolved_request_entities", {}
-            ),
-            "customer": {
-                "tier": profile.get("tier"),
-                "open_tickets_count": profile.get("open_tickets_count"),
-            },
-            "recent_orders": [
-                {
-                    key: order.get(key)
-                    for key in (
-                        "order_id",
-                        "status",
-                        "items",
-                        "total_amount",
-                        "currency",
-                        "order_date",
-                    )
-                    if order.get(key) is not None
-                }
-                for order in (tool_context.get("recent_orders") or [])[:2]
-            ],
-            "past_tickets": [
-                {
-                    key: ticket.get(key)
-                    for key in ("subject", "status", "resolution")
-                    if ticket.get(key) is not None
-                }
-                for ticket in (tool_context.get("past_tickets") or [])[:2]
-            ],
-        }
-        content = json.dumps(
-            compact, default=str, ensure_ascii=False, separators=(",", ":")
-        )
-        return content[: settings.LLM_RESOLVER_MAX_TOOL_CHARS]
+        return compact_tool_context(tool_context)
 
     @staticmethod
     def _empty_response_fallback(description: str) -> str:

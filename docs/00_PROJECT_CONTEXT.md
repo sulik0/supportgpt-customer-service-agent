@@ -122,7 +122,7 @@ LangGraph 使用 `AgentState` 作为节点间共享状态。关键字段分为�
 - 分析结果：`sentiment`、`priority`、`intent`、`department`、`analyzer_confidence`。`intent` 必须来自统一 `IntentType`：`billing_dispute`、`outage_report`、`order_cancellation`、`order_status`、`account_support`、`warranty_claim`、`feedback`、`information_request`；最后一项是唯一兜底值。
 - Skill 快照：`skill_name`、`skill_version`、`selection_strategy`、`skill_registry_id`、必需/缺失槽位、Tool Allowlist/Forbidden List 和 RAG 类别。
 - 权限与工具：`operator_role`、`tool_context`、`tool_calls`。
-- RAG 与回复：`context_citations`、`suggested_response`。
+- RAG 与回复：`context_citations`、`resolution_evidence`、`suggested_response`。`resolution_evidence` 保存本次生成回复实际使用的精简证据，QA 原样复用，不重新挑选上下文。
 - 安全与风险：`security_threat_detected`、`security_risk_score`、`security_findings`、`semantic_guard_label`、`semantic_guard_categories`、`semantic_guard_checks`、`semantic_guard_degraded`、`risk_level`、`risk_score`、`risk_reasons`、`risk_requires_human`、`risk_block_automation`。
 - 质量结果：`qa_score`、`hallucination_detected`、`citation_verified`、`errors`。
 - 性能策略：`analyzer_strategy`、`qa_strategy`，用于区分规则短路、Jev 决策与 LLM 评估；`decision_records` 保存问题集版本、模型、类型化结果、置信度和回退原因。
@@ -173,9 +173,11 @@ approval_gate
    - citation 在交给 Resolver 前扫描间接 Prompt Injection；命中后清空 citation 并短路。
    - 与 Tooling 并行执行，由 Context Enrichment 统一合并结果；风险信号只升不降。
 5. **Resolver**
-   - 只选取最高相关的 Top-2 citation 与必要 Tool 字段，并限制上下文字符数。
-   - 将精简上下文交给 LLM Provider，只生成最终客服回复并限制输出 token。
+   - 只选取最高相关的 Top-2 citation 与必要 Tool 字段，优先保留当前业务查询的状态、异常和下一步；Tool JSON 按完整字段裁剪，不截成半份数据。
+   - 将 Tool、KB 和有界会话内容保存为 `resolution_evidence`，并把这份证据交给生成模型。KB 保留 `[S1]` 等编号、来源和版本。
+   - 回复先说明当前状态、异常和下一步，只有问题需要时才补充政策。默认输出上限为 480 tokens；遇到 `finish_reason=length` 时，使用同一证据重新生成一次更短的完整回复。再次截断则转入已有人工降级流程，不返回半句话。
 6. **QA**
+   - 规则校验和 Jev / LLM Judge 都读取 Resolver 保存的 `resolution_evidence`，不再次裁剪或从原始 State 拼装另一份证据。旧 Checkpoint 没有该字段时才使用共同构造器补齐。
    - 空回复、输出泄露或完全缺少依据等确定性失败优先使用规则判断，不调用 LLM。
    - 安全硬失败、澄清和安全限制回复仍由规则短路；正向 Grounding 候选和其余非确定请求在 Jev 启用时合并评判 Grounding、完成度、citation 与未授权承诺。Jev 不可用时，前者回退规则，后者回退轻量 LLM Judge。
    - 通过 Response Filter 删除内部指令或工作流泄露；命中时将 QA 分数降为 `0.5` 并标记幻觉。
@@ -362,6 +364,7 @@ resolved / closed --reopen--> in_progress
 - Memory V1：结构化会话表、追加为主的消息、确定性摘要/实体、会话归属、Redis revision Cache、多节点上下文注入和 HITL 最终回写。
 - Human-in-the-Loop 审批与工单状态机。
 - OpenTelemetry 统一 Trace / Metrics 采集、OTLP Collector、LangSmith Trace 后端和 Prometheus / Grafana 指标展示。
+- Trace 问题修复：Resolver / QA 共享生成证据；截断回复最多重写一次；Tool Span 显示具体工具名和重试/降级状态；脱敏保留合法时间戳和系统观测 ID，对外观测/决策内容使用稳定业务 ID 别名，不影响内部 Memory 的订单号提取。
 - Docker Compose、Kubernetes manifests、分层 requirements、Python 3.11 GitHub Actions 全量 CI、两级 Evaluation Quality Gate 与 GHCR CD。
 - RAGAS / DeepEval Adapter、本地评测降级和 JSON 报告输出。
 - Dataset + Workflow Replay 离线评测，统一输出 RAG / Agent / Security 指标并关联 Trace ID。

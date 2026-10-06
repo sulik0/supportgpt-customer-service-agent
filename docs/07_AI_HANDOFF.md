@@ -31,9 +31,18 @@
 - Memory V1：SQL 结构化会话是事实源，Redis 是可选 revision Cache；有界历史、摘要和实体进入 AgentState，待审草稿不进入 Prompt。
 - 可观测：OpenTelemetry 唯一采集，OTLP 统一导出，Collector 分发 LangSmith Trace 和 Prometheus Metrics。
 - 评测：Ragas + DeepEval + 确定性 Agent/Security Evaluator，固定 100 条 Baseline 支持真实 Workflow Replay。
-- PromptOps / EvalOps V1：`src/promptops/` 管理模板快照、运行绑定和实验晋级；CLI 为 `scripts/promptops.py`。默认 Prompt 内容保持原样，production 不接受 Mock、过时版本、未提交代码或新增失败 Case。操作流程见 `06_PROMPTS.md`。
+- PromptOps / EvalOps V1：`src/promptops/` 管理模板快照、运行绑定和实验晋级；CLI 为 `scripts/promptops.py`。已有 Bundle 和发布指针不会自动替换；production 不接受 Mock、过时版本、未提交代码或新增失败 Case。操作流程见 `06_PROMPTS.md`。
 - 反馈：AgentRun、FeedbackEvent 和 AgentRunLink 关联 Trace、用户评价、人工修正与 Evaluation。
 - 前端：连续会话式用户咨询页 + 客服审批后台 + Agent 可观测页。用户端以浏览器已知 Session 列表加载最近 7 天安全历史，始终显示正常回复或安全的风险/异常处理状态，用户评分直接写入 Feedback Pipeline；审批明确区分原样批准、人工修改和拒绝。打开工单详情只读持久化结果，不重复调用 Agent。
+
+## 最近修改：2026-10-06 线上 Trace 问题修复
+
+- `src/agents/evidence.py` 只在生成前构造精简证据，Resolver 保存 `resolution_evidence`，QA 原样复用；不要恢复 QA 独立拼装上下文的旧方式。
+- 新增 State 字段可随现有 Checkpoint 保存；旧 Checkpoint 缺少字段时走兼容构造器，没有改动暂停、恢复或审批语义。
+- Resolver 默认 480 tokens，回答优先包含状态、异常、下一步。`finish_reason=length` 最多重写一次，仍截断则安全降级，不能把残缺草稿返回用户。
+- Tool Span 显示具体工具及异常结果，Resilience 子 Span 保留；观测失败不能改变 Tool 执行结果。
+- Trace / Jev 对外内容使用稳定业务 ID 别名。内部 Memory 的 `redact_text` 默认不改业务 ID，以免订单实体续接失效；时间戳和合法系统 ID 保留，Secret / PII 仍过滤。
+- 回归覆盖完整物流 Workflow、冻结证据、旧 State、错误回答反例、Provider 截断恢复、实际导出 Tool Span、脱敏和 Memory 兼容。没有运行真实付费 Jev / LLM，也没有启动 Docker。
 
 ## 必须保持的设计
 

@@ -4,7 +4,7 @@ import re
 import time
 from typing import Dict, Any
 
-from src.config import settings
+from src.agents.evidence import build_resolution_evidence
 from src.decision import decision_service
 from src.llm.provider import llm_provider
 from src.guardrails.response_filter import filter_response
@@ -43,20 +43,33 @@ class QualityAssuranceAgent:
                 f"{query}\nResolved conversation entities: "
                 f"{json.dumps(memory_entities, ensure_ascii=False)}"
             )
-        citations = state.get("context_citations", [])
-        tool_context = state.get("tool_context", {})
         raw_response = state.get("suggested_response", "")
         filtered_response_text = filter_response(raw_response)
-        context_texts = self._compact_context(citations, tool_context)
 
         try:
+            # 旧 Checkpoint 没有此字段时，才使用相同构造器兼容历史状态。
+            context_texts = (
+                list(state["resolution_evidence"])
+                if "resolution_evidence" in state
+                else build_resolution_evidence(state)
+            )
+            # 规则校验也只读取生成时可见的证据，避免使用后来补入的字段。
+            evidence_citations = [
+                {"text": text}
+                for text in context_texts
+                if re.match(r"^\[S[1-9][0-9]*\]", text)
+            ]
+            evidence_tools = {}
+            for text in context_texts:
+                if text.startswith("[TOOL] "):
+                    evidence_tools = json.loads(text[len("[TOOL] ") :])
             # 确定性安全结论直接短路，正向证据结论交给 Jev 复核。
             rule_result, rule_terminal = self._rule_evaluation(
                 query=query,
                 raw_response=raw_response,
                 filtered_response=filtered_response_text,
-                citations=citations,
-                tool_context=tool_context,
+                citations=evidence_citations,
+                tool_context=evidence_tools,
                 context_texts=context_texts,
             )
             decision_records = list(state.get("decision_records", []))
@@ -83,12 +96,10 @@ class QualityAssuranceAgent:
                     qa_eval = rule_result
                     strategy = "rule"
                 else:
-                    qa_eval, llm_in_tok, llm_out_tok = (
-                        await llm_provider.evaluate_qa(
-                            query=query,
-                            context=context_texts,
-                            response=filtered_response_text,
-                        )
+                    qa_eval, llm_in_tok, llm_out_tok = await llm_provider.evaluate_qa(
+                        query=query,
+                        context=context_texts,
+                        response=filtered_response_text,
                     )
                     in_tok += llm_in_tok
                     out_tok += llm_out_tok
@@ -169,32 +180,9 @@ class QualityAssuranceAgent:
         citations: list[Any], tool_context: Dict[str, Any] | None = None
     ) -> list[str]:
         """同时提供 RAG citation 和 Tool 业务事实，避免将真实查询结果误判为幻觉。"""
-        remaining = settings.LLM_QA_MAX_CONTEXT_CHARS
-        context = []
-        for index, citation in enumerate(citations[:2], start=1):
-            source = str(getattr(citation, "source", f"doc-{index}"))
-            prefix = f"[S{index}] {source}: "
-            text = (
-                prefix
-                + str(getattr(citation, "text", ""))[: max(remaining - len(prefix), 0)]
-            )
-            if not text:
-                continue
-            context.append(text)
-            remaining -= len(text)
-            if remaining <= 0:
-                break
-        if tool_context and remaining > 0:
-            compact_tool = {
-                "customer_profile": tool_context.get("customer_profile", {}),
-                "recent_orders": (tool_context.get("recent_orders") or [])[:2],
-                "past_tickets": (tool_context.get("past_tickets") or [])[:2],
-            }
-            text = "[TOOL] " + json.dumps(
-                compact_tool, ensure_ascii=False, default=str, separators=(",", ":")
-            )
-            context.append(text[:remaining])
-        return context
+        return build_resolution_evidence(
+            {"context_citations": citations, "tool_context": tool_context or {}}
+        )
 
     @classmethod
     def _rule_evaluation(
@@ -421,6 +409,8 @@ class QualityAssuranceAgent:
         query: str, response: str, tool_context: Dict[str, Any]
     ) -> bool:
         """用 OMS 返回验证“目标订单不存在”，避免负向查询被误判为幻觉。"""
+        if "recent_orders" not in tool_context:
+            return False
         requested_ids = {
             value.upper() for value in re.findall(r"(?i)\bORD-[A-Z0-9-]+\b", query)
         }

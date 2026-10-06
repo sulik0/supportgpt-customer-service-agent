@@ -7,10 +7,14 @@ from src.models.intents import (
     IntentType,
     normalize_intent,
 )
-from src.observability.tracing import record_current_llm_io, trace_operation
+from src.observability.tracing import (
+    record_current_llm_io,
+    set_span_attributes,
+    trace_operation,
+)
 from src.resilience.executor import resilience_executor
 from src.resilience.policies import llm_policy
-from src.promptops.defaults import RESOLUTION_LANGUAGE_POLICY
+from src.promptops.defaults import RESOLUTION_LANGUAGE_POLICY, RESOLUTION_OUTPUT_POLICY
 from src.promptops.runtime import active_bundle
 
 
@@ -19,6 +23,75 @@ CHAT_LANGUAGE_POLICY = (
     "asks for a different response language, use the requested language instead. "
     "Do not preserve a previous response language unless the latest user message asks you to."
 )
+
+
+def _resolution_messages(
+    subject: str, description: str, context: str
+) -> List[Dict[str, str]]:
+    """旧的已发布 Bundle 也补充输出预算约束，实际 Prompt 仍记录到 Trace。"""
+    messages = active_bundle().messages(
+        "resolver", subject=subject, description=description, context=context
+    )
+    if RESOLUTION_OUTPUT_POLICY not in messages[0]["content"]:
+        messages[0]["content"] += "\n" + RESOLUTION_OUTPUT_POLICY
+    return messages
+
+
+async def _complete_chat(
+    client: Any,
+    model: str,
+    messages: List[Dict[str, str]],
+    kwargs: dict,
+    *,
+    operation: str,
+    json_mode: bool,
+) -> Tuple[str, int, int]:
+    """统一处理兼容服务的停止原因；只对截断的客服回复重写一次。"""
+    from opentelemetry import trace
+
+    input_tokens = output_tokens = 0
+    request_messages = messages
+    resolver = operation == "generate_resolution"
+    for attempt in range(2 if resolver else 1):
+        record_current_llm_io(input_value=request_messages, model=model)
+        response = await client.chat.completions.create(
+            model=model, messages=request_messages, temperature=0.0, **kwargs
+        )
+        choice = response.choices[0]
+        content = choice.message.content or ""
+        input_tokens += int(response.usage.prompt_tokens or 0)
+        output_tokens += int(response.usage.completion_tokens or 0)
+        finish_reason = getattr(choice, "finish_reason", None)
+        record_current_llm_io(output_value=content)
+        set_span_attributes(
+            trace.get_current_span(),
+            {
+                "gen_ai.response.finish_reasons": (
+                    [finish_reason] if isinstance(finish_reason, str) else []
+                ),
+                "llm.completion_requests": attempt + 1,
+                "llm.truncation_retries": attempt,
+                "resolver.output_policy": "concise-v1" if resolver else None,
+            },
+        )
+        if resolver and finish_reason == "length":
+            if attempt:
+                raise ValueError(
+                    "Resolver reply remains truncated after one concise rewrite"
+                )
+            # 使用原始证据重新作答，不把被截断的草稿当作新证据。
+            request_messages = [dict(message) for message in messages]
+            request_messages[0]["content"] += (
+                "\nThe previous generation exceeded its output budget. Rewrite the full answer "
+                "in at most 3 short sentences, about 100 Chinese characters or 60 English words. "
+                "Include the current status, exception and supported next step first. "
+                "Omit optional policy and history. End with a complete sentence."
+            )
+            continue
+        if json_mode:
+            json.loads(content)
+        return content, input_tokens, output_tokens
+    raise RuntimeError("No completion returned")
 
 
 def _ticket_classifier_prompt(text: str) -> str:
@@ -325,18 +398,13 @@ class OpenAILLMProvider(BaseLLMProvider):
 
         async def invoke(target_client: Any, target_model: str) -> Tuple[str, int, int]:
             """单次 SDK 调用禁用内建重试，由 Resilience 统一管理。"""
-            record_current_llm_io(input_value=messages, model=target_model)
-            response = await target_client.chat.completions.create(
-                model=target_model, messages=messages, temperature=0.0, **kwargs
-            )
-            content = response.choices[0].message.content or ""
-            if json_mode:
-                json.loads(content)
-            record_current_llm_io(output_value=content)
-            return (
-                content,
-                int(response.usage.prompt_tokens or 0),
-                int(response.usage.completion_tokens or 0),
+            return await _complete_chat(
+                target_client,
+                target_model,
+                messages,
+                kwargs,
+                operation=operation,
+                json_mode=json_mode,
             )
 
         fallback = None
@@ -370,9 +438,7 @@ class OpenAILLMProvider(BaseLLMProvider):
     async def generate_resolution(
         self, subject: str, description: str, context: str
     ) -> Tuple[str, int, int]:
-        messages = active_bundle().messages(
-            "resolver", subject=subject, description=description, context=context
-        )
+        messages = _resolution_messages(subject, description, context)
         return await self._call_gpt(
             messages,
             json_mode=False,
@@ -457,18 +523,13 @@ class AzureOpenAILLMProvider(BaseLLMProvider):
 
         async def invoke(target_client: Any, target_model: str) -> Tuple[str, int, int]:
             """将 Azure 与备用兼容服务收敛到同一故障策略。"""
-            record_current_llm_io(input_value=messages, model=target_model)
-            response = await target_client.chat.completions.create(
-                model=target_model, messages=messages, temperature=0.0, **kwargs
-            )
-            content = response.choices[0].message.content or ""
-            if json_mode:
-                json.loads(content)
-            record_current_llm_io(output_value=content)
-            return (
-                content,
-                int(response.usage.prompt_tokens or 0),
-                int(response.usage.completion_tokens or 0),
+            return await _complete_chat(
+                target_client,
+                target_model,
+                messages,
+                kwargs,
+                operation=operation,
+                json_mode=json_mode,
             )
 
         fallback = None
@@ -501,9 +562,7 @@ class AzureOpenAILLMProvider(BaseLLMProvider):
     async def generate_resolution(
         self, subject: str, description: str, context: str
     ) -> Tuple[str, int, int]:
-        messages = active_bundle().messages(
-            "resolver", subject=subject, description=description, context=context
-        )
+        messages = _resolution_messages(subject, description, context)
         return await self._call_gpt(
             messages,
             json_mode=False,

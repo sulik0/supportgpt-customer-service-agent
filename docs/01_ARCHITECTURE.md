@@ -159,12 +159,15 @@ stateDiagram-v2
 | 安全与风险 | 安全威胁、检测分数与信号、风险等级/分数/原因、人工与自动化建议 | Guardrails、Analyzer、QA、Risk Engine | 条件边、Escalation、Approval、API、Trace | 让所有节点使用同一风险语义，避免分散阈值漂移 |
 | 工具上下文 | 操作角色、结构化 Tool Context、调用审计 | Tooling / ToolRegistry | Resolver、API、Trace | 让回复可利用业务事实并暴露治理证据 |
 | RAG 结果 | citation | Retriever | Resolver、QA、API | 让回答、质量判断和人工核验使用同一依据 |
+| 生成证据 | `resolution_evidence`：必要 Tool 事实、Top-2 KB 引用和有界会话内容 | Resolver 调用模型前 | QA、Checkpointer | QA 直接复用生成时使用的证据，避免物流事实等关键数据在二次拼装时丢失 |
 | 生成与质量 | 回复草稿、QA 分数、幻觉标记 | Resolver、QA | Escalation、Approval、API | 将内容生成和风险判断分离 |
 | 处理决定 | 是否转人工、转人原因、是否需审批 | Escalation | Approval、API | 让工作流判断能否自动回复，以及是继续还是等待审批 |
 | 持久执行 | Thread ID、逻辑 Namespace、执行状态、审批状态和人工决策 | API、Approval Gate | Checkpointer、恢复服务、API | 让同一 Graph 可以跨请求、跨重启继续 |
 | 可观测数据 | token、成本、延迟、错误列表 | 各节点 | Metrics、Trace、API | 支持成本控制、排障和安全短路 |
 
 `AgentState.intent` 使用统一 `IntentType`，规则表、OpenAI-compatible/Azure Prompt、Mock Provider、Tooling、Risk Engine 和 Agent Evaluation 共用同一套 8 个枚举值。Provider 不遵守约束时，未知值会归一化为 `information_request`，同时将分类置信度上限降至 `0.5`，使 Risk Engine 触发受控人工处理。
+
+Resolver 与 QA 共用 `src/agents/evidence.py` 的证据构造器。Resolver 在现有安全扫描之后只构造一次证据，保存为 State 中的字符串列表，再把相同内容传给生成模型。QA 直接读取这个列表，规则校验也从列表中解析 Tool JSON 和 citation，不另取后来更新的 Tool / KB 内容。旧 State 缺少该字段时才重新构造，保持历史 Checkpoint 兼容。Jev 出站前仍会过滤敏感字段，但同一业务 ID 在问题、证据、回答和 Trace 中使用同一个别名；状态、异常、下一步和引用编号不会因此丢失。
 
 **这个状态用来做什么**：在节点之间传递结构化的上下文，并保留必要信息供审计。
 
