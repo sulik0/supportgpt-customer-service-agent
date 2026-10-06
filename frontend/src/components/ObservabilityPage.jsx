@@ -336,7 +336,7 @@ export default function ObservabilityPage() {
       {!HAS_PROJECT_URL && (
         <div className="obs-config-notice">
           <ShieldAlert size={17} />
-          还没有设置 LangSmith 项目地址，按钮会打开首页。请在前端环境变量中设置 <code>VITE_LANGSMITH_PROJECT_URL</code>。
+          尚未配置 LangSmith 项目快捷入口，当前按钮会打开 LangSmith 首页。若本次 Trace 已上报，可复制 Trace ID 并在 LangSmith 中搜索。
         </div>
       )}
 
