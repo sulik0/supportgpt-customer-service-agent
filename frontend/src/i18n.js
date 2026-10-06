@@ -33,6 +33,12 @@ const ROLE_LABELS = {
 };
 
 const RISK_LABELS = { low: '低', medium: '中', high: '高', critical: '严重' };
+export const DEPARTMENT_LABELS = {
+  billing: '账务',
+  technical: '技术支持',
+  shipping: '订单与物流',
+  general: '综合支持',
+};
 
 const TIER_LABELS = {
   VIP: 'VIP 客户',
@@ -62,6 +68,7 @@ export const translateSentiment = (value) => translateValue(SENTIMENT_LABELS, va
 export const translateStatus = (value) => translateValue(STATUS_LABELS, value, '未知');
 export const translateRole = (value) => translateValue(ROLE_LABELS, value, '客服');
 export const translateRisk = (value) => translateValue(RISK_LABELS, value, '未知');
+export const translateDepartment = (value) => translateValue(DEPARTMENT_LABELS, value, '未分配部门');
 export const translateTier = (value) => translateValue(TIER_LABELS, value, value);
 export const translateSubject = (value) => translateValue(SUBJECT_LABELS, value, value);
 export const translateOrderItem = (value) => translateValue(ORDER_ITEM_LABELS, value, value);

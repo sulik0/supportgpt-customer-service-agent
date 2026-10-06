@@ -1,20 +1,28 @@
 import React, { useMemo, useState } from 'react';
 import { AlertCircle, ChevronRight, Inbox, MessageSquare, RefreshCw, Search } from 'lucide-react';
-import { translatePriority, translateSentiment, translateStatus, translateSubject } from '../i18n';
+import { DEPARTMENT_LABELS, translateDepartment, translatePriority, translateSentiment, translateStatus, translateSubject } from '../i18n';
+import { filterTickets } from './ticketFilters';
 
 export default function TicketList({ tickets = [], selectedId, onSelect, loading = false, error = '', onRetry }) {
   const [query, setQuery] = useState('');
   const [priorityFilter, setPriorityFilter] = useState('all');
+  const [departmentFilter, setDepartmentFilter] = useState('all');
+  const [sentimentFilter, setSentimentFilter] = useState('all');
+  const hasFilters = Boolean(query.trim() || priorityFilter !== 'all' || departmentFilter !== 'all' || sentimentFilter !== 'all');
 
-  // 搜索与状态筛选只作用于当前已加载的工单队列。
-  const filteredTickets = useMemo(() => {
-    const normalizedQuery = query.trim().toLowerCase();
-    return tickets.filter((ticket) => {
-      const matchesPriority = priorityFilter === 'all' || ticket.priority === priorityFilter;
-      const searchable = `${ticket.id} ${ticket.customer_id} ${ticket.subject} ${ticket.description}`.toLowerCase();
-      return matchesPriority && (!normalizedQuery || searchable.includes(normalizedQuery));
-    });
-  }, [priorityFilter, query, tickets]);
+  const filteredTickets = useMemo(() => filterTickets(tickets, {
+    query, department: departmentFilter, priority: priorityFilter, sentiment: sentimentFilter,
+  }), [departmentFilter, priorityFilter, query, sentimentFilter, tickets]);
+  const departments = useMemo(() => [...new Set([
+    ...Object.keys(DEPARTMENT_LABELS), ...tickets.map((ticket) => ticket.department || 'unassigned'),
+  ])], [tickets]);
+
+  function clearFilters() {
+    setQuery('');
+    setPriorityFilter('all');
+    setDepartmentFilter('all');
+    setSentimentFilter('all');
+  }
 
   return (
     <aside className="ticket-queue">
@@ -28,8 +36,12 @@ export default function TicketList({ tickets = [], selectedId, onSelect, loading
       <div className="queue-filters">
         <label className="queue-search">
           <Search size={15} />
-          <input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="搜索客户、主题或编号" />
+          <input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="搜索客户、主题或编号" aria-label="搜索工单" />
         </label>
+        <select value={departmentFilter} onChange={(event) => setDepartmentFilter(event.target.value)} aria-label="筛选工单部门">
+          <option value="all">全部部门</option>
+          {departments.map((department) => <option key={department} value={department}>{translateDepartment(department === 'unassigned' ? null : department)}</option>)}
+        </select>
         <select value={priorityFilter} onChange={(event) => setPriorityFilter(event.target.value)} aria-label="筛选工单优先级">
           <option value="all">全部优先级</option>
           <option value="urgent">紧急</option>
@@ -37,6 +49,16 @@ export default function TicketList({ tickets = [], selectedId, onSelect, loading
           <option value="medium">中</option>
           <option value="low">低</option>
         </select>
+        <select value={sentimentFilter} onChange={(event) => setSentimentFilter(event.target.value)} aria-label="筛选客户情绪">
+          <option value="all">全部情绪</option>
+          <option value="negative">负面</option>
+          <option value="neutral">中性</option>
+          <option value="positive">正面</option>
+        </select>
+        <div className="queue-filter-summary">
+          <span>符合条件 {filteredTickets.length} 张</span>
+          <button type="button" onClick={clearFilters} disabled={!hasFilters}>清除筛选</button>
+        </div>
       </div>
 
       <div className="ticket-list" aria-live="polite">
@@ -57,7 +79,7 @@ export default function TicketList({ tickets = [], selectedId, onSelect, loading
           <div className="queue-empty">
             <Inbox size={28} />
             <strong>{tickets.length === 0 ? '暂无待处理工单' : '没有匹配的工单'}</strong>
-            <span>{tickets.length === 0 ? 'Agent 发现异常或需要审批时会自动加入这里' : '请调整搜索词或优先级筛选'}</span>
+            <span>{tickets.length === 0 ? 'Agent 发现异常或需要审批时会自动加入这里' : '请调整搜索词、部门、优先级或情绪筛选'}</span>
           </div>
         ) : filteredTickets.map((ticket) => {
           const isSelected = ticket.id === selectedId;
@@ -82,6 +104,7 @@ export default function TicketList({ tickets = [], selectedId, onSelect, loading
                 <strong>{translateSubject(ticket.subject)}</strong>
                 <span className="ticket-row-preview">{ticket.description || '未填写问题描述'}</span>
                 <span className="ticket-row-footer">
+                  <span>{translateDepartment(ticket.department)}</span>
                   <span className={`mini-priority priority-text-${priority}`}>
                     {['urgent', 'high'].includes(priority) && <AlertCircle size={12} />}
                     {translatePriority(priority)}优先级

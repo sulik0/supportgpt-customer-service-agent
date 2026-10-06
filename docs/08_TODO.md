@@ -1,6 +1,6 @@
 # 项目任务清单
 
-> 最后更新：2026-09-27。状态以代码、测试和 `03_INTERVIEW_CANON.md` 为准。
+> 最后更新：2026-10-06。状态以代码、测试和 `03_INTERVIEW_CANON.md` 为准。
 
 ## P0
 
@@ -26,6 +26,7 @@
 - [x] 将业务回归 Baseline 扩展到 100 条，增加多语言、安全攻击与安全 hard negative 覆盖。
 - [x] 增加真实 LLM Regression 专用入口、smoke/full 套件、Dry Run、付费调用前确认、调用预算，并记录模型、Token 与成本。
 - [x] 拆分用户咨询页与客服员工后台；用户端采用连续会话展示正常回复或安全的风险/异常状态，异常请求进入受 RBAC 保护的人工审批队列。
+- [x] 人工处理台支持按部门、优先级、客户情绪和关键词组合筛选完整待审批队列；工单显示部门，可一键清除筛选，不重新调用 Agent。
 - [x] 建立统一 `IntentType`，让规则、LLM Provider、AgentState、Tooling、Risk Engine 和 Agent Evaluation 共用同一套意图枚举与兜底策略。
 - [x] 实现 Baseline Workflow Replay V1：固定 100 条完整 Ticket State 回放、六项确定性行为指标、逐 Case 结果和 OTel Trace 同源性能汇总。
 - [x] 建立 Evaluation Report 生命周期：清理旧 `report_*.json`、单条评测最多保留 20 份、Baseline 使用时间戳快照与 latest 普通文件副本，并固化完整实验配置。
