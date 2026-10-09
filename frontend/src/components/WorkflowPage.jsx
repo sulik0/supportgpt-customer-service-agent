@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { ArrowDown, ArrowLeft, ArrowRight, CheckCircle2, Database, GitBranch, Layers, RotateCcw, ShieldCheck } from 'lucide-react';
 import './workflow.css';
+import ToolGovernanceDiagram from './ToolGovernanceDiagram';
 
 // 演示配置对应当前 graph.py；不执行 Agent，也不读取真实客户数据。
 const NODES = {
@@ -26,6 +27,7 @@ const SCENARIOS = {
 const STAGES = ['input', 'analyzer', 'skill_selector', 'context_enrichment', 'resolver', 'qa', 'escalation', 'approval_gate', 'end'];
 
 export default function WorkflowPage({ onBack }) {
+  const [view, setView] = useState('workflow');
   const [scenarioKey, setScenarioKey] = useState('normal');
   const [step, setStep] = useState(-1);
   const [selected, setSelected] = useState('analyzer');
@@ -55,7 +57,9 @@ export default function WorkflowPage({ onBack }) {
 
   return <section className="wf-page">
     {onBack && <button className="wf-back" type="button" onClick={onBack}><ArrowLeft size={16} /> 返回用户咨询</button>}
-    <div className="wf-hero"><div><span className="wf-eyebrow"><GitBranch size={16} /> SupportGPT 智能客服 Agent · 处理流程演示</span><h1>用户提问后，Agent 怎样完成处理？</h1><p>Agent 先理解问题，再查询业务和知识、生成并检查回复，最后决定直接返回结果还是等待人工确认。</p></div><span className="wf-demo-label">流程示例，不会实际运行 Agent</span></div>
+    <div className="wf-hero"><div><span className="wf-eyebrow"><GitBranch size={16} /> SupportGPT 智能客服 Agent · 处理流程演示</span><h1>{view === 'workflow' ? '用户提问后，Agent 怎样完成处理？' : '高风险操作怎样审批、执行和恢复？'}</h1><p>{view === 'workflow' ? 'Agent 先理解问题，再查询业务和知识、生成并检查回复，最后决定直接返回结果还是等待人工确认。' : '通过状态机和故障时序，查看 Action、Outbox、Worker Lease 与 Review 如何共同保护一笔业务操作。'}</p></div><span className="wf-demo-label">流程示例，不会实际运行 Agent</span></div>
+    <nav className="wf-view-switch" aria-label="选择架构演示"><button type="button" aria-pressed={view === 'workflow'} onClick={() => setView('workflow')}>Agent 处理流程</button><button type="button" aria-pressed={view === 'governance'} onClick={() => setView('governance')}>高风险操作与故障恢复</button></nav>
+    {view === 'governance' ? <ToolGovernanceDiagram /> : <>
     <div className="wf-overview">{[['7', 'LangGraph 流程节点'], ['6', 'Skill 处理能力'], ['9', '已注册的业务工具'], ['OTel', '记录调用过程与运行指标']].map(([value, label]) => <div key={label}><strong>{value}</strong><span>{label}</span></div>)}</div>
     <section className="wf-scenarios" aria-label="演示场景">
       <div className="wf-section-heading"><div><h2>选一个场景，逐步查看系统怎样处理</h2><p>点击“下一步”查看处理顺序。演示只在当前页面运行，不向后端提交请求，不调用模型，也不展示真实客户数据或耗时。</p></div></div>
@@ -85,5 +89,6 @@ export default function WorkflowPage({ onBack }) {
       ['查看执行过程并评测质量', 'OpenTelemetry 记录节点、模型、知识检索和工具调用。Collector 将 Trace（调用过程）发到 LangSmith，并提供 Prometheus 指标。系统用固定 Baseline（测试集）重新运行流程，检查行为是否符合预期；PromptOps 可以在同一测试集上比较当前版本和候选版本。'],
       ['服务故障时怎样处理', '模型、检索或工具调用都有超时限制和重试次数限制；连续失败时可暂停调用或使用备用方案。系统分别检查用户输入、查询结果、知识文档和回复。如果无法确认结果可靠，就向用户说明情况或交给人工。'],
     ].map(([title, text]) => <article key={title}><h3>{title}</h3><p>{text}</p></article>)}</div></section>
+    </>}
   </section>;
 }
