@@ -237,6 +237,8 @@ Prompt Injection 不再只是英文关键词检测，当前实现为确定性多
 
 Tool Governance V2.3 另外增加 `ToolBusinessRequest` 和 `ToolActionReview`：同一客户/订单的整单退款申请跨 Action 去重；Worker 续租并按领取版本阻止旧 Worker 写回；unknown/DLQ 核实任务关联工单，由主管填写外部凭证确认，不重复执行写工具，也不替代回复审批。PostgreSQL 多进程演练使用持久化模拟 OMS，包括并发创建、续租、强杀后的对账和旧版本保护；是否实际通过以该次 CI/脚本报告为准，不宣称已接真实 OMS 或 Exactly Once。
 
+2026-10-09，提交 `c9d1bf0` 的 [CI 运行](https://github.com/sulik0/supportgpt-customer-service-agent/actions/runs/37912408689) 中，`PostgreSQL Tool Governance Fault Drill` 任务成功，以上四项演练已在 PostgreSQL 16 上实际通过。该次本地全量测试为 344 项通过，固定 100 条 Mock Baseline 为 100/100；这些结果不等于真实退款业务验收。
+
 ## 16. Redis
 
 Redis 是可选组件，不是系统启动或处理工单的强依赖。
