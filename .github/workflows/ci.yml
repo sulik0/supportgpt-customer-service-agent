@@ -70,6 +70,50 @@ jobs:
         working-directory: frontend
         run: npm run build
 
+      - name: Test frontend filters
+        working-directory: frontend
+        run: npm test
+
+  tool-governance-postgres-drill:
+    name: PostgreSQL Tool Governance Fault Drill
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: supportgpt
+          POSTGRES_PASSWORD: isolated-ci-password
+          POSTGRES_DB: supportgpt_drill
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U supportgpt -d supportgpt_drill"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+          cache-dependency-path: requirements/test.txt
+      - name: Install dependencies
+        run: python -m pip install -r requirements/test.txt
+      - name: Run isolated multi-process fault drill
+        env:
+          TOOL_DRILL_DATABASE_URL: postgresql+asyncpg://supportgpt:isolated-ci-password@127.0.0.1:5432/supportgpt_drill
+        run: python scripts/run_postgres_tool_drill.py --confirm-isolated-database --report evaluation/reports/ci_tool_drill/postgres.json
+      - name: Upload drill report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: postgres-tool-drill-${{ github.run_id }}
+          path: evaluation/reports/ci_tool_drill/
+          if-no-files-found: warn
+          retention-days: 14
+
   agent-quality-gate:
     name: Agent PR Quality Gate
     runs-on: ubuntu-latest
@@ -116,7 +160,7 @@ jobs:
 
   container-build:
     name: Container Build
-    needs: [backend-tests, frontend-build, agent-quality-gate]
+    needs: [backend-tests, frontend-build, agent-quality-gate, tool-governance-postgres-drill]
     runs-on: ubuntu-latest
     timeout-minutes: 20
 

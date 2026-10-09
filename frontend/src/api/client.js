@@ -126,6 +126,20 @@ export async function fetchPendingApprovals() {
   return response.json();
 }
 
+export async function fetchToolReviews(ticketId, signal) {
+  const response = await authenticatedFetch(`${BASE_URL}/tickets/${encodeURIComponent(ticketId)}/tool-reviews`, { headers: getHeaders(), signal });
+  if (!response.ok) throw await apiError(response, '加载业务核实任务失败');
+  return response.json();
+}
+
+export async function resolveToolAction(actionId, payload) {
+  const response = await authenticatedFetch(`${BASE_URL}/tool-actions/${encodeURIComponent(actionId)}/resolve`, {
+    method: 'POST', headers: getHeaders(), body: JSON.stringify(payload),
+  });
+  if (!response.ok) throw await apiError(response, '提交外部核实结果失败');
+  return response.json();
+}
+
 export async function submitApproval(approvalId, status, modifiedResponse) {
   const response = await authenticatedFetch(`${BASE_URL}/approvals/${approvalId}`, {
     method: 'POST',

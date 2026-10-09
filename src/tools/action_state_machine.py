@@ -47,6 +47,10 @@ class ToolActionCommand:
     COMPENSATE_SUCCESS = "compensate_success"
     COMPENSATE_FAILURE = "compensate_failure"
     MARK_COMPENSATION_UNKNOWN = "mark_compensation_unknown"
+    MANUAL_SUCCESS = "manual_success"
+    MANUAL_FAILURE = "manual_failure"
+    MANUAL_COMPENSATED = "manual_compensated"
+    MANUAL_COMPENSATION_FAILURE = "manual_compensation_failure"
 
 
 @dataclass(frozen=True)
@@ -74,6 +78,7 @@ class ToolActionStateMachine:
         },
         ToolActionStatus.QUEUED: {
             ToolActionCommand.START_EXECUTION: ToolActionStatus.EXECUTING,
+            ToolActionCommand.MANUAL_FAILURE: ToolActionStatus.FAILED,
         },
         ToolActionStatus.EXECUTING: {
             ToolActionCommand.SUCCEED: ToolActionStatus.SUCCEEDED,
@@ -82,22 +87,31 @@ class ToolActionStateMachine:
         },
         ToolActionStatus.UNKNOWN: {
             ToolActionCommand.START_RECONCILIATION: ToolActionStatus.RECONCILING,
+            ToolActionCommand.MANUAL_SUCCESS: ToolActionStatus.SUCCEEDED,
+            ToolActionCommand.MANUAL_FAILURE: ToolActionStatus.FAILED,
         },
         ToolActionStatus.RECONCILING: {
             ToolActionCommand.RECONCILE_SUCCESS: ToolActionStatus.SUCCEEDED,
             ToolActionCommand.RECONCILE_FAILURE: ToolActionStatus.FAILED,
             ToolActionCommand.RECONCILE_PENDING: ToolActionStatus.UNKNOWN,
+            ToolActionCommand.MANUAL_SUCCESS: ToolActionStatus.SUCCEEDED,
+            ToolActionCommand.MANUAL_FAILURE: ToolActionStatus.FAILED,
         },
         ToolActionStatus.SUCCEEDED: {
             ToolActionCommand.REQUEST_COMPENSATION: ToolActionStatus.COMPENSATION_PENDING,
         },
         ToolActionStatus.COMPENSATION_PENDING: {
             ToolActionCommand.START_COMPENSATION: ToolActionStatus.COMPENSATING,
+            ToolActionCommand.MANUAL_COMPENSATION_FAILURE: ToolActionStatus.COMPENSATION_FAILED,
         },
         ToolActionStatus.COMPENSATING: {
             ToolActionCommand.COMPENSATE_SUCCESS: ToolActionStatus.COMPENSATED,
             ToolActionCommand.COMPENSATE_FAILURE: ToolActionStatus.COMPENSATION_FAILED,
             ToolActionCommand.MARK_COMPENSATION_UNKNOWN: ToolActionStatus.COMPENSATION_UNKNOWN,
+        },
+        ToolActionStatus.COMPENSATION_UNKNOWN: {
+            ToolActionCommand.MANUAL_COMPENSATED: ToolActionStatus.COMPENSATED,
+            ToolActionCommand.MANUAL_COMPENSATION_FAILURE: ToolActionStatus.COMPENSATION_FAILED,
         },
     }
 

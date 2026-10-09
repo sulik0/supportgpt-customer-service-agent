@@ -29,7 +29,7 @@ export default function TicketList({ tickets = [], selectedId, onSelect, loading
       <div className="queue-heading">
         <div>
           <span className="section-label">处理队列</span>
-          <h2>待人工审批 <em>{tickets.length}</em></h2>
+          <h2>待人工处理 <em>{tickets.length}</em></h2>
         </div>
       </div>
 
@@ -100,6 +100,7 @@ export default function TicketList({ tickets = [], selectedId, onSelect, loading
                   <span>{ticket.customer_id}</span>
                   <span className={`status-dot status-${status}`} />
                   <span>{translateStatus(status)}</span>
+                  {ticket.requires_tool_review && <span>业务待核实</span>}
                 </span>
                 <strong>{translateSubject(ticket.subject)}</strong>
                 <span className="ticket-row-preview">{ticket.description || '未填写问题描述'}</span>

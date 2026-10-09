@@ -1,6 +1,6 @@
 # 项目任务清单
 
-> 最后更新：2026-10-06。状态以代码、测试和 `03_INTERVIEW_CANON.md` 为准。
+> 最后更新：2026-10-09。状态以代码、测试和 `03_INTERVIEW_CANON.md` 为准。
 
 ## P0
 
@@ -38,6 +38,9 @@
 - [x] 完成 Resilience V1：LLM/RAG/Tool 统一故障分类、超时、有界 Retry、进程内 Circuit Breaker、Fallback、AgentState/Risk/OTel 联动与高风险禁重试。
 - [x] 完成 Tool Governance V2.1：持久化保存脱敏后的 Tool 调用审计；高风险写 Action 的参数经加密保存并用 HMAC 防篡改，审批需要由其他人完成，状态用乐观并只追加事件的方式记录。
 - [x] 完成 Tool Governance V2.2：写 Action 业务幂等键、Transactional Outbox、异步 Worker、数据库租约/乐观抢占、unknown 自动对账、Retry/DLQ、状态事件补写、显式补偿和版本化 Policy 回放。
+- [x] Tool Governance V2.3：整单退款跨 Action 去重、旧记录保护、Worker 续租与 fencing token、unknown/DLQ 外部核实 API 和人工处理台联动；回复审批保持独立。
+- [x] 增加专用 PostgreSQL 多进程故障演练脚本和 CI 门禁，使用持久化模拟 OMS；实际验证结果以运行报告为准。
+- [ ] 接入真实 OMS 后核对幂等、退款到账语义、对账权威性和凭证核实流程，不能以 Mock 或演练通过替代真实业务验收。
 - [x] 完成 LangGraph Checkpoint + Durable Execution V1：SQLite/PostgreSQL Saver、Approval Gate interrupt/resume、AgentExecution、数据库恢复租约、启动扫描和主管重试 API。
 - [x] 完成 Skill Framework V1：6 个版本化 Skill 覆盖 8 个 Intent，确定性 Selector、Registry Hash、Tool Allowlist，并关联 State/Checkpoint/OTel/AgentRun/Baseline。
 - [x] 完成 DecisionProvider V1：可选 Jev System One，复核 Analyzer 规则候选与 QA 正向证据，包含脱敏、限长、Trace/Metrics、超时/熔断与规则/LLM 分层 Fallback。

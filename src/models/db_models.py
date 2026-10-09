@@ -298,9 +298,7 @@ class AgentReviewContext(Base):
 
     __tablename__ = "agent_review_contexts"
 
-    agent_run_id = Column(
-        String(36), ForeignKey("agent_runs.id"), primary_key=True
-    )
+    agent_run_id = Column(String(36), ForeignKey("agent_runs.id"), primary_key=True)
     escalation_reason = Column(Text, nullable=True)
     risk_level = Column(String(30), nullable=False, default="low")
     risk_score = Column(Float, nullable=False, default=0.0)
@@ -321,9 +319,7 @@ class AgentRunSnapshot(Base):
 
     __tablename__ = "agent_run_snapshots"
 
-    agent_run_id = Column(
-        String(36), ForeignKey("agent_runs.id"), primary_key=True
-    )
+    agent_run_id = Column(String(36), ForeignKey("agent_runs.id"), primary_key=True)
     analyzer_strategy = Column(String(30), nullable=False, default="not_run")
     analyzer_result = Column(JSON, nullable=False, default=dict)
     qa_strategy = Column(String(30), nullable=False, default="not_run")
@@ -522,6 +518,36 @@ class ToolAction(Base):
     @property
     def policy_hash(self):
         return self.control.policy_hash if self.control else None
+
+
+class ToolBusinessRequest(Base):
+    """按客户、订单和操作保留唯一申请，跨工单复用原 Action。"""
+
+    __tablename__ = "tool_business_requests"
+
+    business_key = Column(String(64), primary_key=True)
+    tool_action_id = Column(
+        String(36), ForeignKey("tool_actions.id"), unique=True, nullable=False
+    )
+    payload_hash = Column(String(64), nullable=False)
+    created_at = Column(DateTime, default=datetime.datetime.utcnow, nullable=False)
+
+
+class ToolActionReview(Base):
+    """将结果不确定或死信操作加入工单人工核实队列。"""
+
+    __tablename__ = "tool_action_reviews"
+
+    tool_action_id = Column(String(36), ForeignKey("tool_actions.id"), primary_key=True)
+    ticket_id = Column(Integer, ForeignKey("tickets.id"), nullable=False, index=True)
+    status = Column(String(30), nullable=False, default="pending", index=True)
+    reason = Column(String(80), nullable=False)
+    outcome = Column(String(40), nullable=True)
+    evidence_encrypted = Column(Text, nullable=True)
+    evidence_summary = Column(JSON, nullable=True)
+    resolved_by_user_id = Column(Integer, ForeignKey("users.id"), nullable=True)
+    created_at = Column(DateTime, default=datetime.datetime.utcnow, nullable=False)
+    resolved_at = Column(DateTime, nullable=True)
 
 
 class ToolActionControl(Base):

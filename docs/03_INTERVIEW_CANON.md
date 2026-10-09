@@ -235,6 +235,8 @@ Prompt Injection 不再只是英文关键词检测，当前实现为确定性多
 
 持久化实体包括用户、工单、会话记忆、知识文档、回复审批记录、AgentRun、AgentSkillSelection、AgentRunLink、AgentExecution、FeedbackEvent、ToolAction、ToolActionControl、ToolActionEvent、ToolOutboxEvent 和 ToolInvocationAudit。AgentExecution 只保存业务关联、状态、租约和 Trace ID；Graph State 正文由 LangGraph Saver 的官方表保存。当前没有数据库迁移工具、读写分离、分库分表、ticket_status_events 审计表或多租户数据隔离。
 
+Tool Governance V2.3 另外增加 `ToolBusinessRequest` 和 `ToolActionReview`：同一客户/订单的整单退款申请跨 Action 去重；Worker 续租并按领取版本阻止旧 Worker 写回；unknown/DLQ 核实任务关联工单，由主管填写外部凭证确认，不重复执行写工具，也不替代回复审批。PostgreSQL 多进程演练使用持久化模拟 OMS，包括并发创建、续租、强杀后的对账和旧版本保护；是否实际通过以该次 CI/脚本报告为准，不宣称已接真实 OMS 或 Exactly Once。
+
 ## 16. Redis
 
 Redis 是可选组件，不是系统启动或处理工单的强依赖。

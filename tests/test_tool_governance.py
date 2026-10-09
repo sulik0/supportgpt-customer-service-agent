@@ -1,4 +1,8 @@
 from dataclasses import replace
+from types import SimpleNamespace
+import asyncio
+import datetime
+import time
 
 import pytest
 from sqlalchemy import func, select
@@ -9,11 +13,30 @@ from src.models.db_models import (
     ToolAction,
     ToolActionControl,
     ToolInvocationAudit,
+    ToolOutboxEvent,
+    ToolActionReview,
+    ToolBusinessRequest,
 )
-from src.tools.outbox import OutboxStatus, ToolOutboxWorker, tool_outbox_worker
+from src.tools.outbox import (
+    OutboxStatus,
+    OutboxLeaseLost,
+    ToolOutboxWorker,
+    tool_outbox_worker,
+)
+from src.tools.governance import tool_governance_service
 from src.tools.payload_security import tool_payload_security
 from src.tools.refund_gateway import refund_gateway
 from src.tools.registry import tool_registry
+
+
+@pytest.fixture(autouse=True)
+async def isolated_tool_circuits():
+    """故障注入产生的熔断状态不能影响下一条独立测试。"""
+    from src.resilience.circuit_breaker import circuit_breakers
+
+    await circuit_breakers.clear()
+    yield
+    await circuit_breakers.clear()
 
 
 async def _register_and_login(client, username: str, role: str) -> dict[str, str]:
@@ -565,3 +588,427 @@ def test_mock_oms_returns_same_result_for_same_business_idempotency_key():
         refund_gateway.reconcile(idempotency_key=payload["idempotency_key"])["result"]
         == first
     )
+
+
+async def _queued_action(client, db_session, agent_headers, name):
+    manager = await _register_and_login(client, name, "manager")
+    ticket = await _ticket(db_session)
+    request = {
+        "ticket_id": ticket.id,
+        "tool_name": "orders.create_refund_request",
+        "intent": "billing_dispute",
+        "payload": {
+            "customer_id": ticket.customer_id,
+            "order_id": "ORD-7001",
+            "reason": "Duplicate charge",
+        },
+    }
+    proposed = await client.post("/tool-actions", headers=agent_headers, json=request)
+    assert proposed.status_code == 201, proposed.text
+    action_id = proposed.json()["id"]
+    assert (
+        await client.post(
+            f"/tool-actions/{action_id}/decision",
+            headers=manager,
+            json={"decision": "approved", "expected_version": 2},
+        )
+    ).status_code == 200
+    assert (
+        await client.post(
+            f"/tool-actions/{action_id}/execute",
+            headers=manager,
+            json={"expected_version": 3},
+        )
+    ).status_code == 200
+    return ticket, action_id, manager, request
+
+
+@pytest.mark.asyncio
+async def test_business_request_deduplicates_across_tickets_and_blocks_parameter_change(
+    client, db_session, agent_headers
+):
+    ticket, action_id, manager, request = await _queued_action(
+        client, db_session, agent_headers, "dedupe_manager"
+    )
+    another = await _ticket(db_session)
+    request["ticket_id"] = another.id
+    repeated = await client.post("/tool-actions", headers=agent_headers, json=request)
+    assert repeated.status_code == 201
+    assert repeated.json()["id"] == action_id
+    assert repeated.json()["ticket_id"] == ticket.id
+    assert (
+        await db_session.execute(select(func.count(ToolAction.id)))
+    ).scalar_one() == 1
+    assert (
+        await db_session.execute(select(func.count(ToolBusinessRequest.business_key)))
+    ).scalar_one() == 1
+    request["payload"]["reason"] = "Different request"
+    conflict = await client.post("/tool-actions", headers=agent_headers, json=request)
+    assert conflict.status_code == 409
+    request["payload"]["order_id"] = " ord-7001 "
+    assert (
+        await client.post("/tool-actions", headers=agent_headers, json=request)
+    ).status_code == 409
+    assert (
+        await db_session.execute(select(func.count(ToolAction.id)))
+    ).scalar_one() == 1
+
+
+@pytest.mark.asyncio
+async def test_existing_legacy_action_is_not_duplicated(
+    client, db_session, agent_headers
+):
+    _, action_id, _, request = await _queued_action(
+        client, db_session, agent_headers, "legacy_manager"
+    )
+    from sqlalchemy import delete
+
+    await db_session.execute(delete(ToolBusinessRequest))
+    await db_session.commit()
+    repeated = await client.post("/tool-actions", headers=agent_headers, json=request)
+    assert repeated.json()["id"] == action_id
+    assert (
+        await db_session.execute(select(func.count(ToolAction.id)))
+    ).scalar_one() == 1
+
+
+@pytest.mark.asyncio
+async def test_expired_worker_cannot_execute_or_overwrite_new_lease(
+    client, db_session, agent_headers, outbox_session_factory
+):
+    _, action_id, _, _ = await _queued_action(
+        client, db_session, agent_headers, "fence_manager"
+    )
+    first, second = ToolOutboxWorker(), ToolOutboxWorker()
+    event_id = (await first._claim_batch(outbox_session_factory))[0]
+    event = await db_session.get(ToolOutboxEvent, event_id, populate_existing=True)
+    old_token = event.version
+    snapshot = SimpleNamespace(
+        id=event.id, version=old_token, lease_owner=event.lease_owner
+    )
+    event.lease_expires_at = datetime.datetime.utcnow() - datetime.timedelta(seconds=1)
+    await db_session.commit()
+    assert await second._claim_batch(outbox_session_factory) == [event_id]
+    async with outbox_session_factory() as db:
+        with pytest.raises(OutboxLeaseLost):
+            await tool_governance_service._dispatch_execution(db, snapshot)
+    async with outbox_session_factory() as db:
+        await first._mark_succeeded(db, event_id, old_token)
+    await first._mark_failed(
+        outbox_session_factory, event_id, RuntimeError(), old_token
+    )
+    assert not await first.renew_lease(outbox_session_factory, event_id, old_token)
+    await db_session.refresh(event)
+    assert event.status == OutboxStatus.PROCESSING
+    assert event.lease_owner == second.worker_id
+    await second._process_one(outbox_session_factory, event_id)
+    assert (
+        await client.get(f"/tool-actions/{action_id}", headers=agent_headers)
+    ).json()["status"] == "succeeded"
+
+
+@pytest.mark.asyncio
+async def test_heartbeat_keeps_slow_handler_owned(monkeypatch, tmp_path):
+    from sqlalchemy.ext.asyncio import create_async_engine, async_sessionmaker
+    from src.database import Base
+    from src.models.db_models import User
+
+    # 独立文件数据库允许多个真实连接；不能用共享单连接的内存 SQLite 演练续租。
+    engine = create_async_engine(f"sqlite+aiosqlite:///{tmp_path / 'heartbeat.sqlite'}")
+    factory = async_sessionmaker(engine, expire_on_commit=False, autoflush=False)
+    async with engine.begin() as conn:
+        await conn.run_sync(Base.metadata.create_all)
+    async with factory() as db:
+        proposer = User(username="proposer", hashed_password="unused", role="agent")
+        manager = User(username="manager", hashed_password="unused", role="manager")
+        ticket = Ticket(
+            customer_id="cust_101",
+            subject="Refund",
+            description="Refund",
+            status="open",
+            priority="high",
+        )
+        db.add_all([proposer, manager, ticket])
+        await db.flush()
+        action = await tool_governance_service.propose(
+            db,
+            ticket_id=ticket.id,
+            tool_name="orders.create_refund_request",
+            intent="billing_dispute",
+            payload={
+                "customer_id": "cust_101",
+                "order_id": "ORD-7001",
+                "reason": "Duplicate charge",
+            },
+            proposer=proposer,
+        )
+        await tool_governance_service.decide(
+            db,
+            action_id=action.id,
+            decision="approved",
+            expected_version=2,
+            reviewer=manager,
+        )
+        await tool_governance_service.execute(
+            db, action_id=action.id, expected_version=3, executor=manager
+        )
+        action_id = action.id
+        await db.commit()
+    definition = tool_registry.get_definition("orders.create_refund_request")
+
+    def slow_handler(**kwargs):
+        time.sleep(0.7)
+        return refund_gateway.create_refund_request(**kwargs)
+
+    monkeypatch.setitem(
+        tool_registry._tools, definition.name, replace(definition, handler=slow_handler)
+    )
+    monkeypatch.setattr(settings, "TOOL_OUTBOX_LEASE_SECONDS", 0.3)
+    first, second = ToolOutboxWorker(), ToolOutboxWorker()
+    try:
+        task = asyncio.create_task(first.run_once(factory))
+        await asyncio.sleep(0.5)
+        assert await second._claim_batch(factory) == []
+        await task
+        async with factory() as db:
+            assert (await db.get(ToolAction, action_id)).status == "succeeded"
+    finally:
+        await engine.dispose()
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("outcome", ["succeeded", "failed"])
+async def test_unknown_manual_confirmation_links_ticket_and_never_rewrites(
+    client, db_session, agent_headers, outbox_session_factory, monkeypatch, outcome
+):
+    ticket, action_id, manager, _ = await _queued_action(
+        client, db_session, agent_headers, "confirmation_manager"
+    )
+    definition = tool_registry.get_definition("orders.create_refund_request")
+    calls = 0
+
+    def uncertain(**kwargs):
+        nonlocal calls
+        calls += 1
+        raise TimeoutError()
+
+    monkeypatch.setitem(
+        tool_registry._tools, definition.name, replace(definition, handler=uncertain)
+    )
+    await tool_outbox_worker.run_once(outbox_session_factory)
+    action = (await client.get(f"/tool-actions/{action_id}", headers=manager)).json()
+    queue = (await client.get("/staff/review-queue", headers=agent_headers)).json()
+    assert any(row["id"] == ticket.id and row["requires_tool_review"] for row in queue)
+    reviews = await client.get(
+        f"/tickets/{ticket.id}/tool-reviews", headers=agent_headers
+    )
+    assert reviews.json()[0]["reason"] == "unknown"
+    payload = {
+        "expected_version": action["version"],
+        "outcome": outcome,
+        "evidence_reference": "OMS-VERIFICATION-1",
+        "note": "Confirmed in the order system",
+    }
+    invalid = {**payload, "evidence_reference": "   "}
+    assert (
+        await client.post(
+            f"/tool-actions/{action_id}/resolve", headers=manager, json=invalid
+        )
+    ).status_code == 422
+    stale = {**payload, "expected_version": 1}
+    assert (
+        await client.post(
+            f"/tool-actions/{action_id}/resolve", headers=manager, json=stale
+        )
+    ).status_code == 409
+    assert (
+        await client.post(
+            f"/tool-actions/{action_id}/resolve", headers=agent_headers, json=payload
+        )
+    ).status_code == 403
+    resolved = await client.post(
+        f"/tool-actions/{action_id}/resolve", headers=manager, json=payload
+    )
+    assert resolved.status_code == 200, resolved.text
+    assert resolved.json()["status"] == outcome
+    assert resolved.json()["events"][-1]["action"].startswith("manual_")
+    assert await tool_outbox_worker.run_once(outbox_session_factory) == 0
+    assert calls == 1
+    assert not any(
+        row["id"] == ticket.id
+        for row in (
+            await client.get("/staff/review-queue", headers=agent_headers)
+        ).json()
+    )
+    review = await db_session.get(ToolActionReview, action_id, populate_existing=True)
+    assert review.status == "resolved"
+    assert "OMS-VERIFICATION-1" not in review.evidence_encrypted
+    assert "OMS-VERIFICATION-1" not in str(review.evidence_summary)
+    assert (
+        await client.post(
+            f"/tool-actions/{action_id}/resolve", headers=manager, json=payload
+        )
+    ).status_code == 409
+
+
+@pytest.mark.asyncio
+async def test_manual_confirmation_cannot_override_active_worker(
+    client, db_session, agent_headers, outbox_session_factory
+):
+    _, action_id, manager, _ = await _queued_action(
+        client, db_session, agent_headers, "active_confirmation_manager"
+    )
+    await tool_outbox_worker._claim_batch(outbox_session_factory)
+    result = await client.post(
+        f"/tool-actions/{action_id}/resolve",
+        headers=manager,
+        json={
+            "expected_version": 4,
+            "outcome": "succeeded",
+            "evidence_reference": "OMS-1",
+            "note": "External result verified",
+        },
+    )
+    assert result.status_code == 409
+
+
+@pytest.mark.asyncio
+async def test_dlq_confirmation_preserves_independent_response_approval(
+    client, db_session, agent_headers, outbox_session_factory, monkeypatch
+):
+    from src.approval.workflows import human_it_loop_service
+    from src.models.db_models import ResponseApproval
+
+    ticket, action_id, manager, _ = await _queued_action(
+        client, db_session, agent_headers, "dlq_confirmation_manager"
+    )
+    approval = await human_it_loop_service.create_pending_approval(
+        db_session, ticket.id, "Draft awaiting human approval"
+    )
+    approval_id = approval.id
+    definition = tool_registry.get_definition("orders.create_refund_request")
+
+    def timeout(**_kwargs):
+        raise TimeoutError()
+
+    monkeypatch.setitem(
+        tool_registry._tools, definition.name, replace(definition, handler=timeout)
+    )
+    monkeypatch.setattr(settings, "TOOL_OUTBOX_MAX_ATTEMPTS", 1)
+    await tool_outbox_worker.run_once(outbox_session_factory)
+    await tool_outbox_worker.run_once(outbox_session_factory)
+    action = (await client.get(f"/tool-actions/{action_id}", headers=manager)).json()
+    reviews = (
+        await client.get(f"/tickets/{ticket.id}/tool-reviews", headers=manager)
+    ).json()
+    assert reviews[0]["reason"] == "dead_letter"
+    confirmed = await client.post(
+        f"/tool-actions/{action_id}/resolve",
+        headers=manager,
+        json={
+            "expected_version": action["version"],
+            "outcome": "failed",
+            "evidence_reference": "OMS-CONFIRMED-FAILURE",
+            "note": "Failure confirmed by the order system",
+        },
+    )
+    assert confirmed.status_code == 200, confirmed.text
+    ticket = await db_session.get(Ticket, ticket.id, populate_existing=True)
+    response_approval = await db_session.get(
+        ResponseApproval, approval_id, populate_existing=True
+    )
+    assert ticket.status == "pending_approval"
+    assert response_approval.status == "pending"
+    queue = (await client.get("/staff/review-queue", headers=manager)).json()
+    assert any(
+        row["id"] == ticket.id and not row["requires_tool_review"] for row in queue
+    )
+    assert await tool_outbox_worker.run_once(outbox_session_factory) == 0
+
+
+@pytest.mark.asyncio
+async def test_startup_backfills_legacy_unknown_review_without_changing_ticket(
+    client, db_session, agent_headers, monkeypatch, outbox_session_factory
+):
+    from sqlalchemy import delete
+
+    ticket, action_id, _, _ = await _queued_action(
+        client, db_session, agent_headers, "backfill_manager"
+    )
+    definition = tool_registry.get_definition("orders.create_refund_request")
+
+    def timeout(**_kwargs):
+        raise TimeoutError()
+
+    monkeypatch.setitem(
+        tool_registry._tools, definition.name, replace(definition, handler=timeout)
+    )
+    await tool_outbox_worker.run_once(outbox_session_factory)
+    await db_session.execute(delete(ToolActionReview))
+    await db_session.commit()
+    await tool_governance_service.backfill_reviews(db_session)
+    await db_session.commit()
+    await tool_governance_service.backfill_reviews(db_session)
+    await db_session.commit()
+    assert (
+        await db_session.execute(select(func.count(ToolActionReview.tool_action_id)))
+    ).scalar_one() == 1
+    assert (
+        await db_session.get(ToolAction, action_id, populate_existing=True)
+    ).status == "unknown"
+    ticket = await db_session.get(Ticket, ticket.id, populate_existing=True)
+    assert ticket.status == "open"
+
+
+@pytest.mark.asyncio
+async def test_interrupted_compensation_is_not_replayed_and_can_be_confirmed(
+    client, db_session, agent_headers, outbox_session_factory, monkeypatch
+):
+    from src.tools.action_state_machine import (
+        ToolActionCommand,
+        tool_action_state_machine,
+    )
+
+    _, action_id, manager, _ = await _queued_action(
+        client, db_session, agent_headers, "compensation_recovery_manager"
+    )
+    await tool_outbox_worker.run_once(outbox_session_factory)
+    assert (
+        await client.post(
+            f"/tool-actions/{action_id}/compensate",
+            headers=manager,
+            json={"expected_version": 6, "reason": "External refund request withdrawn"},
+        )
+    ).status_code == 200
+    interrupted = ToolOutboxWorker()
+    event_id = (await interrupted._claim_batch(outbox_session_factory))[0]
+    action = await tool_governance_service.get(db_session, action_id)
+    tool_action_state_machine.transition(action, ToolActionCommand.START_COMPENSATION)
+    event = await db_session.get(ToolOutboxEvent, event_id)
+    event.lease_expires_at = datetime.datetime.utcnow() - datetime.timedelta(seconds=1)
+    await db_session.commit()
+    definition = tool_registry.get_definition(action.tool_name)
+
+    def forbidden_compensation(**_kwargs):
+        raise AssertionError("Uncertain compensation must not be executed twice")
+
+    monkeypatch.setitem(
+        tool_registry._tools,
+        definition.name,
+        replace(definition, compensation_handler=forbidden_compensation),
+    )
+    assert await ToolOutboxWorker().run_once(outbox_session_factory) == 1
+    current = (await client.get(f"/tool-actions/{action_id}", headers=manager)).json()
+    assert current["status"] == "compensation_unknown"
+    resolved = await client.post(
+        f"/tool-actions/{action_id}/resolve",
+        headers=manager,
+        json={
+            "expected_version": current["version"],
+            "outcome": "compensated",
+            "evidence_reference": "OMS-COMPENSATION-1",
+            "note": "Compensation confirmed in the external system",
+        },
+    )
+    assert resolved.status_code == 200, resolved.text
+    assert resolved.json()["status"] == "compensated"

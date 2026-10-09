@@ -26,6 +26,8 @@
 - 优化：Analyzer 保留规则候选与回退，Analyzer/QA 可使用 Jev 或小模型，Resolver 裁剪 Context，QA 仅返回最小 JSON。
 - RAG：ChromaDB + 关键词/向量 Hybrid Search + 轻量 rerank + version/category filter + citation。
 - Tool：Mock CRM/OMS/Ticket Adapter 通过 ToolRegistry 暴露；V2.2 为高风险写 Action 增加业务幂等、Transactional Outbox、Worker、unknown 自动对账、Retry/DLQ、补偿和 Policy 回放。
+- V2.3：同一客户/订单整单退款复用原 Action，参数变化拒绝新建；Worker 续租和领取版本保护全部状态写回；unknown/DLQ 关联独立的业务核实任务。主管确认只保存已核实的外部结果，绝不重新执行写 Tool 或修改回复审批。新表由 create_all 创建，旧 Action 通过兼容检查去重，启动时补齐旧核实任务。
+- PostgreSQL 故障演练：`scripts/run_postgres_tool_drill.py` 只接受显式确认的专用测试库，使用随机 schema 和持久化模拟 OMS。CI 已配置并发创建、跨进程续租、强杀后对账和旧 Worker 保护；未看到实际报告时不得声称已跑通，真实 OMS 仍未接入。
 - 故障治理：LLM/RAG/读 Tool 统一超时、有界 Retry、进程内 Circuit Breaker 与 Fallback；高风险写调用禁止重试，只 Retry 幂等对账查询。
 - 安全：确定性多层规则 + 可选 Qwen3Guard-Gen-0.6B + Risk Engine + 输出过滤 + HITL。
 - Memory V1：SQL 结构化会话是事实源，Redis 是可选 revision Cache；有界历史、摘要和实体进入 AgentState，待审草稿不进入 Prompt。

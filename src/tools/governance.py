@@ -9,6 +9,7 @@ from typing import Any, Optional
 from fastapi import HTTPException, status
 from pydantic import ValidationError
 from sqlalchemy import func, select
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
@@ -18,6 +19,8 @@ from src.models.db_models import (
     ToolAction,
     ToolActionControl,
     ToolActionEvent,
+    ToolActionReview,
+    ToolBusinessRequest,
     ToolOutboxEvent,
     User,
 )
@@ -41,7 +44,13 @@ from src.tools.action_state_machine import (
     tool_action_state_machine,
 )
 from src.tools.contracts import ApprovedToolExecution
-from src.tools.outbox import OutboxEventType, tool_outbox_service
+from src.tools.outbox import (
+    OutboxEventType,
+    OutboxStatus,
+    OutboxLeaseLost,
+    ensure_outbox_lease,
+    tool_outbox_service,
+)
 from src.tools.payload_security import tool_payload_security
 from src.tools.policy import tool_policy_service
 from src.tools.registry import ROLE_RANK, ToolDefinition, tool_registry
@@ -81,6 +90,13 @@ class ToolGovernanceService:
             raise HTTPException(status_code=404, detail="Ticket not found.")
 
         normalized_payload = self._validate_payload(definition, payload)
+        if (
+            not str(normalized_payload.get("order_id", "")).strip()
+            or len(str(normalized_payload.get("reason", "")).strip()) < 2
+        ):
+            raise HTTPException(
+                status_code=422, detail="Order ID and refund reason cannot be blank."
+            )
         normalized_intent = normalize_intent(intent)
         if (
             definition.allowed_intents is not None
@@ -95,6 +111,26 @@ class ToolGovernanceService:
                 status_code=status.HTTP_403_FORBIDDEN,
                 detail="Tool payload does not belong to the ticket customer.",
             )
+
+        # 当前退款工具只表示整单退款申请，同一订单不能新建第二个 Action。
+        if definition.name != "orders.create_refund_request":
+            raise HTTPException(
+                status_code=422,
+                detail="Business deduplication contract is not configured for this Tool.",
+            )
+        business_key = tool_payload_security.payload_hash(
+            {
+                "tool": definition.name,
+                "customer_id": normalized_payload["customer_id"],
+                "order_id": normalized_payload["order_id"].strip().casefold(),
+            }
+        )
+        payload_hash = tool_payload_security.payload_hash(normalized_payload)
+        existing = await self._existing_business_action(
+            db, business_key, definition.name, normalized_payload
+        )
+        if existing:
+            return self._check_duplicate(existing, payload_hash)
 
         now = datetime.datetime.utcnow()
         action_id = str(uuid.uuid4())
@@ -128,7 +164,6 @@ class ToolGovernanceService:
             created_at=now,
             updated_at=now,
         )
-        db.add(action)
         self._append_event(
             action,
             command="propose",
@@ -140,8 +175,74 @@ class ToolGovernanceService:
             action, ToolActionCommand.REQUEST_APPROVAL
         )
         self._append_transition(action, transition, proposer)
-        await db.flush()
+        try:
+            async with db.begin_nested():
+                db.add(action)
+                await db.flush()
+                db.add(
+                    ToolBusinessRequest(
+                        business_key=business_key,
+                        tool_action_id=action.id,
+                        payload_hash=payload_hash,
+                    )
+                )
+                await db.flush()
+        except IntegrityError:
+            # 唯一键解决多进程同时创建；输掉竞争的 Action 随保存点回滚。
+            existing = await self._existing_business_action(
+                db, business_key, definition.name, normalized_payload
+            )
+            if existing is None:
+                raise
+            return self._check_duplicate(existing, payload_hash)
         await db.refresh(action, attribute_names=["events"])
+        return action
+
+    async def _existing_business_action(self, db, business_key, tool_name, payload):
+        """兼容升级前已存在的 Action，避免新表为空时再次提交退款。"""
+        request = await db.get(ToolBusinessRequest, business_key)
+        if request:
+            return await self.get(db, request.tool_action_id)
+        candidates = (
+            (
+                await db.execute(
+                    select(ToolAction)
+                    .join(Ticket, Ticket.id == ToolAction.ticket_id)
+                    .where(
+                        ToolAction.tool_name == tool_name,
+                        Ticket.customer_id == payload["customer_id"],
+                    )
+                    .order_by(ToolAction.created_at, ToolAction.id)
+                )
+            )
+            .scalars()
+            .all()
+        )
+        for candidate in candidates:
+            try:
+                original = tool_payload_security.decrypt(candidate.payload_encrypted)
+            except ValueError as exc:
+                raise HTTPException(
+                    status_code=409,
+                    detail="Existing business Action cannot be verified; manual review is required.",
+                ) from exc
+            if (
+                str(original.get("order_id", "")).strip().casefold()
+                == payload["order_id"].strip().casefold()
+            ):
+                return await self.get(db, candidate.id)
+        return None
+
+    @staticmethod
+    def _check_duplicate(action, payload_hash):
+        if action.payload_hash != payload_hash:
+            raise HTTPException(
+                status_code=409,
+                detail={
+                    "message": "This order already has a refund Action with different parameters.",
+                    "action_id": action.id,
+                },
+            )
         return action
 
     async def decide(
@@ -285,6 +386,236 @@ class ToolGovernanceService:
         action = await self.get(db, action_id)
         return tool_policy_service.replay(action)
 
+    async def _open_review(self, db, action, reason):
+        """独立于回复审批保存业务核实任务，工单队列按此记录联动。"""
+        if action.status in {
+            ToolActionStatus.SUCCEEDED,
+            ToolActionStatus.FAILED,
+            ToolActionStatus.REJECTED,
+            ToolActionStatus.COMPENSATED,
+            ToolActionStatus.COMPENSATION_FAILED,
+        }:
+            return
+        review = await db.get(ToolActionReview, action.id)
+        if review is None:
+            db.add(
+                ToolActionReview(
+                    tool_action_id=action.id,
+                    ticket_id=action.ticket_id,
+                    status="pending",
+                    reason=reason,
+                )
+            )
+        elif review.status == "pending":
+            review.reason = reason
+
+    async def backfill_reviews(self, db):
+        """升级时补齐旧 unknown / DLQ 的工单关联，不修改执行或回复审批状态。"""
+        dead_actions = select(ToolOutboxEvent.tool_action_id).where(
+            ToolOutboxEvent.status == OutboxStatus.DEAD_LETTER
+        )
+        actions = (
+            (
+                await db.execute(
+                    select(ToolAction)
+                    .where(
+                        ToolAction.status.in_(
+                            [
+                                ToolActionStatus.UNKNOWN,
+                                ToolActionStatus.COMPENSATION_UNKNOWN,
+                            ]
+                        )
+                        | ToolAction.id.in_(dead_actions)
+                    )
+                    .with_for_update(skip_locked=True)
+                )
+            )
+            .scalars()
+            .all()
+        )
+        for action in actions:
+            await self._open_review(
+                db,
+                action,
+                (
+                    "compensation_unknown"
+                    if action.status == ToolActionStatus.COMPENSATION_UNKNOWN
+                    else (
+                        "unknown"
+                        if action.status == ToolActionStatus.UNKNOWN
+                        else "dead_letter"
+                    )
+                ),
+            )
+        await db.flush()
+
+    async def _close_review(self, db, action, outcome, actor):
+        review = await db.get(ToolActionReview, action.id)
+        if review and review.status == "pending":
+            review.status = "resolved"
+            review.outcome = outcome
+            review.resolved_at = datetime.datetime.utcnow()
+            review.resolved_by_user_id = actor.id if actor else None
+
+    async def list_ticket_reviews(self, db, ticket_id):
+        """客服可读核实原因和状态，不能读取外部凭证原文。"""
+        if not await db.get(Ticket, ticket_id):
+            raise HTTPException(status_code=404, detail="Ticket not found.")
+        reviews = (
+            (
+                await db.execute(
+                    select(ToolActionReview)
+                    .where(ToolActionReview.ticket_id == ticket_id)
+                    .order_by(ToolActionReview.created_at.desc())
+                )
+            )
+            .scalars()
+            .all()
+        )
+        result = []
+        for review in reviews:
+            result.append(
+                {
+                    name: getattr(review, name)
+                    for name in (
+                        "tool_action_id",
+                        "ticket_id",
+                        "status",
+                        "reason",
+                        "outcome",
+                        "evidence_summary",
+                        "resolved_by_user_id",
+                        "created_at",
+                        "resolved_at",
+                    )
+                }
+                | {"action": await self.get(db, review.tool_action_id)}
+            )
+        return result
+
+    async def resolve_manually(
+        self,
+        db,
+        *,
+        action_id,
+        expected_version,
+        outcome,
+        evidence_reference,
+        note,
+        reviewer,
+    ):
+        """只确认人工查到的外部结果，禁止重发写操作或覆盖正在运行的 Worker。"""
+        if ROLE_RANK.get(reviewer.role, 0) < ROLE_RANK["manager"]:
+            raise HTTPException(status_code=403, detail="Manager role is required.")
+        if not evidence_reference.strip() or len(note.strip()) < 5:
+            raise HTTPException(
+                status_code=422,
+                detail="External evidence and a verification note are required.",
+            )
+        # 与 Worker 一样先锁租约行再锁 Action，避免锁顺序反转。
+        events = (
+            (
+                await db.execute(
+                    select(ToolOutboxEvent)
+                    .where(ToolOutboxEvent.tool_action_id == action_id)
+                    .order_by(ToolOutboxEvent.id)
+                    .with_for_update()
+                )
+            )
+            .scalars()
+            .all()
+        )
+        now = datetime.datetime.utcnow()
+        if any(
+            event.status == OutboxStatus.PROCESSING
+            and event.lease_expires_at
+            and event.lease_expires_at > now
+            for event in events
+        ):
+            raise HTTPException(
+                status_code=409,
+                detail="An active Worker still owns this Action; wait for completion or lease expiry.",
+            )
+        action = await self._load_for_update(db, action_id)
+        self._check_version(action, expected_version)
+        if reviewer.id == action.proposed_by_user_id:
+            raise HTTPException(
+                status_code=409,
+                detail="Proposer cannot confirm their own high-risk Action.",
+            )
+        review = await db.get(ToolActionReview, action_id)
+        if review is None or review.status != "pending":
+            raise HTTPException(
+                status_code=409,
+                detail="Action has no pending manual verification task.",
+            )
+        if action.status == ToolActionStatus.EXECUTING:
+            transition = tool_action_state_machine.transition(
+                action, ToolActionCommand.MARK_UNKNOWN
+            )
+            self._append_transition(action, transition, reviewer)
+        if action.status == ToolActionStatus.COMPENSATING:
+            transition = tool_action_state_machine.transition(
+                action, ToolActionCommand.MARK_COMPENSATION_UNKNOWN
+            )
+            self._append_transition(action, transition, reviewer)
+        commands = {
+            "succeeded": ToolActionCommand.MANUAL_SUCCESS,
+            "failed": ToolActionCommand.MANUAL_FAILURE,
+            "compensated": ToolActionCommand.MANUAL_COMPENSATED,
+            "compensation_failed": ToolActionCommand.MANUAL_COMPENSATION_FAILURE,
+        }
+        command = commands.get(outcome)
+        if not command:
+            raise HTTPException(
+                status_code=422, detail="Unsupported confirmation outcome."
+            )
+        transition = tool_action_state_machine.transition(action, command)
+        review.evidence_encrypted = tool_payload_security.encrypt(
+            {"reference": evidence_reference.strip(), "note": note.strip()}
+        )
+        review.evidence_summary = {
+            "reference_hash": tool_payload_security.payload_hash(
+                {"reference": evidence_reference.strip()}
+            ),
+            "note": redact_text(note.strip())[:1000],
+        }
+        action.error_type = (
+            None
+            if outcome in {"succeeded", "compensated"}
+            else "manually_confirmed_failure"
+        )
+        action.failure_reason = (
+            None
+            if action.error_type is None
+            else "External failure confirmed by a manager."
+        )
+        action.completed_at = now
+        action.result_summary = {
+            "status": outcome,
+            "confirmation_source": "manual",
+            "evidence_hash": review.evidence_summary["reference_hash"],
+        }
+        self._append_transition(
+            action,
+            transition,
+            reviewer,
+            details={
+                "confirmation_source": "manual",
+                "evidence_hash": review.evidence_summary["reference_hash"],
+            },
+        )
+        await self._close_review(db, action, outcome, reviewer)
+        for event in events:
+            if event.status not in {OutboxStatus.SUCCEEDED, OutboxStatus.CANCELLED}:
+                event.status = OutboxStatus.CANCELLED
+                event.version += 1
+                event.lease_owner = None
+                event.lease_expires_at = None
+                event.completed_at = now
+        await db.flush()
+        return action
+
     async def dispatch_outbox_event(
         self, db: AsyncSession, event: ToolOutboxEvent
     ) -> None:
@@ -301,6 +632,7 @@ class ToolGovernanceService:
     async def _dispatch_execution(
         self, db: AsyncSession, event: ToolOutboxEvent
     ) -> None:
+        await ensure_outbox_lease(db, event)
         action = await self._load_for_update(db, event.tool_action_id)
         actor = self._event_actor(event)
         if action.status in {
@@ -343,6 +675,8 @@ class ToolGovernanceService:
             idempotency_key=action.control.idempotency_key,
             policy_version=action.policy_version,
         )
+        # 外部调用期间不占数据库锁，独立连接可以正常续租。
+        await db.commit()
         with observed_span(
             tracer,
             "supportgpt.tool_action.execute",
@@ -367,6 +701,8 @@ class ToolGovernanceService:
                     execution_grant=grant,
                     idempotency_key=action.control.idempotency_key,
                 )
+                await ensure_outbox_lease(db, event)
+                action = await self._load_for_update(db, event.tool_action_id)
                 if result.get("status") == "success":
                     transition = tool_action_state_machine.transition(
                         action, ToolActionCommand.SUCCEED
@@ -421,8 +757,11 @@ class ToolGovernanceService:
                     },
                 )
                 await db.commit()
+            except OutboxLeaseLost:
+                raise
             except Exception as exc:
                 await db.rollback()
+                await ensure_outbox_lease(db, event)
                 action = await self._load_for_update(db, event.tool_action_id)
                 if action.status == ToolActionStatus.EXECUTING:
                     await self._enter_unknown(
@@ -462,12 +801,14 @@ class ToolGovernanceService:
             dedupe_key=f"{action.id}:reconcile",
             delay_seconds=settings.TOOL_RECONCILIATION_DELAY_SECONDS,
         )
+        await self._open_review(db, action, "unknown")
         if commit:
             await db.commit()
 
     async def _dispatch_reconciliation(
         self, db: AsyncSession, event: ToolOutboxEvent
     ) -> None:
+        await ensure_outbox_lease(db, event)
         action = await self._load_for_update(db, event.tool_action_id)
         actor = self._event_actor(event, role="system")
         if action.status in {
@@ -497,21 +838,27 @@ class ToolGovernanceService:
                 db, action, actor, error_type="handler_missing"
             )
             raise ReconciliationPending("Reconciliation handler is not configured.")
+        idempotency_key = action.control.idempotency_key
+        await db.commit()
         try:
             result = await asyncio.wait_for(
                 asyncio.to_thread(
                     definition.reconciliation_handler,
-                    idempotency_key=action.control.idempotency_key,
+                    idempotency_key=idempotency_key,
                 ),
                 timeout=definition.timeout_seconds,
             )
         except Exception as exc:
+            await ensure_outbox_lease(db, event)
+            action = await self._load_for_update(db, event.tool_action_id)
             await self._finish_reconciliation_pending(
                 db, action, actor, error_type=exc.__class__.__name__
             )
             self._reconciliation_metric("retry")
             raise
 
+        await ensure_outbox_lease(db, event)
+        action = await self._load_for_update(db, event.tool_action_id)
         outcome = str(result.get("status") or "pending").lower()
         if outcome == "succeeded":
             transition = tool_action_state_machine.transition(
@@ -526,6 +873,7 @@ class ToolGovernanceService:
             self._append_transition(
                 action, transition, actor, details={"outcome": outcome}
             )
+            await self._close_review(db, action, outcome, actor=None)
             await db.commit()
             self._reconciliation_metric("succeeded")
             return
@@ -539,6 +887,7 @@ class ToolGovernanceService:
             self._append_transition(
                 action, transition, actor, details={"outcome": outcome}
             )
+            await self._close_review(db, action, outcome, actor=None)
             await db.commit()
             self._reconciliation_metric("failed")
             return
@@ -568,6 +917,7 @@ class ToolGovernanceService:
     async def _dispatch_compensation(
         self, db: AsyncSession, event: ToolOutboxEvent
     ) -> None:
+        await ensure_outbox_lease(db, event)
         action = await self._load_for_update(db, event.tool_action_id)
         actor = self._event_actor(event)
         if action.status in {
@@ -575,6 +925,17 @@ class ToolGovernanceService:
             ToolActionStatus.COMPENSATION_FAILED,
             ToolActionStatus.COMPENSATION_UNKNOWN,
         }:
+            return
+        if action.status == ToolActionStatus.COMPENSATING:
+            # 旧 Worker 中断后补偿结果同样不确定，不能重新执行副作用。
+            transition = tool_action_state_machine.transition(
+                action, ToolActionCommand.MARK_COMPENSATION_UNKNOWN
+            )
+            action.error_type = "worker_interrupted"
+            action.failure_reason = "Compensation outcome requires manual verification."
+            self._append_transition(action, transition, actor)
+            await self._open_review(db, action, "compensation_unknown")
+            await db.commit()
             return
         if action.status == ToolActionStatus.COMPENSATION_PENDING:
             transition = tool_action_state_machine.transition(
@@ -588,15 +949,20 @@ class ToolGovernanceService:
             raise RuntimeError(f"Action cannot compensate from status {action.status}.")
         if definition.compensation_handler is None:
             raise RuntimeError("Compensation handler is not configured.")
+        idempotency_key = action.control.idempotency_key
+        compensation_key = action.control.compensation_key
+        await db.commit()
         try:
             result = await asyncio.wait_for(
                 asyncio.to_thread(
                     definition.compensation_handler,
-                    idempotency_key=action.control.idempotency_key,
-                    compensation_key=action.control.compensation_key,
+                    idempotency_key=idempotency_key,
+                    compensation_key=compensation_key,
                 ),
                 timeout=definition.timeout_seconds,
             )
+            await ensure_outbox_lease(db, event)
+            action = await self._load_for_update(db, event.tool_action_id)
             command = (
                 ToolActionCommand.COMPENSATE_SUCCESS
                 if result.get("status") == "compensated"
@@ -612,9 +978,13 @@ class ToolGovernanceService:
                 action.failure_reason = "External system rejected the compensation."
             action.completed_at = datetime.datetime.utcnow()
             self._append_transition(action, transition, actor)
+            await self._close_review(db, action, action.status, actor=None)
             await db.commit()
+        except OutboxLeaseLost:
+            raise
         except Exception as exc:
             await db.rollback()
+            await ensure_outbox_lease(db, event)
             action = await self._load_for_update(db, event.tool_action_id)
             if action.status == ToolActionStatus.COMPENSATING:
                 transition = tool_action_state_machine.transition(
@@ -625,6 +995,7 @@ class ToolGovernanceService:
                     "Compensation outcome is unknown and requires manual review."
                 )
                 self._append_transition(action, transition, actor)
+                await self._open_review(db, action, "compensation_unknown")
                 await db.commit()
 
     @staticmethod
@@ -646,7 +1017,17 @@ class ToolGovernanceService:
     ) -> None:
         """Retry 耗尽时补写同状态审计事件并明确转人工处理。"""
         action = await self._load_for_update(db, event.tool_action_id)
-        action.failure_reason = "Outbox delivery exhausted; manual review is required."
+        if action.status not in {
+            ToolActionStatus.SUCCEEDED,
+            ToolActionStatus.FAILED,
+            ToolActionStatus.REJECTED,
+            ToolActionStatus.COMPENSATED,
+            ToolActionStatus.COMPENSATION_FAILED,
+        }:
+            action.failure_reason = (
+                "Outbox delivery exhausted; manual review is required."
+            )
+        await self._open_review(db, action, "dead_letter")
         self._append_event(
             action,
             command="dead_letter",
@@ -679,6 +1060,7 @@ class ToolGovernanceService:
             select(ToolAction)
             .options(selectinload(ToolAction.events), selectinload(ToolAction.control))
             .where(ToolAction.id == action_id)
+            .execution_options(populate_existing=True)
         )
         action = (await db.execute(query)).scalar_one_or_none()
         if not action:
@@ -720,6 +1102,7 @@ class ToolGovernanceService:
             .options(selectinload(ToolAction.events), selectinload(ToolAction.control))
             .where(ToolAction.id == action_id)
             .with_for_update()
+            .execution_options(populate_existing=True)
         )
         action = (await db.execute(query)).scalar_one_or_none()
         if not action:

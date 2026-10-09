@@ -4,6 +4,7 @@ import asyncio
 import datetime
 import logging
 import uuid
+from types import SimpleNamespace
 from typing import Any, Optional
 
 from fastapi import HTTPException
@@ -45,6 +46,32 @@ class OutboxStatus:
     RETRY = "retry"
     SUCCEEDED = "succeeded"
     DEAD_LETTER = "dead_letter"
+    CANCELLED = "cancelled"
+
+
+class OutboxLeaseLost(RuntimeError):
+    """旧 Worker 已失去执行资格，不允许覆盖新 Worker 或人工结果。"""
+
+
+async def ensure_outbox_lease(db: AsyncSession, event: ToolOutboxEvent) -> None:
+    """用领取版本作为 fencing token，并在状态提交期间锁住租约记录。"""
+    token = event.version
+    owner = event.lease_owner
+    current = (
+        await db.execute(
+            select(ToolOutboxEvent.id)
+            .where(
+                ToolOutboxEvent.id == event.id,
+                ToolOutboxEvent.status == OutboxStatus.PROCESSING,
+                ToolOutboxEvent.lease_owner == owner,
+                ToolOutboxEvent.version == token,
+                ToolOutboxEvent.lease_expires_at > datetime.datetime.utcnow(),
+            )
+            .with_for_update()
+        )
+    ).scalar_one_or_none()
+    if current is None:
+        raise OutboxLeaseLost("Outbox lease expired or was replaced.")
 
 
 class ToolOutboxService:
@@ -128,6 +155,17 @@ class ToolOutboxService:
             raise HTTPException(
                 status_code=409, detail="Only DLQ events can be retried."
             )
+        action = await db.get(ToolAction, event.tool_action_id)
+        if action and action.status in {
+            "succeeded",
+            "failed",
+            "rejected",
+            "compensated",
+            "compensation_failed",
+        }:
+            raise HTTPException(
+                status_code=409, detail="A terminal Action cannot be replayed from DLQ."
+            )
         event.status = OutboxStatus.RETRY
         event.attempts = 0
         event.version += 1
@@ -183,8 +221,10 @@ class ToolOutboxWorker:
         session_factory: async_sessionmaker[AsyncSession] = AsyncSessionLocal,
     ) -> int:
         event_ids = await self._claim_batch(session_factory)
-        for event_id in event_ids:
-            await self._process_one(session_factory, event_id)
+        # 每个已领取事件立即开始续租，避免批次尾部任务等待到租约过期。
+        await asyncio.gather(
+            *(self._process_one(session_factory, event_id) for event_id in event_ids)
+        )
         return len(event_ids)
 
     async def _run_forever(self) -> None:
@@ -229,7 +269,8 @@ class ToolOutboxWorker:
                 .limit(settings.TOOL_OUTBOX_BATCH_SIZE)
             )
             candidates = list((await db.execute(query)).scalars().all())
-            for event in candidates:
+            # 与人工确认使用相同锁顺序，批次选择仍按创建时间保证公平。
+            for event in sorted(candidates, key=lambda item: item.id):
                 if event.attempts >= event.max_attempts:
                     exhausted = await db.execute(
                         update(ToolOutboxEvent)
@@ -237,6 +278,12 @@ class ToolOutboxWorker:
                             ToolOutboxEvent.id == event.id,
                             ToolOutboxEvent.version == event.version,
                             ToolOutboxEvent.status == event.status,
+                            or_(
+                                ToolOutboxEvent.status.in_(
+                                    [OutboxStatus.PENDING, OutboxStatus.RETRY]
+                                ),
+                                ToolOutboxEvent.lease_expires_at < now,
+                            ),
                         )
                         .values(
                             status=OutboxStatus.DEAD_LETTER,
@@ -260,6 +307,12 @@ class ToolOutboxWorker:
                         ToolOutboxEvent.id == event.id,
                         ToolOutboxEvent.version == event.version,
                         ToolOutboxEvent.status == event.status,
+                        or_(
+                            ToolOutboxEvent.status.in_(
+                                [OutboxStatus.PENDING, OutboxStatus.RETRY]
+                            ),
+                            ToolOutboxEvent.lease_expires_at < now,
+                        ),
                     )
                     .values(
                         status=OutboxStatus.PROCESSING,
@@ -299,8 +352,34 @@ class ToolOutboxWorker:
     ) -> None:
         async with session_factory() as db:
             event = await db.get(ToolOutboxEvent, event_id)
-            if not event or event.lease_owner != self.worker_id:
+            if (
+                not event
+                or event.lease_owner != self.worker_id
+                or event.status != OutboxStatus.PROCESSING
+            ):
                 return
+            token = event.version
+            # 固定本次领取凭证，事务回滚不能把它刷新为新 Worker 的版本。
+            claimed_event = SimpleNamespace(
+                **{
+                    name: getattr(event, name)
+                    for name in (
+                        "id",
+                        "tool_action_id",
+                        "event_type",
+                        "actor_user_id",
+                        "actor_role",
+                        "request_id",
+                        "trace_id",
+                        "attempts",
+                        "version",
+                        "lease_owner",
+                    )
+                }
+            )
+            heartbeat = asyncio.create_task(
+                self._heartbeat(session_factory, event_id, token)
+            )
             request_token = bind_request_id(event.request_id)
             try:
                 # 延迟导入打破 Governance 与 Outbox 的模块依赖环。
@@ -316,16 +395,79 @@ class ToolOutboxWorker:
                         "tool.origin_trace_id": event.trace_id,
                     },
                 ):
-                    await tool_governance_service.dispatch_outbox_event(db, event)
-                await self._mark_succeeded(db, event.id)
+                    await tool_governance_service.dispatch_outbox_event(
+                        db, claimed_event
+                    )
+                await self._mark_succeeded(db, event_id, token)
+            except OutboxLeaseLost:
+                await db.rollback()
+                logger.warning("tool outbox lease lost", extra={"outbox_id": event_id})
             except Exception as exc:
                 await db.rollback()
-                await self._mark_failed(session_factory, event_id, exc)
+                await self._mark_failed(session_factory, event_id, exc, token)
             finally:
+                heartbeat.cancel()
+                try:
+                    await heartbeat
+                except asyncio.CancelledError:
+                    pass
                 reset_request_id(request_token)
 
-    async def _mark_succeeded(self, db: AsyncSession, event_id: str) -> None:
-        event = await db.get(ToolOutboxEvent, event_id)
+    async def _heartbeat(self, session_factory, event_id, token):
+        """只续当前且未过期的租约，不能复活已经失效的执行资格。"""
+        while True:
+            await asyncio.sleep(max(settings.TOOL_OUTBOX_LEASE_SECONDS / 3, 0.1))
+            try:
+                if not await self.renew_lease(session_factory, event_id, token):
+                    return
+            except Exception:
+                logger.warning(
+                    "tool outbox heartbeat failed", extra={"outbox_id": event_id}
+                )
+                return
+
+    async def renew_lease(self, session_factory, event_id, token) -> bool:
+        async with session_factory() as db:
+            now = datetime.datetime.utcnow()
+            result = await db.execute(
+                update(ToolOutboxEvent)
+                .where(
+                    ToolOutboxEvent.id == event_id,
+                    ToolOutboxEvent.version == token,
+                    ToolOutboxEvent.lease_owner == self.worker_id,
+                    ToolOutboxEvent.status == OutboxStatus.PROCESSING,
+                    ToolOutboxEvent.lease_expires_at > now,
+                )
+                .values(
+                    lease_expires_at=now
+                    + datetime.timedelta(seconds=settings.TOOL_OUTBOX_LEASE_SECONDS),
+                    updated_at=now,
+                )
+            )
+            await db.commit()
+            return result.rowcount == 1
+
+    async def _owned_event(self, db, event_id, token):
+        """完成、重试和死信写回都必须持有相同且未过期的租约。"""
+        return (
+            await db.execute(
+                select(ToolOutboxEvent)
+                .where(
+                    ToolOutboxEvent.id == event_id,
+                    ToolOutboxEvent.version == token,
+                    ToolOutboxEvent.lease_owner == self.worker_id,
+                    ToolOutboxEvent.status == OutboxStatus.PROCESSING,
+                    ToolOutboxEvent.lease_expires_at > datetime.datetime.utcnow(),
+                )
+                .with_for_update()
+                .execution_options(populate_existing=True)
+            )
+        ).scalar_one_or_none()
+
+    async def _mark_succeeded(
+        self, db: AsyncSession, event_id: str, token: int
+    ) -> None:
+        event = await self._owned_event(db, event_id, token)
         if not event:
             return
         event.status = OutboxStatus.SUCCEEDED
@@ -350,9 +492,10 @@ class ToolOutboxWorker:
         session_factory: async_sessionmaker[AsyncSession],
         event_id: str,
         exc: Exception,
+        token: int,
     ) -> None:
         async with session_factory() as db:
-            event = await db.get(ToolOutboxEvent, event_id)
+            event = await self._owned_event(db, event_id, token)
             if not event:
                 return
             exhausted = event.attempts >= event.max_attempts

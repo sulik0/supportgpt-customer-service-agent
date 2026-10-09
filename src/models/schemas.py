@@ -185,6 +185,7 @@ class TicketResponse(BaseModel):
     sentiment: Optional[str]
     department: Optional[str]
     sla_hours: Optional[float]
+    requires_tool_review: bool = False
     created_at: datetime
     updated_at: datetime
 
@@ -402,6 +403,32 @@ class ToolActionExecuteRequest(BaseModel):
     expected_version: int = Field(..., ge=1)
 
 
+class ToolActionResolutionRequest(BaseModel):
+    """主管提交外部核实结果，不触发任何业务写入。"""
+
+    expected_version: int = Field(..., ge=1)
+    outcome: str = Field(
+        ..., pattern="^(succeeded|failed|compensated|compensation_failed)$"
+    )
+    evidence_reference: str = Field(..., min_length=3, max_length=500)
+    note: str = Field(..., min_length=5, max_length=1000)
+
+
+class ToolActionReviewResponse(BaseModel):
+    """向工单详情返回待核实操作及脱敏后的确认记录。"""
+
+    tool_action_id: str
+    ticket_id: int
+    status: str
+    reason: str
+    outcome: Optional[str]
+    evidence_summary: Optional[Dict[str, Any]]
+    resolved_by_user_id: Optional[int]
+    created_at: datetime
+    resolved_at: Optional[datetime]
+    action: "ToolActionResponse"
+
+
 class ToolActionCompensationRequest(BaseModel):
     """由主管发起带原因和乐观版本的补偿请求。"""
 
@@ -468,6 +495,9 @@ class ToolActionResponse(BaseModel):
         """允许从 ORM Action 读取字段。"""
 
         from_attributes = True
+
+
+ToolActionReviewResponse.model_rebuild()
 
 
 class ToolActionPageResponse(BaseModel):
@@ -764,7 +794,9 @@ class AdminPromptRegistryResponse(BaseModel):
 class AdminKnowledgeDocumentRequest(BaseModel):
     """定义知识文档和向量索引的统一写入输入。"""
 
-    id: str = Field(..., min_length=1, max_length=100, pattern=r"^[a-zA-Z0-9][a-zA-Z0-9._-]*$")
+    id: str = Field(
+        ..., min_length=1, max_length=100, pattern=r"^[a-zA-Z0-9][a-zA-Z0-9._-]*$"
+    )
     title: str = Field(..., min_length=1, max_length=255)
     content: str = Field(..., min_length=1, max_length=30000)
     version: str = Field(default="v1", min_length=1, max_length=50)

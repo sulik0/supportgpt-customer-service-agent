@@ -130,7 +130,7 @@ export default function App() {
 
   const workspaceStats = useMemo(() => ({
     total: tickets.length,
-    active: tickets.filter((ticket) => ticket.status === 'pending_approval').length,
+    active: tickets.filter((ticket) => ticket.status === 'pending_approval' || ticket.requires_tool_review).length,
     attention: tickets.filter((ticket) => ['urgent', 'high'].includes(ticket.priority)).length,
   }), [tickets]);
 
@@ -258,7 +258,7 @@ export default function App() {
                 <div>
                   <span className="workspace-eyebrow"><Headphones size={14} /> 人工处理队列</span>
                   <h2>{workspaceStats.active > 0 ? `还有 ${workspaceStats.active} 张异常工单等待确认` : '当前没有需要人工处理的工单'}</h2>
-                  <p>普通问题由 Agent 自动回复。这里列出需要人工确认风险、核对回复或审批操作的工单。</p>
+                  <p>普通问题由 Agent 自动回复。这里列出需要审批回复或核实业务操作结果的工单，两类任务分开处理。</p>
                 </div>
                 <div className="workspace-hero-actions">
                   {workspaceStats.attention > 0 && <span className="attention-pill">{workspaceStats.attention} 张高优工单</span>}

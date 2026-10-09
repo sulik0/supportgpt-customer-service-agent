@@ -374,6 +374,16 @@ body {
 .app-topbar h1 { color: #172033; }
 
 /* 人工处理工作台 */
+.tool-review-panel { margin: 16px 0; }
+.tool-review-panel h3 { color: #263247; margin-bottom: 8px; }
+.tool-review-panel p, .tool-review-item small { color: #687588; overflow-wrap: anywhere; }
+.tool-review-item { padding: 16px 0; border-top: 1px solid #e5e9ef; }
+.tool-review-form { display: grid; gap: 12px; margin-top: 12px; }
+.tool-review-form label { display: grid; gap: 6px; color: #344054; font-size: 13px; }
+.tool-review-form input, .tool-review-form textarea, .tool-review-form select { width: 100%; padding: 9px; border: 1px solid #dce2ea; border-radius: 6px; color: #263247; background: #fff; }
+.tool-review-form textarea { min-height: 75px; resize: vertical; }
+.tool-review-form .btn { justify-self: start; }
+.tool-review-form .tool-review-error { color: #b42318; }
 .workspace-hero {
   border-color: #e1e6ed;
   background: #ffffff;

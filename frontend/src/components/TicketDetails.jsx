@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from 'react';
+import ToolReviewPanel from './ToolReviewPanel';
 import {
   AlertTriangle,
   BookOpen,
@@ -155,6 +156,8 @@ export default function TicketDetails({ ticket, userRole, onActionComplete }) {
           <RefreshCw size={15} className={loading ? 'spin' : ''} /> 刷新已保存的结果
         </button>
       </header>
+
+      <ToolReviewPanel ticketId={ticket.id} userRole={userRole} onActionComplete={onActionComplete} />
 
       <div className="workflow-progress" aria-label="工单处理进度">
         <span className="complete"><i>1</i>读取工单</span><b />

@@ -171,6 +171,31 @@ Worker 默认随 FastAPI lifespan 启动；需要独立进程时运行 `python s
 
 审批后的 `/tool-actions/{id}/execute` 只返回 `queued`。排障时先用 `GET /tool-actions/{id}` 查看状态事件，再用 `GET /tool-outbox?action_id=<id>` 查看投递；只有 manager/admin 可对 DLQ 调用 `POST /tool-outbox/{event_id}/retry`。退款超时只能等待 `reconcile` 查询，禁止直接再次调用写 Tool。
 
+## Tool Governance V2.3：重复申请、租约保护与人工核实
+
+- `tool_business_requests` 保存唯一业务申请。当前只覆盖 `orders.create_refund_request` 的整单退款：同一客户、同一订单跨工单提交相同参数时返回原 Action；参数变化返回 409，不能新建 Action 绕过原审批。拒绝、失败或补偿后也不会自动释放去重记录；部分退款和再次退款需另行定义业务申请边界。
+- 数据库唯一键解决并发创建，保存点回滚输掉竞争的新 Action。升级前旧 Action 会按解密后的客户/订单核对，不因新表为空而重复创建；密文无法核实时拒绝继续创建，需要人工处理。
+- Worker 每隔租约期限的三分之一续租。领取时的 `version` 作为 fencing token（本次执行凭证）；Action 状态提交、成功、Retry 和 DLQ 写回都要求 owner、版本和有效期匹配。过期 Worker 不能复活租约或覆盖新结果。外部调用期间不占 Action/Outbox 行锁；批次内每个已领取事件立即处理和续租。
+- `tool_action_reviews` 保存 unknown、补偿不确定和 DLQ 核实任务。人工处理台同时列出这些工单并标记“业务待核实”，不改变原 Ticket 状态、ResponseApproval 或 LangGraph 恢复语义。自动对账确定结果后关闭核实任务；启动时补齐旧记录。
+- `GET /tickets/{id}/tool-reviews` 返回脱敏视图。主管通过 `POST /tool-actions/{id}/resolve` 提交 `expected_version`、`outcome`、`evidence_reference` 和 `note`。必须先在外部业务系统核实；提出人不能自确认，存在有效 Worker 租约时返回 409。确认只保存结果和事件，不调用写 Tool；剩余 Outbox 转为 `cancelled`，原回复审批保持不变。
+- 人工可确认 `succeeded/failed`，补偿不确定时可确认 `compensated/compensation_failed`。仅入队而从未执行的操作不能直接确认为成功。凭证原文加密，对外仅返回摘要哈希和脱敏说明；系统没有自动验证凭证真伪，真实性由核实人负责。
+
+新增两张表，不修改既有表列。当前仍由 `init_db/create_all` 创建；多实例部署前应先受控执行初始化，避免同时建表，后续统一纳入 Alembic。数据库、Checkpoint 和加密密钥须跨部署保留；Mock Gateway 仍是进程内账本，不代表真实退款完成。
+
+### PostgreSQL 多进程故障演练
+
+```bash
+export TOOL_DRILL_DATABASE_URL='postgresql+asyncpg://USER:PASSWORD@HOST:5432/supportgpt_drill'
+python scripts/run_postgres_tool_drill.py --confirm-isolated-database \
+  --report evaluation/reports/tool_drill/postgres.json
+```
+
+只能使用名称以 `_test` 或 `_drill` 结尾的专用测试库，必须显式确认。脚本创建随机 schema，结束时只删除该 schema。需要建 schema 权限，禁止使用生产库。脚本不连接真实 OMS、不调用 LLM，也不启动本地 Docker。
+
+覆盖：两个独立进程同时创建同一申请；调用长于租约期限时另一 Worker 不能接管；模拟 OMS 已提交后强杀 Worker，新进程只对账，写 Handler 总次数为 1；旧 fencing token 不能执行或写回。模拟 OMS 的账本独立存入 PostgreSQL，不随 Worker 退出丢失。这是 PostgreSQL 与持久化模拟接口测试，不是真实支付/OMS 验收。
+
+CI 的 `tool-governance-postgres-drill` 使用临时 PostgreSQL 16 执行脚本并保存报告，容器构建依赖该任务成功。本机没有 PostgreSQL 时，不得把跳过或仅编译脚本说成演练通过，应检查 CI 的实际结果。
+
 ## 安全配置
 
 输入、Tool Result 和 RAG Document 均经过多层 Prompt Injection 检测；结果与 Qwen3Guard 语义分类共同进入 Risk Engine。Qwen3Guard 默认关闭：

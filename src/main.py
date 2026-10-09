@@ -45,6 +45,7 @@ from src.models.db_models import (
     AgentReviewContext,
     AgentRun,
     ToolRuntimeSetting,
+    ToolActionReview,
     ResponseApproval,
     Ticket,
     User,
@@ -92,6 +93,8 @@ from src.models.schemas import (
     ToolActionExecuteRequest,
     ToolActionPageResponse,
     ToolActionResponse,
+    ToolActionResolutionRequest,
+    ToolActionReviewResponse,
     ToolInvocationAuditPageResponse,
     ToolOutboxEventResponse,
     ToolOutboxPageResponse,
@@ -500,6 +503,9 @@ async def lifespan(app: FastAPI):
     init_tracing()
     # Create DB schemas (SQLite or PostgreSQL)
     await init_db()
+    async with AsyncSessionLocal() as db:
+        await tool_governance_service.backfill_reviews(db)
+        await db.commit()
     await _load_tool_runtime_settings()
     await initialize_agent_checkpointing()
     await _recover_resumable_workflows()
@@ -750,7 +756,9 @@ async def _admin_tool_catalog(db: AsyncSession) -> list[AdminToolResponse]:
         catalog.append(
             AdminToolResponse(
                 **item,
-                disabled_reason=(runtime.reason if runtime and not runtime.enabled else None),
+                disabled_reason=(
+                    runtime.reason if runtime and not runtime.enabled else None
+                ),
                 updated_by=runtime.updated_by if runtime else None,
                 updated_at=runtime.updated_at if runtime else None,
             )
@@ -767,9 +775,7 @@ async def list_admin_tools(
     return await _admin_tool_catalog(db)
 
 
-@app.put(
-    "/admin/resources/tools/{tool_name}", response_model=AdminToolResponse
-)
+@app.put("/admin/resources/tools/{tool_name}", response_model=AdminToolResponse)
 async def update_admin_tool(
     tool_name: str,
     req: AdminToolUpdateRequest,
@@ -778,7 +784,9 @@ async def update_admin_tool(
 ):
     """持久化 Tool 开关，所有 Schema、RBAC 和高风险门禁保持不变。"""
     if tool_registry.get_definition(tool_name) is None:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Tool not found")
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="Tool not found"
+        )
     reason = (req.reason or "").strip() or None
     if not req.enabled and reason is None:
         raise HTTPException(
@@ -787,7 +795,9 @@ async def update_admin_tool(
         )
     runtime = await db.get(ToolRuntimeSetting, tool_name)
     if runtime is None:
-        runtime = ToolRuntimeSetting(tool_name=tool_name, updated_by=current_user.username)
+        runtime = ToolRuntimeSetting(
+            tool_name=tool_name, updated_by=current_user.username
+        )
         db.add(runtime)
     runtime.enabled = req.enabled
     runtime.reason = reason
@@ -807,9 +817,7 @@ def _prompt_bundle_response(bundle) -> AdminPromptBundleResponse:
     )
 
 
-@app.get(
-    "/admin/resources/prompts", response_model=AdminPromptRegistryResponse
-)
+@app.get("/admin/resources/prompts", response_model=AdminPromptRegistryResponse)
 async def list_admin_prompts(current_user: User = Depends(require_admin)):
     """查看全部不可变 Bundle 及生产/预发布指针。"""
     registry = PromptRegistry(Path(settings.PROMPT_REGISTRY_DIR))
@@ -1538,6 +1546,33 @@ async def compensate_tool_action(
     return await tool_governance_service.get(db, action.id)
 
 
+@app.post("/tool-actions/{action_id}/resolve", response_model=ToolActionResponse)
+async def resolve_tool_action(
+    action_id: str,
+    req: ToolActionResolutionRequest,
+    current_user: User = Depends(require_manager),
+    db: AsyncSession = Depends(get_db),
+):
+    """保存主管核实的外部结果，不调用业务写工具。"""
+    action = await tool_governance_service.resolve_manually(
+        db, action_id=action_id, reviewer=current_user, **req.model_dump()
+    )
+    await db.commit()
+    return await tool_governance_service.get(db, action.id)
+
+
+@app.get(
+    "/tickets/{ticket_id}/tool-reviews", response_model=list[ToolActionReviewResponse]
+)
+async def ticket_tool_reviews(
+    ticket_id: int,
+    current_user: User = Depends(require_agent),
+    db: AsyncSession = Depends(get_db),
+):
+    """在工单详情显示业务核实任务，与回复审批分开处理。"""
+    return await tool_governance_service.list_ticket_reviews(db, ticket_id)
+
+
 def _ticket_review_reasons(
     *,
     agent_run: AgentRun,
@@ -1674,8 +1709,7 @@ def _public_review_feedback(agent_output: dict) -> tuple[str, str, str]:
     if (
         agent_output.get("hallucination_detected")
         or agent_output.get("response_requires_human")
-        or float(agent_output.get("qa_score", 1.0))
-        < settings.RISK_QA_SCORE_THRESHOLD
+        or float(agent_output.get("qa_score", 1.0)) < settings.RISK_QA_SCORE_THRESHOLD
     ):
         return (
             "quality_review",
@@ -1709,8 +1743,10 @@ async def get_public_support_history(
     session_ids = list(
         dict.fromkeys(item.strip() for item in session_id if item.strip())
     )
-    if not session_ids or len(session_ids) > 50 or any(
-        len(item) > 100 for item in session_ids
+    if (
+        not session_ids
+        or len(session_ids) > 50
+        or any(len(item) > 100 for item in session_ids)
     ):
         raise HTTPException(
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
@@ -1997,10 +2033,20 @@ async def list_tickets(
 async def list_staff_review_queue(
     current_user: User = Depends(require_agent), db: AsyncSession = Depends(get_db)
 ):
-    """客服工作台只返回等待人工审批的异常工单。"""
+    """返回待回复审批或存在待核实业务操作的工单。"""
+    review_tickets = select(ToolActionReview.ticket_id).where(
+        ToolActionReview.status == "pending"
+    )
     result = await db.execute(
         select(Ticket)
-        .where(Ticket.status == "pending_approval")
+        .where((Ticket.status == "pending_approval") | Ticket.id.in_(review_tickets))
         .order_by(Ticket.updated_at.desc(), Ticket.id.desc())
     )
-    return result.scalars().all()
+    tickets = result.scalars().all()
+    pending_ids = set((await db.execute(review_tickets)).scalars().all())
+    return [
+        TicketResponse.model_validate(ticket).model_copy(
+            update={"requires_tool_review": ticket.id in pending_ids}
+        )
+        for ticket in tickets
+    ]
