@@ -5,6 +5,8 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
+    "demo:api": "node tests/fixtures/server.mjs",
+    "dev:demo": "vite --config tests/fixtures/vite.config.mjs",
     "test": "node --test tests/*.test.js",
     "build": "vite build",
     "preview": "vite preview"

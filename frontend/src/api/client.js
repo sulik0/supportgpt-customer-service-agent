@@ -33,8 +33,8 @@ async function apiError(response, fallbackMessage) {
   }
 }
 
-export async function fetchHealth() {
-  const response = await fetch(`${BASE_URL}/health`);
+export async function fetchHealth(signal) {
+  const response = await fetch(`${BASE_URL}/health`, { signal });
   if (!response.ok) throw await apiError(response, '服务健康检查失败');
   return response.json();
 }
@@ -69,9 +69,9 @@ export async function fetchTickets() {
   return response.json();
 }
 
-export async function fetchReviewQueue() {
+export async function fetchReviewQueue(signal) {
   const response = await authenticatedFetch(`${BASE_URL}/staff/review-queue`, {
-    headers: getHeaders(),
+    headers: getHeaders(), signal,
   });
   if (!response.ok) throw new Error('加载待人工处理队列失败');
   return response.json();
@@ -202,26 +202,26 @@ export async function evaluateResponse(query, context, responseText, agentRunId)
   return response.json();
 }
 
-export async function fetchAgentRuns(limit = 30, offset = 0, ticketId = null) {
+export async function fetchAgentRuns(limit = 30, offset = 0, ticketId = null, signal) {
   const params = new URLSearchParams({ limit: String(limit), offset: String(offset) });
   if (ticketId != null) params.set('ticket_id', String(ticketId));
   const response = await authenticatedFetch(`${BASE_URL}/observability/runs?${params}`, {
-    headers: getHeaders(),
+    headers: getHeaders(), signal,
   });
   if (!response.ok) throw new Error('加载 Agent 运行记录失败');
   return response.json();
 }
 
-export async function fetchAgentRun(agentRunId) {
+export async function fetchAgentRun(agentRunId, signal) {
   const response = await authenticatedFetch(`${BASE_URL}/feedback/runs/${encodeURIComponent(agentRunId)}`, {
-    headers: getHeaders(),
+    headers: getHeaders(), signal,
   });
   if (!response.ok) throw new Error('加载 Agent 运行详情失败');
   return response.json();
 }
 
-export async function fetchAdminTools() {
-  const response = await authenticatedFetch(`${BASE_URL}/admin/resources/tools`);
+export async function fetchAdminTools(signal) {
+  const response = await authenticatedFetch(`${BASE_URL}/admin/resources/tools`, { signal });
   if (!response.ok) throw await apiError(response, '加载工具列表失败');
   return response.json();
 }
@@ -235,8 +235,8 @@ export async function updateAdminTool(toolName, enabled, reason) {
   return response.json();
 }
 
-export async function fetchAdminPrompts() {
-  const response = await authenticatedFetch(`${BASE_URL}/admin/resources/prompts`);
+export async function fetchAdminPrompts(signal) {
+  const response = await authenticatedFetch(`${BASE_URL}/admin/resources/prompts`, { signal });
   if (!response.ok) throw await apiError(response, '加载提示词版本失败');
   return response.json();
 }
@@ -250,8 +250,8 @@ export async function createPromptCandidate(payload) {
   return response.json();
 }
 
-export async function fetchAdminRagDocuments() {
-  const response = await authenticatedFetch(`${BASE_URL}/admin/resources/rag-documents`);
+export async function fetchAdminRagDocuments(signal) {
+  const response = await authenticatedFetch(`${BASE_URL}/admin/resources/rag-documents`, { signal });
   if (!response.ok) throw await apiError(response, '加载 RAG 文档失败');
   return response.json();
 }

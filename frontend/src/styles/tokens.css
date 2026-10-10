@@ -1,0 +1,36 @@
+:root {
+  color-scheme: light;
+  --color-background: #ffffff;
+  --color-surface-muted: #f7f8fa;
+  --color-border: #e5e7eb;
+  --color-text: #111827;
+  --color-text-secondary: #64748b;
+  --color-accent: #2563eb;
+  --color-success: #15803d;
+  --color-warning: #b45309;
+  --color-danger: #b91c1c;
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-6: 24px;
+  --space-8: 32px;
+  --space-10: 40px;
+  --space-12: 48px;
+  --radius-control: 6px;
+  --radius-card: 8px;
+  --radius-dialog: 12px;
+  --duration-fast: 160ms;
+  --font-sans: 'Inter', 'Noto Sans SC', 'PingFang SC', 'Microsoft YaHei', sans-serif;
+  --font-mono: 'JetBrains Mono', 'SFMono-Regular', Consolas, monospace;
+  /* 流程图沿用这些变量，数值与统一 Tokens 保持一致。 */
+  --bg-main: var(--color-background);
+  --bg-card: var(--color-background);
+  --bg-secondary: var(--color-surface-muted);
+  --border-color: var(--color-border);
+  --border-strong: #cbd5e1;
+  --text-primary: var(--color-text);
+  --text-secondary: var(--color-text-secondary);
+  --text-muted: var(--color-text-secondary);
+  --primary: var(--color-accent);
+}

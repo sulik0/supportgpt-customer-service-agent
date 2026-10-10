@@ -1,30 +1,16 @@
-import React, { useEffect, useState } from 'react';
+import { friendlyError } from '../errors';
+import React, { useEffect, useRef, useState } from 'react';
+import { createLatestRequest } from '../latestRequest';
+import { useConfirm, useUnsavedChanges } from './uiHooks';
 import ToolReviewPanel from './ToolReviewPanel';
-import {
-  AlertTriangle,
-  BookOpen,
-  CheckCircle2,
-  ChevronDown,
-  ClipboardCheck,
-  FileText,
-  RefreshCw,
-  ShieldAlert,
-  ShoppingBag,
-  Sparkles,
-  User,
-  XCircle,
-} from 'lucide-react';
+import { AlertTriangle, BookOpen, CheckCircle2, ChevronDown, ClipboardCheck, FileText, RefreshCw, ShieldAlert, ShoppingBag, Sparkles, User, XCircle } from 'lucide-react';
 import { evaluateResponse, fetchCustomerContext, fetchTicketAgentResult, submitApproval } from '../api/client';
-import {
-  translateEscalationReason,
-  translateOrderItem,
-  translatePriority,
-  translateStatus,
-  translateSubject,
-  translateTier,
-} from '../i18n';
-
-export default function TicketDetails({ ticket, userRole, onActionComplete }) {
+import { translateEscalationReason, translateOrderItem, translatePriority, translateStatus, translateSubject, translateTier } from '../i18n';
+export default function TicketDetails({
+  ticket,
+  userRole,
+  onActionComplete
+}) {
   const [customer, setCustomer] = useState(null);
   const [chatOutput, setChatOutput] = useState(null);
   const [editedResponse, setEditedResponse] = useState('');
@@ -34,44 +20,62 @@ export default function TicketDetails({ ticket, userRole, onActionComplete }) {
   const [loadError, setLoadError] = useState('');
   const [actionNotice, setActionNotice] = useState('');
   const [actionError, setActionError] = useState('');
+  const detailsRequests = useRef(null);
+  const evaluationRequests = useRef(null);
+  if (!detailsRequests.current) detailsRequests.current = createLatestRequest();
+  if (!evaluationRequests.current) evaluationRequests.current = createLatestRequest();
+  const {
+    ask,
+    confirmation
+  } = useConfirm();
+  const responseChanged = Boolean(chatOutput && editedResponse.trim() !== chatOutput.response.trim());
+  useUnsavedChanges(responseChanged, ask);
 
   // 切换工单时只读取已经持久化的 Agent 结果。
   useEffect(() => {
     if (!ticket) return;
-    const controller = new AbortController();
     setCustomer(null);
     setChatOutput(null);
     setEditedResponse('');
     setEvaluation(null);
+    setEvalLoading(false);
     setLoadError('');
     setActionNotice('');
     setActionError('');
-    loadDetails(ticket, controller.signal);
-    return () => controller.abort();
+    loadDetails(ticket);
+    return () => {
+      detailsRequests.current.cancel();
+      evaluationRequests.current.cancel();
+    };
   }, [ticket?.id]);
-
-  async function loadDetails(currentTicket = ticket, signal) {
+  async function loadDetails(currentTicket = ticket) {
     if (!currentTicket) return;
+    const request = detailsRequests.current.start();
     setLoading(true);
     setLoadError('');
     try {
-      const [crmProfile, chatRes] = await Promise.all([
-        fetchCustomerContext(currentTicket.customer_id, signal),
-        fetchTicketAgentResult(currentTicket.id, signal),
-      ]);
-      if (signal?.aborted) return;
+      const [crmProfile, chatRes] = await Promise.all([fetchCustomerContext(currentTicket.customer_id, request.signal), fetchTicketAgentResult(currentTicket.id, request.signal)]);
+      if (!request.isCurrent()) return;
       setCustomer(crmProfile);
       setChatOutput(chatRes);
       setEditedResponse(chatRes.response);
     } catch (err) {
-      if (err.name === 'AbortError') return;
+      if (err.name === 'AbortError' || !request.isCurrent()) return;
       console.error('加载工单详情失败：', err);
-      setLoadError(err.message || 'Agent 处理失败，请稍后重试。');
+      setLoadError(friendlyError(err) || 'Agent 处理失败，请稍后重试。');
     } finally {
-      if (!signal?.aborted) setLoading(false);
+      if (request.isCurrent()) setLoading(false);
     }
   }
-
+  async function refreshDetails() {
+    // 重新读取结果前确认，避免覆盖员工正在编辑的回复。
+    if (responseChanged && !(await ask({
+      title: '放弃修改并重新加载？',
+      description: '重新加载会用已保存的回复替换当前尚未提交的修改。',
+      confirmLabel: '重新加载'
+    }))) return;
+    await loadDetails(ticket);
+  }
   async function handleApproval(status) {
     if (!chatOutput?.approval_id) return;
     const trimmedResponse = editedResponse.trim();
@@ -84,7 +88,12 @@ export default function TicketDetails({ ticket, userRole, onActionComplete }) {
       setActionError('人工修改后的回复不能为空。');
       return;
     }
-    if (status === 'rejected' && !window.confirm('确定拒绝这条 AI 回复吗？工单将按拒绝结果结束当前审批。')) return;
+    if (status === 'rejected' && !(await ask({
+      title: '拒绝这条回复？',
+      description: '拒绝后，当前回复审批将按拒绝结果结束。此操作不代表取消或执行业务操作。',
+      confirmLabel: '拒绝回复',
+      danger: true
+    }))) return;
     setLoading(true);
     setActionNotice('');
     setActionError('');
@@ -93,28 +102,27 @@ export default function TicketDetails({ ticket, userRole, onActionComplete }) {
       setActionNotice(status === 'approved' ? 'AI 回复已批准。' : status === 'modified' ? '人工修改已提交。' : 'AI 回复已拒绝。');
       onActionComplete?.();
     } catch (err) {
-      setActionError(err.message);
+      setActionError(friendlyError(err));
     } finally {
       setLoading(false);
     }
   }
-
   async function triggerEvaluation() {
-    if (!chatOutput) return;
+    if (!chatOutput || evalLoading) return;
+    const request = evaluationRequests.current.start();
     setEvalLoading(true);
     try {
-      const contexts = (chatOutput.citations || []).map((citation) => citation.text);
-      setEvaluation(await evaluateResponse(ticket.description, contexts, editedResponse, chatOutput.agent_run_id));
+      const contexts = (chatOutput.citations || []).map(citation => citation.text);
+      const result = await evaluateResponse(ticket.description, contexts, editedResponse, chatOutput.agent_run_id);
+      if (request.isCurrent()) setEvaluation(result);
     } catch (err) {
-      alert(`回复评测失败：${err.message}`);
+      if (request.isCurrent()) setActionError(`回复评测失败：${friendlyError(err)}`);
     } finally {
-      setEvalLoading(false);
+      if (request.isCurrent()) setEvalLoading(false);
     }
   }
-
   if (!ticket) {
-    return (
-      <section className="ticket-empty-state">
+    return <section className="ticket-empty-state">
         <span className="empty-state-icon"><ClipboardCheck size={34} /></span>
         <span className="section-label">等待处理</span>
         <h2>从人工队列中选择一张工单</h2>
@@ -125,23 +133,14 @@ export default function TicketDetails({ ticket, userRole, onActionComplete }) {
           <span>3. 生成回复</span><i />
           <span>4. 人工确认</span>
         </div>
-      </section>
-    );
+      </section>;
   }
-
   const citations = chatOutput?.citations || [];
   const recentOrders = customer?.recent_orders || [];
-  const responseChanged = Boolean(chatOutput && editedResponse.trim() !== chatOutput.response.trim());
   const canRunEvaluation = ['manager', 'admin'].includes(userRole);
-  const reviewReasons = Array.from(new Set(
-    (chatOutput?.review_reasons?.length
-      ? chatOutput.review_reasons
-      : [chatOutput?.escalation_reason]
-    ).map(translateEscalationReason).filter(Boolean),
-  ));
-
-  return (
-    <section className="ticket-detail">
+  const reviewReasons = Array.from(new Set((chatOutput?.review_reasons?.length ? chatOutput.review_reasons : [chatOutput?.escalation_reason]).map(translateEscalationReason).filter(Boolean)));
+  return <section className="ticket-detail">
+      {confirmation}
       <header className="ticket-detail-header">
         <div>
           <div className="ticket-detail-meta">
@@ -152,19 +151,14 @@ export default function TicketDetails({ ticket, userRole, onActionComplete }) {
           <h2>{translateSubject(ticket.subject)}</h2>
           <p>客户 {ticket.customer_id} · 本次使用的知识库版本：{chatOutput?.kb_version || '加载中'}</p>
         </div>
-        <button className="btn btn-secondary compact-button" onClick={() => loadDetails(ticket)} disabled={loading}>
+        <button className="btn btn-secondary compact-button" onClick={refreshDetails} disabled={loading}>
           <RefreshCw size={15} className={loading ? 'spin' : ''} /> 刷新已保存的结果
         </button>
       </header>
 
       <ToolReviewPanel ticketId={ticket.id} userRole={userRole} onActionComplete={onActionComplete} />
 
-      <div className="workflow-progress" aria-label="工单处理进度">
-        <span className="complete"><i>1</i>读取工单</span><b />
-        <span className={loading || chatOutput ? 'complete' : 'active'}><i>2</i>Agent 分析</span><b />
-        <span className={chatOutput ? 'complete' : ''}><i>3</i>生成建议</span><b />
-        <span className={chatOutput?.approval_required ? 'active' : chatOutput ? 'complete' : ''}><i>4</i>人工确认</span>
-      </div>
+      <p className="saved-result-notice">此页读取已保存的处理结果，不会重新运行 Agent。</p>
 
       <div className="case-context-grid">
         <article className="detail-card issue-card">
@@ -174,46 +168,35 @@ export default function TicketDetails({ ticket, userRole, onActionComplete }) {
 
         <article className="detail-card customer-card">
           <div className="card-heading"><span className="card-icon purple"><User size={17} /></span><div><span>客户资料</span><small>来自本地 CRM 演示适配器</small></div></div>
-          {customer ? (
-            <div className="customer-facts">
+          {customer ? <div className="customer-facts">
               <div><span>客户</span><strong>{customer.name}</strong></div>
               <div><span>等级</span><strong>{translateTier(customer.tier)}</strong></div>
               <div><span>未结工单</span><strong>{customer.open_tickets_count}</strong></div>
               <div><span>最近订单</span><strong>{recentOrders.length}</strong></div>
-            </div>
-          ) : <div className="context-placeholder">正在读取客户资料…</div>}
+            </div> : <div className="context-placeholder">正在读取客户资料…</div>}
         </article>
       </div>
 
-      {customer && recentOrders.length > 0 && (
-        <details className="orders-disclosure">
+      {customer && recentOrders.length > 0 && <details className="orders-disclosure">
           <summary><span><ShoppingBag size={16} /> 最近订单</span><span>{recentOrders.length} 笔 <ChevronDown size={15} /></span></summary>
           <div className="orders-grid">
-            {recentOrders.map((order) => (
-              <div className="order-item" key={order.order_id}>
+            {recentOrders.map(order => <div className="order-item" key={order.order_id}>
                 <div><strong>{order.order_id}</strong><span>{translateStatus(order.status)}</span></div>
                 <p>{order.items.map(translateOrderItem).join('、')}</p>
                 <b>${order.total_amount}</b>
-              </div>
-            ))}
+              </div>)}
           </div>
-        </details>
-      )}
+        </details>}
 
-      {loading && (
-        <div className="agent-loading-card">
+      {loading && <div className="agent-loading-card">
           <span className="agent-orbit"><Sparkles size={22} /></span>
           <div><strong>正在读取已保存的处理结果</strong><p>正在加载客户资料、引用文档和回复草稿，请稍候……</p></div>
           <span className="loading-dots"><i /><i /><i /></span>
-        </div>
-      )}
+        </div>}
 
-      {!loading && loadError && (
-        <div className="detail-error"><AlertTriangle size={19} /><div><strong>处理结果加载失败</strong><span>{loadError}</span></div><button className="btn btn-secondary" onClick={loadDetails}>重新加载</button></div>
-      )}
+      {!loading && loadError && <div className="detail-error"><AlertTriangle size={19} /><div><strong>处理结果加载失败</strong><span>{loadError}</span></div><button className="btn btn-secondary" onClick={refreshDetails}>重新加载</button></div>}
 
-      {!loading && chatOutput && (
-        <article className="assistant-panel">
+      {!loading && chatOutput && <article className="assistant-panel">
           <header className="assistant-heading">
             <div className="assistant-title">
               <span className="assistant-logo"><Sparkles size={19} /></span>
@@ -223,37 +206,29 @@ export default function TicketDetails({ ticket, userRole, onActionComplete }) {
               <span className="evidence-badge"><BookOpen size={13} /> {citations.length} 条知识依据</span>
               {chatOutput.qa_score != null && <span className="evidence-badge">QA {chatOutput.qa_score.toFixed(2)}</span>}
               {chatOutput.hallucination_detected && <span className="risk-badge"><ShieldAlert size={13} /> 回复可能缺少依据</span>}
-              {chatOutput.approval_required
-                ? <span className="review-badge"><ShieldAlert size={13} /> 待人工审批</span>
-                : <span className="passed-badge"><CheckCircle2 size={13} /> 自动校验通过</span>}
+              {chatOutput.approval_required ? <span className="review-badge"><ShieldAlert size={13} /> 待人工审批</span> : <span className="passed-badge"><CheckCircle2 size={13} /> 自动校验通过</span>}
             </div>
           </header>
 
-          {chatOutput.escalation_recommended && (
-            <div className="escalation-banner">
+          {chatOutput.escalation_recommended && <div className="escalation-banner">
               <ShieldAlert size={19} />
               <div>
                 <strong>建议交给人工处理</strong>
                 <span>{reviewReasons[0] || '该工单需要人工复核。'}</span>
-                {reviewReasons.length > 1 && (
-                  <ul className="escalation-reasons">
-                    {reviewReasons.slice(1).map((reason) => <li key={reason}>{reason}</li>)}
-                  </ul>
-                )}
-                {chatOutput.risk_level && chatOutput.risk_score != null && (
-                  <small>
+                {reviewReasons.length > 1 && <ul className="escalation-reasons">
+                    {reviewReasons.slice(1).map(reason => <li key={reason}>{reason}</li>)}
+                  </ul>}
+                {chatOutput.risk_level && chatOutput.risk_score != null && <small>
                     风险等级：{chatOutput.risk_level.toUpperCase()}
                     · 风险分：{chatOutput.risk_score.toFixed(2)}
                     {chatOutput.analyzer_confidence != null && ` · 意图置信度：${chatOutput.analyzer_confidence.toFixed(2)}`}
-                  </small>
-                )}
+                  </small>}
               </div>
-            </div>
-          )}
+            </div>}
 
           <div className="draft-section">
             <div className="draft-label"><div><strong>回复草稿</strong><span>发送前可直接编辑</span></div><span>{editedResponse.length} 字</span></div>
-            <textarea value={editedResponse} onChange={(event) => setEditedResponse(event.target.value)} placeholder="已保存的 Agent 回复草稿会显示在这里……" />
+            <textarea aria-label="回复草稿" value={editedResponse} onChange={event => setEditedResponse(event.target.value)} placeholder="已保存的 Agent 回复草稿会显示在这里……" />
           </div>
 
           <details className="reference-disclosure">
@@ -262,37 +237,30 @@ export default function TicketDetails({ ticket, userRole, onActionComplete }) {
               <span>{citations.length} 条 <ChevronDown size={15} /></span>
             </summary>
             <div className="reference-list">
-              {citations.length === 0 ? <p className="no-reference">本次未检索到可引用的知识文档。</p> : citations.map((citation, index) => (
-                <div className="reference-item" key={`${citation.source}-${index}`}>
+              {citations.length === 0 ? <p className="no-reference">本次未检索到可引用的知识文档。</p> : citations.map((citation, index) => <div className="reference-item" key={`${citation.source}-${index}`}>
                   <div><span>{index + 1}</span><strong>{citation.source}</strong><em>相关度 {citation.score}</em></div>
                   <p>{citation.text}</p>
-                </div>
-              ))}
+                </div>)}
             </div>
           </details>
 
           <footer className="assistant-actions">
             <div>
-              {chatOutput.approval_required ? (
-                <>
+              {chatOutput.approval_required ? <>
                   <button onClick={() => handleApproval('approved')} className="btn btn-primary" disabled={responseChanged}><CheckCircle2 size={16} /> 批准原回复</button>
                   <button onClick={() => handleApproval('modified')} className="btn btn-secondary" disabled={!responseChanged}>批准修改后的回复</button>
                   <button onClick={() => handleApproval('rejected')} className="btn btn-danger"><XCircle size={16} /> 拒绝回复</button>
-                </>
-              ) : <span className="no-review-needed"><CheckCircle2 size={16} /> 此回复无需人工审批</span>}
+                </> : <span className="no-review-needed"><CheckCircle2 size={16} /> 此回复无需人工审批</span>}
             </div>
-            {canRunEvaluation && (
-              <button onClick={triggerEvaluation} className="btn btn-quiet" disabled={evalLoading}>
+            {canRunEvaluation && <button onClick={triggerEvaluation} className="btn btn-quiet" disabled={evalLoading}>
                 <Sparkles size={14} className={evalLoading ? 'spin' : ''} /> {evalLoading ? '评测中…' : '运行质量评测'}
-              </button>
-            )}
+              </button>}
           </footer>
 
           {actionNotice && <div className="action-notice success" role="status">{actionNotice}</div>}
           {actionError && <div className="action-notice error" role="alert">{actionError}</div>}
 
-          {evaluation && (
-            <section className="evaluation-panel">
+          {evaluation && <section className="evaluation-panel">
               <div className="evaluation-heading"><div><span>本次回复的质量评测</span><small>Ragas + DeepEval</small></div><CheckCircle2 size={19} /></div>
               <div className="evaluation-grid">
                 <div><span>与依据一致程度</span><strong>{evaluation.faithfulness_score}</strong></div>
@@ -300,10 +268,7 @@ export default function TicketDetails({ ticket, userRole, onActionComplete }) {
                 <div><span>相关资料召回率</span><strong>{evaluation.context_recall}</strong></div>
                 <div><span>回答相关性</span><strong>{evaluation.answer_relevance}</strong></div>
               </div>
-            </section>
-          )}
-        </article>
-      )}
-    </section>
-  );
+            </section>}
+        </article>}
+    </section>;
 }
