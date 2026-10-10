@@ -1,8 +1,11 @@
 # 项目任务清单
 
-> 最后更新：2026-10-09。状态以代码、测试和 `03_INTERVIEW_CANON.md` 为准。
+> 最后更新：2026-10-10。状态以代码、测试和 `03_INTERVIEW_CANON.md` 为准。
 
 ## P0
+
+- [x] 增加可独立运行的 PostgreSQL OMS 参考服务及 HTTP Gateway，保存幂等回执，拒绝参数冲突，提供权威查询及幂等补偿；保持默认 Mock 和原审批 / Outbox 流程，不执行真实资金操作。
+- [ ] 为参考 OMS 增加 Alembic Migration、密钥轮换、备份恢复、保留期和真实 OMS / 支付渠道契约验证；参考申请提交成功不能作为真实到账证明。
 
 - [x] 建立 `AgentRun`、`AgentRunLink`、`FeedbackEvent` 数据模型。
 - [x] 将 `/chat`、`/suggest-response` 的执行快照与 OpenTelemetry Trace ID 关联。

@@ -16,6 +16,8 @@
 
 ## 当前系统快照
 
+- OMS 参考实现：`src/oms/` 使用独立 PostgreSQL、API Key、Fernet Key；`src/tools/oms_gateway.py` 适配三个 HTTP 接口。默认 `OMS_PROVIDER=mock` 不变，只有显式配置 reference_http 才接入。服务不操作资金，写入结果不确定时仍使用原 unknown / Outbox 对账；不要把 submitted 改写为已到账，也不要通过重试写入解决查询不到的问题。
+
 - 后端：FastAPI + SQLAlchemy Async + JWT/RBAC。
 - Agent：LangGraph StateGraph，包含 Analyzer、Tooling、Retriever、Resolver、QA、Escalation 六个逻辑业务 Agent 节点，以及不调用 LLM 的 Skill Selector 和 Approval Gate。
 - 执行：Analyzer 后先使用统一 Intent 确定性选择 Skill，再并行 Tooling/Retriever；安全强命中直接短路；之后 Resolver、QA、Escalation、Approval Gate。高风险路径 interrupt，人工决策后从原 Checkpoint Thread 恢复。

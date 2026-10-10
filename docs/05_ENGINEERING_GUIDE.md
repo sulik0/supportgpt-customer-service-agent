@@ -435,6 +435,59 @@ docker compose -f deployment/docker-compose.yml up --build
 
 仓库需要在 GitHub `release-quality-gate` Environment 配置 `LLM_BASE_URL`、`LLM_API_KEY`、`LLM_MODEL_NAME`；Fast Model Secrets 可选。建议为该 Environment 设置 Required Reviewer，避免无意触发真实模型成本。CD 当前完成的是经过质量门禁的容器交付，未获得具体集群凭据，因此不会自动修改 Kubernetes 集群。
 
+## PostgreSQL OMS 参考服务
+
+参考服务位于 `src/oms/`，与客服后端分开启动，使用专用 PostgreSQL 数据库、API Key 和 Fernet Key。默认 `OMS_PROVIDER=mock` 不变，部署这轮代码不会自动执行退款，也不会自动连接参考服务。
+
+### 启动和接入
+
+在参考服务的运行环境中设置以下变量（不要将实际值提交到 Git）：
+
+```bash
+export REFERENCE_OMS_DATABASE_URL='postgresql+asyncpg://<user>:<password>@<host>/<dedicated_oms_db>'
+export REFERENCE_OMS_API_KEY='<独立随机密钥，至少 32 字符>'
+export REFERENCE_OMS_ENCRYPTION_KEY='<独立 Fernet Key>'
+```
+
+这些变量只从进程环境读取，不读取客服的 `.env`。API Key 可用 `python -c 'import secrets; print(secrets.token_urlsafe(48))'` 生成；Fernet Key 可用 `python -c 'from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())'` 生成。请安全保存密钥，并保持重启前后一致；本版没有密钥轮换迁移。
+
+```bash
+# 显式导入仓库的六名虚构客户订单；已有订单不会被覆盖。
+python scripts/seed_reference_oms.py --confirm-reference-data
+uvicorn src.oms.app:create_app --factory --host 127.0.0.1 --port 8010
+```
+
+启动只创建参考服务的三张表，不自动导入订单。金额以最小货币单位保存，退款申请从该服务中的订单读取金额和客户归属，调用方不能传入退款金额。演示订单默认允许提交申请，这不是实际退款政策或支付渠道审批。
+
+在客服后端设置 `OMS_PROVIDER=reference_http`、`OMS_BASE_URL` 和 `OMS_API_KEY`，其中 API Key 与参考服务一致，然后重启客服后端。开发机地址可为 `http://127.0.0.1:8010`；生产配置要求 HTTPS。`OMS_TIMEOUT_SECONDS` 默认 1.5 秒，上限 1.8 秒，短于现有退款 Tool 的 2 秒超时。退款仍须经过原有提议、独立审批和 Outbox Worker，不会加入 Agent 自动调用路径。
+
+Railway 可使用同一后端镜像另建一个服务，将启动命令改为 `uvicorn src.oms.app:create_app --factory --host 0.0.0.0 --port $PORT`，并配置专用数据库。优先限制网络访问；本版不应开放给浏览器、公开演示用户或互联网任意调用方。没有 CORS、公开注册或文档入口，三个业务接口都需要专用 Bearer Key。
+
+### HTTP 契约与失败语义
+
+| 接口 | 输入 | 结果 |
+|---|---|---|
+| `POST /v1/refund-requests` | Bearer Key、`Idempotency-Key`，以及 customer_id / order_id / reason | 返回首次提交的不可变回执；submitted 表示申请已保存，不表示资金到账 |
+| `POST /v1/refund-requests/reconcile` | Bearer Key，JSON idempotency_key | 从同一主库读取已提交结果；authoritative=true；未查到返回 pending，不自动重新写入 |
+| `POST /v1/refund-requests/compensate` | Bearer Key、独立补偿 `Idempotency-Key`，JSON 原申请 idempotency_key | 原申请状态与补偿回执在同一事务提交；只撤销参考申请，不执行资金冲正 |
+
+同一幂等键、相同参数返回首次回执；参数变化返回 `409 idempotency_parameter_conflict`。一个订单只允许一个全额退款申请，不同 Action 使用不同幂等键申请同一订单也会被拒绝。参数使用 HMAC 比较、原参数使用独立 Fernet Key 加密，数据库不保存明文幂等键。补偿也校验相同键的参数，并用唯一约束避免重复撤销。
+
+Gateway 不重试写入，不跟随重定向。只有经过身份验证的明确拒绝，或带 `execution_rejected=true` 的 409/422，才判定为确定性失败。超时、断连、5xx、无效或缺失的成功回执都按结果不确定处理，由现有 Action 转入 unknown 并查询，不以客户端异常推断“退款未发生”。异常不会带回响应原文、API Key 或 Authorization。
+
+### 验证与边界
+
+```bash
+python -m pytest -q tests/test_reference_oms.py tests/test_tool_governance.py
+# 仅允许专用 *_test / *_drill PostgreSQL；不启动本地 Docker。
+TOOL_DRILL_DATABASE_URL='<专用 PostgreSQL asyncpg URL>' python scripts/run_reference_oms_drill.py \
+  --confirm-isolated-database --report /tmp/reference_oms_drill.json
+```
+
+CI 使用 PostgreSQL 16 执行独立进程重复申请、参数冲突、跨 Action 重复申请、提交后进程退出及重启补偿演练，并启动两轮真实 HTTP 服务验证 Gateway 鉴权、参数冲突及重启后查询。每轮只创建并删除随机 Schema，不读写原有业务表。HTTP 回执丢失后的 Worker 测试验证写入次数为 1，后续只查询权威结果。
+
+这是可运行的 OMS 参考实现，不是已集成企业 OMS 或支付系统。权威结果只对参考数据库中“申请是否已持久化”负责；不能证明真实到账、银行结算或跨支付渠道 Exactly Once。幂等记录目前不自动过期，退款和补偿表仍使用 `create_all`，正式部署还需要 Alembic Migration、密钥轮换、客户身份隔离、运维备份和对账保留期。
+
 ## 开发约定
 
 - Python 遵循 PEP 8，新函数可增加一两行精简中文注释。

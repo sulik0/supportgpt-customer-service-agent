@@ -203,7 +203,7 @@ Collector 未启动时后端会 fail-open，不影响 Agent 主流程。
 ## 实现边界
 
 - CRM、OMS、Ticketing 和默认 LLM 是 Mock Adapter，架构保留替换边界，但不得表述为已接入真实企业系统。
-- V2.2 的退款幂等、对账和补偿由 Mock OMS 账本验证；生产接入仍需由真实 OMS 明确实现相同契约，并补 Alembic Migration。
+- 退款默认使用 Mock OMS，也可显式连接新增的 PostgreSQL OMS 参考服务，验证跨进程幂等、参数冲突和权威查询。参考服务只保存演示退款申请，不移动真实资金；真实企业 OMS 仍需实现并验证相同契约，且补充 Alembic Migration。启动方法见工程指南的「PostgreSQL OMS 参考服务」。
 - Docker Compose 和 Kubernetes 是可复现部署模板，不代表已生产上线。
 - 公网限流在 Redis 不可用时会降级到单进程内存；多副本上线前必须使用共享 Redis 并校准可信代理头。
 - Qwen3Guard 默认关闭，Risk Engine 阈值尚未用真实客服数据校准。

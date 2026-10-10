@@ -68,4 +68,17 @@ class MockRefundGateway:
             self._records.clear()
 
 
-refund_gateway = MockRefundGateway()
+def create_refund_gateway():
+    """保持现有 Tool handler 协议，默认不连接任何外部 OMS。"""
+    from src.config import settings
+
+    if settings.OMS_PROVIDER == "reference_http":
+        from src.tools.oms_gateway import HTTPRefundGateway
+
+        return HTTPRefundGateway(
+            settings.OMS_BASE_URL, settings.OMS_API_KEY, settings.OMS_TIMEOUT_SECONDS
+        )
+    return MockRefundGateway()
+
+
+refund_gateway = create_refund_gateway()

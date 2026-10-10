@@ -9,6 +9,7 @@ from httpx import AsyncClient, ASGITransport
 os.environ["APP_ENV"] = "testing"
 os.environ["DATABASE_URL"] = "sqlite+aiosqlite:///:memory:"
 os.environ["LLM_PROVIDER"] = "mock"
+os.environ["OMS_PROVIDER"] = "mock"
 # 测试环境不得继承开发机的小模型端点与凭据。
 os.environ["LLM_FAST_MODEL_NAME"] = ""
 os.environ["LLM_FAST_BASE_URL"] = ""

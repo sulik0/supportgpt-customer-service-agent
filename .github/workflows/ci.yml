@@ -114,6 +114,20 @@ jobs:
           if-no-files-found: warn
           retention-days: 14
 
+      - name: Run PostgreSQL reference OMS persistence drill
+        env:
+          TOOL_DRILL_DATABASE_URL: postgresql+asyncpg://supportgpt:isolated-ci-password@127.0.0.1:5432/supportgpt_drill
+        run: python scripts/run_reference_oms_drill.py --confirm-isolated-database --report evaluation/reports/ci_tool_drill/reference_oms.json
+
+      - name: Upload reference OMS drill report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: postgres-reference-oms-${{ github.run_id }}
+          path: evaluation/reports/ci_tool_drill/reference_oms.json
+          if-no-files-found: warn
+          retention-days: 14
+
   agent-quality-gate:
     name: Agent PR Quality Gate
     runs-on: ubuntu-latest

@@ -16,6 +16,8 @@ SupportGPT 智能客服 Agent 面向售后服务场景，可在本地运行，�
 
 CRM、OMS、历史工单和退款资格初筛当前均通过本地 Mock Adapter 模拟。默认 LLM 也为 Mock Provider，以保证本地无 API Key 环境下可复现。
 
+退款额外提供 PostgreSQL OMS 参考服务，可通过 `OMS_PROVIDER=reference_http` 显式接入 Outbox Worker。已实现数据库级幂等回执、参数冲突拒绝、同订单重复申请保护、按幂等键查询已提交结果，以及独立幂等补偿。参考服务只处理仓库虚构订单，submitted 只表示申请已保存，`funds_moved=false` 明确表示未执行真实资金操作；不能表述为已接入企业 OMS、完成真实退款或保证跨支付系统 Exactly Once。
+
 ## 3. 项目目标
 
 - 让客户自然语言问题进入可分析、可路由、可审核的工单流程。

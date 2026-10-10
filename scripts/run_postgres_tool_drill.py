@@ -22,6 +22,7 @@ def configure(url):
             "APP_ENV": "testing",
             "DATABASE_URL": url,
             "LLM_PROVIDER": "mock",
+            "OMS_PROVIDER": "mock",
             "DECISION_PROVIDER": "disabled",
             "JEV_API_KEY": "",
             "OTEL_ENABLED": "false",

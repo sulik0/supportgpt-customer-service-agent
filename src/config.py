@@ -1,5 +1,6 @@
 import base64
 import os
+from urllib.parse import urlsplit
 from typing import Optional
 
 from pydantic import Field, model_validator
@@ -120,6 +121,11 @@ class Settings(BaseSettings):
     TOOL_OUTBOX_RETRY_BASE_SECONDS: float = Field(default=1.0, ge=0.0, le=60.0)
     TOOL_OUTBOX_RETRY_MAX_SECONDS: float = Field(default=60.0, ge=0.0, le=3600.0)
     TOOL_RECONCILIATION_DELAY_SECONDS: float = Field(default=2.0, ge=0.0, le=300.0)
+    # 默认仍为进程内 Mock；reference_http 只连接独立演示 OMS。
+    OMS_PROVIDER: str = Field(default="mock", pattern="^(mock|reference_http)$")
+    OMS_BASE_URL: Optional[str] = Field(default=None)
+    OMS_API_KEY: Optional[str] = Field(default=None, repr=False)
+    OMS_TIMEOUT_SECONDS: float = Field(default=1.5, gt=0.0, le=1.8)
     PROMPT_VERSION: str = Field(default="support-v1")
     # PromptOps 按内容 Hash 绑定版本；旧标签仅保留兼容。
     PROMPT_REGISTRY_DIR: str = Field(default="./.runtime/promptops")
@@ -236,6 +242,29 @@ class Settings(BaseSettings):
                 if origin.strip()
             )
         )
+
+    @model_validator(mode="after")
+    def validate_oms_gateway(self):
+        """显式启用 HTTP 才检查凭据，并禁止 URL 中夹带密钥。"""
+        if self.OMS_PROVIDER == "mock":
+            return self
+        url = urlsplit(self.OMS_BASE_URL or "")
+        if (
+            url.scheme not in {"http", "https"}
+            or not url.hostname
+            or url.username
+            or url.password
+            or url.query
+            or url.fragment
+        ):
+            raise ValueError(
+                "OMS_BASE_URL must be a plain HTTP(S) URL without credentials"
+            )
+        if self.APP_ENV in {"production", "prod"} and url.scheme != "https":
+            raise ValueError("Production OMS gateway requires HTTPS")
+        if len(self.OMS_API_KEY or "") < 32:
+            raise ValueError("OMS reference HTTP gateway requires a dedicated API key")
+        return self
 
     @property
     def public_demo_profile_ids(self) -> set[str]:

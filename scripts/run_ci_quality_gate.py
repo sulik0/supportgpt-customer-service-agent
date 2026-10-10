@@ -84,6 +84,7 @@ def _configure_offline_environment(runtime: Path) -> None:
         "DATABASE_URL": f"sqlite+aiosqlite:///{runtime / 'quality_gate.db'}",
         "VECTOR_DB_PERSIST_DIR": str(runtime / "chromadb"),
         "LLM_PROVIDER": "mock",
+        "OMS_PROVIDER": "mock",
         "LLM_MODEL_NAME": "mock",
         "LLM_BASE_URL": "",
         "LLM_API_KEY": "",
