@@ -53,6 +53,9 @@
 - [ ] 引入 Alembic，并为 Feedback Pipeline 新表生成生产 Migration。
 - [ ] 增加训练样本人工复核状态、删除请求和数据保留周期。
 
+- [x] 受控 ReAct Tool 选择（`TOOL_SELECTION_MODE=react`）：强制上下文 + Skill 白名单内只读 Tool 由 LLM 选择，有界步数/调用、参数绑定、注入不回灌、失败回退规则；DeepSeek 100 条对比 rules 0.91 / react v2 0.84（7 条纯政策问题标注存疑）。
+- [ ] 复核 Baseline 中 7 条纯政策问题的 required_tools 标注，并用独立留出集重测 rules 与 react；定位规则模式复测 0.91（低于 08-30 的 0.99）的 HITL 失败。
+
 ## P1
 
 - [x] 售后 Tool / RAG 扩充：9 个注册工具、12 篇新增中文演示文档、中文词法召回，新增查询按意图进入 Workflow 和 Resolver，并经过 Skill `v1.1` 权限及审计。

@@ -110,6 +110,13 @@ class Settings(BaseSettings):
     LLM_FALLBACK_MODEL_NAME: Optional[str] = Field(default=None)
     LLM_FALLBACK_BASE_URL: Optional[str] = Field(default=None)
     LLM_FALLBACK_API_KEY: Optional[str] = Field(default=None)
+    # rules 为确定性路由；react 由 LLM 在 Skill 白名单的只读 Tool 中受控选择。
+    TOOL_SELECTION_MODE: str = Field(default="rules", pattern="^(rules|react)$")
+    TOOL_REACT_MAX_STEPS: int = Field(default=3, ge=1, le=5)
+    TOOL_REACT_MAX_TOOL_CALLS: int = Field(default=5, ge=1, le=10)
+    TOOL_REACT_MAX_RESULT_CHARS: int = Field(default=600, ge=200, le=5000)
+    LLM_TOOL_PLANNER_MAX_TOKENS: int = Field(default=200, ge=32, le=1024)
+    LLM_TOOL_PLANNER_MODEL_NAME: Optional[str] = Field(default=None)
     # Tool Governance V2.2：Outbox Worker 统一执行、对账与补偿事件。
     TOOL_POLICY_VERSION: str = Field(default="tool-policy-v2.2")
     TOOL_ACTION_ENCRYPTION_KEY: Optional[str] = Field(default=None)

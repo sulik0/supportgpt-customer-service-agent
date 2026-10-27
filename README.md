@@ -19,7 +19,7 @@ SupportGPT 智能客服 Agent 面向售后服务场景，能够理解用户问�
 | LLM | `mock/openai/azure`；`openai` 兼容 OpenAI、DeepSeek、Qwen 和 vLLM |
 | DecisionProvider | 可选 Jev System One；复核 Analyzer 规则候选并评判 QA 正向证据，规则/LLM 作为分层回退 |
 | RAG | ChromaDB、Hybrid Search、轻量 rerank、版本/类别过滤、citation |
-| Tool Calling | 9 个演示 Tool，覆盖客户、订单、工单、物流、保修、支付发票及服务状态；ToolRegistry、Schema、RBAC、持久化脱敏审计 |
+| Tool Calling | 9 个演示 Tool，覆盖客户、订单、工单、物流、保修、支付发票及服务状态；ToolRegistry、Schema、RBAC、持久化脱敏审计；可切换规则路由或受控 ReAct（LLM 只选 Skill 白名单内的只读 Tool，[对比实验](docs/evidence/tool_selection_react_vs_rules.md)） |
 | Tool Governance | V2.2：业务幂等键、Transactional Outbox、Worker、unknown 自动对账、Retry/DLQ、补偿与 Policy 回放 |
 | Safety | 多层 Prompt Injection 规则、Qwen3Guard Adapter、Risk Engine、PII/泄露过滤 |
 | HITL | 高风险、低置信度、低 QA、投诉与退款场景在 Graph 内暂停审批，完成后从原 Thread 恢复 |

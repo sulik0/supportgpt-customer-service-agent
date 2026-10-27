@@ -119,6 +119,7 @@ class AgentState(TypedDict):
     operator_role: str
     tool_context: Dict[str, Any]
     tool_calls: List[Dict[str, Any]]
+    tool_planner: Dict[str, Any]
     context_citations: List[Any]
     resolution_evidence: List[str]
     suggested_response: str
@@ -314,6 +315,8 @@ async def tooling_node(state: AgentState) -> Dict[str, Any]:
                     call.get("tool_name", "unknown") for call in tool_calls
                 ),
                 "tool_count": len(tool_calls),
+                "tool_selection_mode": result.get("tool_planner", {}).get("mode", "rules"),
+                "tool_planner_steps": result.get("tool_planner", {}).get("steps", 0),
                 "risk_level": result.get("risk_level"),
                 "risk_score": result.get("risk_score"),
             },
@@ -350,6 +353,7 @@ def _merge_context_results(
         **state,
         "tool_context": tool_result.get("tool_context", {}),
         "tool_calls": tool_result.get("tool_calls", []),
+        "tool_planner": tool_result.get("tool_planner", {}),
         "context_citations": retrieval_result.get("context_citations", []),
         "errors": _unique_values(
             state.get("errors", []),
@@ -803,6 +807,7 @@ def build_ticket_state(initial_state: Dict[str, Any]) -> AgentState:
         "operator_role": initial_state.get("operator_role", "agent"),
         "tool_context": {},
         "tool_calls": [],
+        "tool_planner": {},
         "context_citations": [],
         "suggested_response": "",
         "qa_score": 1.0,

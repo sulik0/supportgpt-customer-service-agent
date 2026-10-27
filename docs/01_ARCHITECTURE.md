@@ -223,6 +223,16 @@ Resolver 与 QA 共用 `src/agents/evidence.py` 的证据构造器。Resolver �
 
 处理顺序由固定 Workflow 决定，系统根据意图分类结果选择后续分支。LLM 不会自行列出步骤、拆分子任务或生成动态执行计划。
 
+例外是 Tooling 节点内可选的受控 ReAct（`TOOL_SELECTION_MODE=react`，实现见 `src/agents/tool_planner.py`）：
+
+- 画像与历史工单由系统强制获取，并与规划第一步并行。
+- 模型只能看到 Skill 白名单内、当前角色和意图允许的低风险只读 Tool；Tool 无参数，`customer_id` 由系统绑定。
+- 每轮最多 3 步、5 次调用；白名单外调用返回 `tool_not_available`，重复调用去重。
+- Tool 结果命中注入检测时停止循环且不回灌模型，交由 Tooling 原有安全链路阻断。
+- 规划失败回退规则路由并记为 PARTIAL 降级；结果摘要写入 `tool_planner` State、Trace 日志和 Baseline 报告。
+
+它只决定"查哪些只读数据"，不改变节点顺序，也不触达写 Tool 与审批。对比实验见 `docs/evidence/tool_selection_react_vs_rules.md`。
+
 | 维度 | 当前方案 | 可替代方案 | 最终原因与权衡 |
 |---|---|---|---|
 | 如何决定步骤 | 按既定 Workflow 和分类结果选择处理路径 | LLM Planner 动态生成多步计划 | 客服流程稳定且风险高，固定路径更容易控制 |

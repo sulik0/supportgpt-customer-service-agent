@@ -102,7 +102,7 @@ Prometheus + OpenTelemetry 覆盖 API、Agent、工具、RAG 和审批过程。
 | 可观测 | OpenTelemetry、LangSmith、Prometheus、Grafana |
 | 部署与验证 | Docker、Docker Compose、Kubernetes manifests、pytest、GitHub Actions |
 
-未使用或未实现的技术包括：MCP、pgvector、独立 TaskState、动态 Planner、自动 Reflection Loop、多租户知识隔离、生产搜索后端、Prompt 版本灰度、通用分布式任务队列和旧 Graph 多版本恢复。
+未使用或未实现的技术包括：MCP、pgvector、独立 TaskState、动态多步任务 Planner（Tool 选择的受控 ReAct 见第 9 节）、自动 Reflection Loop、多租户知识隔离、生产搜索后端、Prompt 版本灰度、通用分布式任务队列和旧 Graph 多版本恢复。
 
 ## 8. Agent 数量与节点分工
 
@@ -119,7 +119,7 @@ Prometheus + OpenTelemetry 覆盖 API、Agent、工具、RAG 和审批过程。
 | Escalation | 调用 Risk Engine 生成最终风险结论，计算 SLA，判断升级与人工审批需求 |
 | Approval Gate（控制节点） | 无需审批时结束；需要审批时 interrupt，人工决策后从原 Checkpoint Thread 恢复 |
 
-当前没有独立 Planner、LLM Selector、Validator Agent 或 Reflection Agent。Skill Selector 是确定性控制节点；QA 负责检查回复；安全、工具和状态验证则由分层规则处理。
+当前没有独立 Planner Agent、LLM Skill Selector、Validator Agent 或 Reflection Agent；Tooling 节点内可选的受控 ReAct 只决定调用哪些只读 Tool。Skill Selector 是确定性控制节点；QA 负责检查回复；安全、工具和状态验证则由分层规则处理。
 
 Resolver 在生成前保存 `resolution_evidence`，QA 的规则和 Jev / LLM 评判直接复用这份证据。它包含必要 Tool 事实和带编号、来源、版本的 KB 片段，不是整个 State 的 dump。回复优先说明当前状态、异常和下一步；默认输出上限 480 tokens，截断时最多用同一证据重写一次，仍失败则转人工。这些机制避免证据遗漏和半句话输出，但不代表已经验证了真实 Jev 在所有业务上的判断准确率。
 
@@ -147,7 +147,14 @@ Skill Framework V1 共有 **6 个 Skill**：`refund_support`、`order_support`�
 | 账务查询 `billing.get_payment_invoices` | agent 及以上 | 返回支付、金额、币种和开票状态，不提供支付密钥 |
 | 服务状态 `services.get_status` | agent 及以上 | 返回模拟 API 健康状态，不代表实时生产监控 |
 
-共 8 个读工具和 1 个写工具。客户画像和历史工单在正常请求中调用；订单历史只在账单和订单意图下调用。新增工具分别按订单、账务、保修、API 故障意图选择，与已有查询并行执行，返回结果经过安全扫描后送入 Resolver。Skill 配置升级为 `v1.1`，只有对应 Skill 可以调用这些工具。每次调用经过 Schema、RBAC、策略门禁和 Resilience，并持久化脱敏审计。
+共 8 个读工具和 1 个写工具。
+
+Tool 选择有两种模式，由 `TOOL_SELECTION_MODE` 切换，默认 `rules`：
+
+- `rules`：按归一化意图确定性选择 Tool。
+- `react`（Tool Planner `react-v2`）：客户画像和历史工单由系统强制获取；其余候选为 Skill 白名单内、当前角色和意图允许的低风险只读 Tool，由 LLM 通过 function calling 选择，最多 3 步、5 次调用。Tool 无参数，`customer_id` 由系统绑定；写 Tool 与高风险 Tool 不暴露给模型；白名单外调用被拒绝，重复调用去重；Tool 结果命中注入检测时不回灌给模型；规划失败回退规则路由。没有可选 Tool 的 Skill 跳过规划。
+
+2026-10-27 用 DeepSeek 在同一 100 条 Baseline 上对比（详见 `docs/evidence/tool_selection_react_vs_rules.md`）：rules Case Pass `0.91`；react v1（全部交给模型）`0.32`；react v2 `0.84`，其中 7 条失败为不涉及订单的纯政策问题，模型未查订单而标注要求查询；除去这 7 条两者均为 84/93。react v2 无越权 Tool、无禁用 Tool 违规，平均多约 740 Token、1.6 秒。可以说“实现并量化评估了受控 ReAct Tool 选择”；不能说“ReAct 提升了质量”或“已在生产启用”。客户画像和历史工单在正常请求中调用；订单历史只在账单和订单意图下调用。新增工具分别按订单、账务、保修、API 故障意图选择，与已有查询并行执行，返回结果经过安全扫描后送入 Resolver。Skill 配置升级为 `v1.1`，只有对应 Skill 可以调用这些工具。每次调用经过 Schema、RBAC、策略门禁和 Resilience，并持久化脱敏审计。
 
 高风险写 Tool 采用 Tool Governance V2.2：主状态机为 `proposed -> pending_approval -> approved/rejected -> queued -> executing -> succeeded/failed/unknown`。参数加密存储，payload 和创建时的 Policy 快照使用 HMAC 防篡改；每个写 Action 生成唯一业务幂等键；提议人不能自批；API 原子保存 `queued + Outbox`，Worker 使用数据库租约和乐观版本竞争消费。
 
@@ -167,7 +174,7 @@ Skill Framework V1 共有 **6 个 Skill**：`refund_support`、`order_support`�
 
 当前没有独立 `TaskState`。LangGraph 使用单一 `AgentState` 传递工单输入、分类结果与置信度、Skill 版本/策略/Policy 快照、工具上下文、citation、回复草稿、QA、安全信号、`risk_level`、`risk_score`、`risk_reasons`、人工/自动化建议、降级等级与脱敏依赖事件、升级结论、token、成本和错误信息。
 
-当前也没有独立 Planner 或动态任务分解。系统采用固定 Workflow，并根据安全结果、部门、意图和优先级做有限的规则路由。当前唯一的受限重新规划是：类别检索无结果时，保留知识库版本并放宽类别进行一次回退检索。
+当前也没有独立 Planner 或动态任务分解（受控 ReAct 只在 Tooling 节点内选择只读 Tool）。系统采用固定 Workflow，并根据安全结果、部门、意图和优先级做有限的规则路由。当前唯一的受限重新规划是：类别检索无结果时，保留知识库版本并放宽类别进行一次回退检索。
 
 不得表述为：系统具备动态 Planner、子任务拆分、自动 Plan Revision、任务队列或自主多 Agent 协商。
 
@@ -396,7 +403,7 @@ React 前端已拆分为用户咨询页与客服员工后台。用户页采用�
 1. 已实现、部分实现、规划中和未知信息必须明确区分。
 2. 所有 CRM、OMS、Ticketing、退款初筛和默认 LLM 均为 Mock，除非代码与凭据明确变为真实集成。
 3. Agent 数量固定表述为 6 个逻辑业务 Agent 节点 + Skill Selector + Approval Gate；Tool 数量为 9 个注册 Tool，其中 1 个为只能经审批 Action 执行的 Mock 高风险写 Tool。
-4. MCP 数量为 0；独立 TaskState、动态 Planner、自动 Reflection 和 pgvector 均未采用。Checkpoint 已实现，但只覆盖固定 Workflow 的审批暂停与恢复；Tool Outbox 是高风险写操作专用队列，不是通用 Agent 任务队列。
+4. MCP 数量为 0；Tool 选择默认 rules，可切换受控 ReAct（只选只读 Tool）；独立 TaskState、动态多步任务 Planner、自动 Reflection 和 pgvector 均未采用。Checkpoint 已实现，但只覆盖固定 Workflow 的审批暂停与恢复；Tool Outbox 是高风险写操作专用队列，不是通用 Agent 任务队列。
 5. Memory V1 以 SQL 结构化消息为事实源、Redis 为 revision Cache，有界历史已注入 Agent；它不等于向量长期记忆。
 6. ChromaDB 是当前向量数据库；Hybrid RAG 是当前检索方案。
 7. 项目没有真实生产上线数据、线上 KPI 或真实客户业务数据。

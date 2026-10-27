@@ -81,6 +81,9 @@ TOOL_CALL_DURATION_SECONDS = meter.create_histogram(
 TOOL_ACTION_TRANSITIONS_TOTAL = meter.create_counter(
     "tool_action_transitions", description="Total governed Tool Action transitions"
 )
+TOOL_PLANNER_RUNS_TOTAL = meter.create_counter(
+    "tool_planner_runs", description="ReAct Tool planner runs by stop reason"
+)
 TOOL_OUTBOX_EVENTS_TOTAL = meter.create_counter(
     "tool_outbox_events", description="Total Tool Outbox delivery outcomes"
 )

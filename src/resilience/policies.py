@@ -20,6 +20,17 @@ def llm_policy(operation: str) -> ResiliencePolicy:
     )
 
 
+def tool_planner_policy() -> ResiliencePolicy:
+    """ReAct 规划失败时回退确定性 Tool 路由，不单独触发 HITL。"""
+    return ResiliencePolicy(
+        timeout_seconds=settings.RESILIENCE_LLM_TIMEOUT_SECONDS,
+        max_retries=settings.RESILIENCE_LLM_MAX_RETRIES,
+        circuit_failure_threshold=settings.RESILIENCE_CIRCUIT_FAILURE_THRESHOLD,
+        circuit_recovery_seconds=settings.RESILIENCE_CIRCUIT_RECOVERY_SECONDS,
+        failure_degradation=DegradationLevel.PARTIAL,
+    )
+
+
 def decision_policy() -> ResiliencePolicy:
     """DecisionProvider 失败时回退原有 LLM，不单独触发 HITL。"""
     return ResiliencePolicy(

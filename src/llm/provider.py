@@ -13,7 +13,7 @@ from src.observability.tracing import (
     trace_operation,
 )
 from src.resilience.executor import resilience_executor
-from src.resilience.policies import llm_policy
+from src.resilience.policies import llm_policy, tool_planner_policy
 from src.promptops.defaults import RESOLUTION_LANGUAGE_POLICY, RESOLUTION_OUTPUT_POLICY
 from src.promptops.runtime import active_bundle
 
@@ -92,6 +92,55 @@ async def _complete_chat(
             json.loads(content)
         return content, input_tokens, output_tokens
     raise RuntimeError("No completion returned")
+
+
+ToolPlan = Tuple[List[Dict[str, Any]], Dict[str, Any], int, int]
+
+
+async def _complete_tool_plan(
+    client: Any,
+    model: str,
+    messages: List[Dict[str, Any]],
+    tools: List[Dict[str, Any]],
+) -> ToolPlan:
+    """单步 function calling；只返回模型提议的调用，不在这里执行 Tool。"""
+    record_current_llm_io(input_value=messages, model=model)
+    response = await client.chat.completions.create(
+        model=model,
+        messages=messages,
+        tools=tools,
+        tool_choice="auto",
+        temperature=0.0,
+        max_tokens=settings.LLM_TOOL_PLANNER_MAX_TOKENS,
+    )
+    message = response.choices[0].message
+    calls = [
+        {
+            "id": item.id,
+            "name": item.function.name,
+            "arguments": item.function.arguments or "",
+        }
+        for item in (message.tool_calls or [])
+    ]
+    assistant: Dict[str, Any] = {"role": "assistant", "content": message.content or ""}
+    if calls:
+        assistant["tool_calls"] = [
+            {
+                "id": call["id"],
+                "type": "function",
+                "function": {"name": call["name"], "arguments": call["arguments"]},
+            }
+            for call in calls
+        ]
+    record_current_llm_io(
+        output_value=json.dumps([call["name"] for call in calls]) if calls else assistant["content"]
+    )
+    return (
+        calls,
+        assistant,
+        int(response.usage.prompt_tokens or 0),
+        int(response.usage.completion_tokens or 0),
+    )
 
 
 def _ticket_classifier_prompt(text: str) -> str:
@@ -184,6 +233,15 @@ class BaseLLMProvider(ABC):
         Returns: (completion, input_tokens, output_tokens)
         """
         pass
+
+    async def plan_tool_calls(
+        self, messages: List[Dict[str, Any]], tools: List[Dict[str, Any]]
+    ) -> ToolPlan:
+        """
+        Propose the next read-only Tool calls for the ReAct loop.
+        Returns: (tool_calls, assistant_message, input_tokens, output_tokens)
+        """
+        raise NotImplementedError("This provider does not support Tool planning")
 
 
 class MockLLMProvider(BaseLLMProvider):
@@ -306,6 +364,32 @@ class MockLLMProvider(BaseLLMProvider):
         else:
             response = f"This is an automated response from SupportGPT. I received your message: '{last_user_message}'. How else can I assist you today?"
         return response, 200, 40
+
+
+    @trace_operation(name="supportgpt.llm.plan_tool_calls", component="llm")
+    async def plan_tool_calls(
+        self, messages: List[Dict[str, Any]], tools: List[Dict[str, Any]]
+    ) -> ToolPlan:
+        # 首轮调用全部候选 Tool，看到结果后结束，保证离线测试可复现。
+        if any(message.get("role") == "tool" for message in messages):
+            return [], {"role": "assistant", "content": "DONE"}, 180, 4
+        calls = [
+            {"id": f"mock_call_{index}", "name": tool["function"]["name"], "arguments": "{}"}
+            for index, tool in enumerate(tools)
+        ]
+        assistant = {
+            "role": "assistant",
+            "content": "",
+            "tool_calls": [
+                {
+                    "id": call["id"],
+                    "type": "function",
+                    "function": {"name": call["name"], "arguments": "{}"},
+                }
+                for call in calls
+            ],
+        }
+        return calls, assistant, 220, 12 * max(len(calls), 1)
 
 
 class OpenAILLMProvider(BaseLLMProvider):
@@ -483,6 +567,21 @@ class OpenAILLMProvider(BaseLLMProvider):
         )
 
 
+    @trace_operation(name="supportgpt.llm.plan_tool_calls", component="llm")
+    async def plan_tool_calls(
+        self, messages: List[Dict[str, Any]], tools: List[Dict[str, Any]]
+    ) -> ToolPlan:
+        model = settings.LLM_TOOL_PLANNER_MODEL_NAME or self.model
+        result = await resilience_executor.execute(
+            component="llm",
+            operation="plan_tool_calls",
+            call=lambda: _complete_tool_plan(self.client, model, messages, tools),
+            policy=tool_planner_policy(),
+            circuit_key=f"llm:{model}",
+        )
+        return result.unwrap()
+
+
 class AzureOpenAILLMProvider(BaseLLMProvider):
     """通过 Azure OpenAI 部署实现统一 LLM Provider 接口。"""
 
@@ -604,6 +703,20 @@ class AzureOpenAILLMProvider(BaseLLMProvider):
         return await self._call_gpt(
             messages, json_mode=False, operation="run_chat"
         )
+
+
+    @trace_operation(name="supportgpt.llm.plan_tool_calls", component="llm")
+    async def plan_tool_calls(
+        self, messages: List[Dict[str, Any]], tools: List[Dict[str, Any]]
+    ) -> ToolPlan:
+        result = await resilience_executor.execute(
+            component="llm",
+            operation="plan_tool_calls",
+            call=lambda: _complete_tool_plan(self.client, self.deployment, messages, tools),
+            policy=tool_planner_policy(),
+            circuit_key=f"llm:{self.deployment}",
+        )
+        return result.unwrap()
 
 
 # Provider factory

@@ -1,7 +1,7 @@
 import asyncio
 import time
 from dataclasses import dataclass
-from typing import Any, Callable, Dict, List, Optional
+from typing import Any, Callable, Dict, Iterable, List, Optional
 
 from pydantic import BaseModel, Field, ValidationError
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -132,6 +132,28 @@ class ToolRegistry:
 
     def get_definition(self, name: str) -> Optional[ToolDefinition]:
         return self._tools.get(name)
+
+    def planner_candidates(
+        self, names: Iterable[str], *, role: str, intent: Any
+    ) -> List[ToolDefinition]:
+        """只向 LLM 暴露当前角色、意图下可直接调用的低风险只读 Tool。"""
+        candidates = []
+        for name in sorted(set(names)):
+            definition = self._tools.get(name)
+            if (
+                definition is None
+                or not self.is_enabled(name)
+                or definition.operation_type is not OperationType.READ
+                or definition.risk_level != "low"
+                or not self._is_allowed(role, definition.min_role)
+                or (
+                    definition.allowed_intents is not None
+                    and intent not in definition.allowed_intents
+                )
+            ):
+                continue
+            candidates.append(definition)
+        return candidates
 
     async def call_tool(
         self,

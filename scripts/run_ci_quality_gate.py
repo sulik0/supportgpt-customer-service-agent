@@ -94,6 +94,7 @@ def _configure_offline_environment(runtime: Path) -> None:
         "LLM_ANALYZER_MODEL_NAME": "",
         "LLM_QA_MODEL_NAME": "",
         "QWEN3_GUARD_ENABLED": "false",
+        "TOOL_SELECTION_MODE": "rules",
         "OTEL_ENABLED": "false",
         "OTEL_EXPORTER_OTLP_TRACES_ENDPOINT": "",
         "OTEL_EXPORTER_OTLP_METRICS_ENDPOINT": "",

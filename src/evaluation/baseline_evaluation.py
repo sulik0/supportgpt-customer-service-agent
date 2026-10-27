@@ -496,6 +496,7 @@ def build_baseline_report(
                         "department": record.workflow_output.get("department"),
                         "priority": record.workflow_output.get("priority"),
                         "tool_calls": record.workflow_output.get("tool_calls", []),
+                        "tool_planner": record.workflow_output.get("tool_planner", {}),
                         "workflow_path": record.workflow_path,
                         "escalation_recommended": record.workflow_output.get(
                             "escalation_recommended", False
@@ -905,6 +906,12 @@ def _build_experiment_config(
                 "source_revision": source_revision,
             },
             "skills": skill_registry.snapshot(),
+            "tool_selection": {
+                "mode": settings.TOOL_SELECTION_MODE,
+                "react_max_steps": settings.TOOL_REACT_MAX_STEPS,
+                "react_max_tool_calls": settings.TOOL_REACT_MAX_TOOL_CALLS,
+                "planner_model": settings.LLM_TOOL_PLANNER_MODEL_NAME or resolver_model,
+            },
             "models": {
                 "provider": provider,
                 "resolver": resolver_model,
