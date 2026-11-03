@@ -5,6 +5,7 @@ from typing import Dict, Any
 from src.llm.provider import llm_provider
 from src.observability.metrics import AGENT_EXECUTION_DURATION_SECONDS
 from src.agents.evidence import build_resolution_evidence, compact_tool_context
+from src.agents.record_queries import requested_record_tool
 from src.agents.scope import is_scope_boundary_request, scope_boundary_response
 
 logger = logging.getLogger("supportgpt.agents.resolver")
@@ -35,6 +36,31 @@ class ResolutionAgent:
 
         subject = state.get("subject", "")
         description = state.get("description", "")
+        # A missing/failed query is not a successful lookup with no matching records.
+        required_tool = requested_record_tool(description)
+        service = (state.get("tool_context") or {}).get("service_query") or {}
+        data = service.get("data")
+        if required_tool and not (
+            service.get("tool") == required_tool
+            and service.get("status") == "success"
+            and isinstance(data, dict)
+            and data.get("status") in {"found", "not_found"}
+            and isinstance(data.get("records"), list)
+        ):
+            chinese = any("\u4e00" <= char <= "\u9fff" for char in description)
+            return {
+                **state,
+                "suggested_response": (
+                    "尚未成功查询到本次所需的业务资料，暂时无法确认相关记录或状态，需要人工核查。"
+                    if chinese else
+                    "The required business lookup has not completed successfully. "
+                    "I cannot confirm the records or their status; a support specialist needs to verify them."
+                ),
+                "resolution_evidence": [],
+                "errors": [*state.get("errors", []), f"Required business lookup unavailable: {required_tool}"],
+                "degradation_level": "human_required",
+                "degradation_reasons": [*state.get("degradation_reasons", []), "business_lookup:unavailable"],
+            }
         # 记录实际发给生成模型的证据，QA 不再重新挑选或裁剪。
         evidence = build_resolution_evidence(state)
         state = {**state, "resolution_evidence": evidence}
