@@ -1,3 +1,4 @@
+import '../styles/pages/workspace.css';
 import React, { useMemo } from 'react';
 import { AlertCircle, ChevronRight, Inbox, MessageSquare, RefreshCw, Search } from 'lucide-react';
 import { DEPARTMENT_LABELS, translateDepartment, translatePriority, translateSentiment, translateStatus, translateSubject } from '../i18n';

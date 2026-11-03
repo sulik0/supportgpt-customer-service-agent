@@ -1,0 +1,539 @@
+/* Application chrome. Page bodies live in styles/pages/. */
+
+.app-shell {
+  display: grid;
+  grid-template-columns: 248px minmax(0, 1fr);
+  min-height: 100dvh;
+}
+
+.app-sidebar {
+  position: sticky;
+  top: 0;
+  height: 100dvh;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+  padding: 20px 14px;
+  background: var(--color-nav-bg);
+  color: var(--color-nav-text);
+}
+
+.sidebar-brand, .customer-brand, .login-brand {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.sidebar-brand {
+  padding: 0 6px;
+  color: var(--color-surface);
+}
+
+.sidebar-brand:hover {
+  text-decoration: none;
+}
+
+.sidebar-brand div, .customer-brand div {
+  display: grid;
+  min-width: 0;
+}
+
+.sidebar-brand strong, .customer-brand strong {
+  font-size: 15px;
+}
+
+.sidebar-brand small, .sidebar-account small {
+  color: var(--color-nav-text-muted);
+}
+
+.brand-mark, .customer-brand > span {
+  display: grid;
+  place-items: center;
+  flex-shrink: 0;
+  width: 32px;
+  height: 32px;
+  border-radius: 9px;
+  background: var(--color-accent-bright);
+  color: var(--color-surface);
+}
+
+.sidebar-nav {
+  display: grid;
+  gap: 2px;
+}
+
+.sidebar-group-label {
+  font-size: 11px;
+  letter-spacing: .06em;
+  color: var(--color-nav-text-muted);
+  padding: 0 10px 6px;
+}
+
+.sidebar-nav a, .sidebar-support {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px;
+  border-radius: var(--radius-control);
+  color: var(--color-nav-text);
+}
+
+.sidebar-nav a > span:first-of-type {
+  flex: 1;
+}
+
+.sidebar-nav a:hover, .sidebar-support:hover {
+  background: var(--color-nav-panel);
+  text-decoration: none;
+}
+
+.sidebar-nav a.active {
+  color: var(--color-surface);
+  background: var(--color-nav-active);
+  font-weight: 500;
+}
+
+.sidebar-count {
+  padding: 1px 8px;
+  border-radius: var(--radius-inset);
+  background: var(--color-accent-bright);
+  color: var(--color-surface);
+  font: 12px/1.6 var(--font-mono);
+}
+
+.sidebar-footer {
+  margin-top: auto;
+  display: grid;
+  gap: 12px;
+  padding: 12px;
+  border-radius: var(--radius-inset);
+  background: var(--color-nav-panel);
+}
+
+.sidebar-runtime {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  color: var(--color-nav-text);
+}
+
+.service-dot {
+  width: 8px;
+  height: 8px;
+  flex-shrink: 0;
+  border-radius: 50%;
+  background: var(--color-nav-text-muted);
+}
+
+.runtime-healthy .service-dot {
+  background: var(--color-success-dot);
+}
+
+.runtime-offline .service-dot {
+  background: var(--color-danger-border);
+}
+
+.runtime-degraded .service-dot {
+  background: var(--color-warning-border);
+}
+
+.sidebar-account {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.account-avatar {
+  width: 32px;
+  height: 32px;
+  flex-shrink: 0;
+  display: grid;
+  place-items: center;
+  border-radius: 50%;
+  background: var(--color-nav-active);
+  color: var(--color-surface);
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.sidebar-account > div {
+  display: grid;
+  flex: 1;
+  min-width: 0;
+}
+
+.sidebar-account strong {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--color-surface);
+  font-size: 13px;
+}
+
+.sidebar-account .icon-button {
+  width: 32px;
+  min-height: 32px;
+  border: 0;
+  background: transparent;
+  color: var(--color-nav-text-muted);
+}
+
+.sidebar-account .icon-button:hover {
+  background: var(--color-nav-active);
+  color: var(--color-surface);
+}
+
+.app-main {
+  min-width: 0;
+}
+
+.app-topbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 16px;
+  padding: 16px 28px;
+  border-bottom: 1px solid var(--color-border);
+  background: var(--color-surface);
+}
+
+.app-topbar > div {
+  flex: 1;
+  min-width: 0;
+}
+
+.app-topbar h1 {
+  font-size: 20px;
+  margin: 0;
+}
+
+.app-topbar p {
+  margin: 2px 0 0;
+  font-size: 13px;
+  color: var(--color-text-secondary);
+}
+
+.topbar-support {
+  font-size: 13px;
+  white-space: nowrap;
+}
+
+.app-content {
+  padding: 24px 28px;
+  max-width: 1480px;
+  margin: auto;
+}
+
+.mobile-menu {
+  display: none;
+}
+
+.section-label {
+  font-size: 12px;
+  color: var(--color-text-secondary);
+}
+/* The public header spans the viewport; only its content is width constrained. */
+
+.customer-portal {
+  min-height: 100dvh;
+}
+
+.customer-header {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 12px;
+  padding: 14px 32px;
+  border-bottom: 1px solid var(--color-border);
+  background: var(--color-surface);
+}
+
+.customer-brand {
+  flex: 1;
+  min-width: 180px;
+}
+
+.customer-header-actions {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.staff-entry {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  min-height: 36px;
+  padding: 0 14px;
+  border: 1px solid var(--color-border-strong);
+  border-radius: var(--radius-control);
+  color: var(--color-text-control);
+  background: var(--color-surface);
+  font-weight: 500;
+}
+
+.staff-entry-workflow {
+  border-color: transparent;
+  padding: 0 12px;
+}
+
+.customer-portal > :not(.customer-header) {
+  width: calc(100% - 64px);
+  max-width: 1280px;
+  margin-left: auto;
+  margin-right: auto;
+}
+
+.staff-login-page {
+  min-height: 100dvh;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+}
+
+.login-brand-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 40px;
+  padding: 48px 56px;
+  background: var(--color-nav-bg);
+  color: var(--color-nav-text);
+}
+
+.login-brand {
+  color: var(--color-surface);
+  font-size: 17px;
+}
+
+.login-brand .brand-mark {
+  width: 36px;
+  height: 36px;
+  border-radius: var(--radius-inset);
+}
+
+.login-brand-copy {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 20px;
+  max-width: 480px;
+}
+
+.login-brand-copy h2 {
+  margin: 0;
+  font-size: 34px;
+  line-height: 1.3;
+  color: var(--color-surface);
+}
+
+.login-brand-copy p {
+  margin: 0;
+  line-height: 1.8;
+}
+
+.login-brand-copy ul {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: grid;
+  gap: 12px;
+}
+
+.login-brand-copy li {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.login-brand-copy li::before {
+  content: '';
+  width: 6px;
+  height: 6px;
+  flex-shrink: 0;
+  border-radius: 50%;
+  background: var(--color-accent-border);
+}
+
+.staff-register {
+  font-size: 12px;
+  color: var(--color-nav-text-muted);
+  margin: 0;
+}
+
+.login-form-panel {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 48px 24px;
+}
+
+.staff-login-card {
+  width: 100%;
+  max-width: 400px;
+  padding: 32px;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-dialog);
+  background: var(--color-surface);
+  box-shadow: var(--shadow-overlay);
+}
+
+.back-to-customer {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--color-text-secondary);
+  font-size: 13px;
+}
+
+.staff-login-heading {
+  display: grid;
+  gap: 6px;
+  margin: 20px 0;
+}
+
+.staff-login-heading h1 {
+  margin: 0;
+  font-size: 24px;
+}
+
+.staff-login-heading p {
+  margin: 0;
+  color: var(--color-text-secondary);
+}
+
+.staff-login-form {
+  display: grid;
+  gap: 20px;
+}
+
+.staff-login-form label {
+  gap: 6px;
+  color: var(--color-text-control);
+  font-size: 13px;
+  font-weight: 500;
+}
+
+.staff-login-form input {
+  height: 44px;
+  font-size: 14px;
+  font-weight: 400;
+}
+
+.navigation-drawer {
+  margin: 0 auto 0 0;
+  width: 248px;
+  max-width: calc(100vw - 32px);
+  border: 0;
+  background: var(--color-nav-bg);
+  color: var(--color-nav-text);
+}
+
+.navigation-drawer .ui-dialog-header {
+  padding: 12px 14px;
+  background: var(--color-nav-bg);
+  border-color: var(--color-nav-active);
+}
+
+.navigation-drawer .ui-dialog-header h2 {
+  font-size: 15px;
+}
+
+.navigation-drawer .ui-dialog-header .btn {
+  background: transparent;
+  color: var(--color-nav-text);
+  border-color: var(--color-nav-active);
+}
+
+.navigation-drawer .app-sidebar {
+  position: static;
+  height: auto;
+  min-height: calc(100dvh - 65px);
+  overflow: visible;
+}
+@media (max-width: 1023px) {
+
+  .app-shell {
+    display: block;
+  }
+
+  .app-shell > .app-sidebar {
+    display: none;
+  }
+
+  .mobile-menu {
+    display: inline-flex;
+  }
+
+  .topbar-support {
+    display: none;
+  }
+
+  .login-brand-panel {
+    padding: 32px;
+  }
+}
+@media (max-width: 767px) {
+
+  .app-topbar {
+    padding: 16px;
+    gap: 12px;
+  }
+
+  .app-topbar h1 {
+    font-size: 18px;
+  }
+
+  .app-topbar p {
+    display: none;
+  }
+
+  .app-topbar > .btn > span {
+    display: none;
+  }
+
+  .app-content {
+    padding: 16px;
+  }
+
+  .customer-header {
+    padding: 14px 16px;
+  }
+
+  .customer-header-actions {
+    width: 100%;
+    justify-content: flex-end;
+  }
+
+  .customer-portal > :not(.customer-header) {
+    width: calc(100% - 32px);
+  }
+
+  .staff-login-page {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .login-brand-panel {
+    gap: 24px;
+    padding: 28px 24px;
+  }
+
+  .login-brand-copy h2 {
+    font-size: 34px;
+  }
+
+  .login-form-panel {
+    padding: 24px 16px;
+  }
+
+  .staff-login-card {
+    padding: 24px;
+  }
+
+  .staff-login-form input {
+    font-size: 16px;
+  }
+}

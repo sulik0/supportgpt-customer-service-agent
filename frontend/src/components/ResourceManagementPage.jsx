@@ -1,3 +1,4 @@
+import '../styles/pages/resources.css';
 import { friendlyError } from '../errors';
 import React, { useEffect, useMemo, useState } from 'react';
 import { AlertTriangle, BookOpen, CheckCircle2, FileCode2, Plus, RefreshCw, Save, Settings2, ShieldCheck, Trash2, Wrench } from 'lucide-react';

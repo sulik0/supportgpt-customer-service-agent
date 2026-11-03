@@ -1,0 +1,173 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<title>Agent 运行监控</title>
+
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&amp;family=JetBrains+Mono:wght@400;500&amp;family=Noto+Sans+SC:wght@400;500;600;700&amp;display=swap" rel="stylesheet">
+<style>
+body{margin:0}
+a{color:#4338CA}a:hover{color:#3730A3}
+</style>
+</helmet>
+<div style="display: flex; flex-wrap: wrap; min-height: 900px; background: #F6F7F9; font-family: Inter, 'Noto Sans SC', 'PingFang SC', sans-serif; color: #0F172A; font-size: 14px">
+
+  <nav aria-label="主导航" style="flex: 1 1 232px; max-width: 248px; min-width: 232px; background: #0E1325; color: #C7CDDB; display: flex; flex-direction: column; padding: 20px 14px; gap: 24px; box-sizing: border-box">
+    <div style="display: flex; align-items: center; gap: 10px; padding: 0 6px">
+      <div style="width: 32px; height: 32px; border-radius: 9px; background: #4F46E5; display: flex; align-items: center; justify-content: center">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#FFFFFF" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path></svg>
+      </div>
+      <div style="display: flex; flex-direction: column">
+        <span style="color: #FFFFFF; font-weight: 600; font-size: 15px">SupportGPT</span>
+        <span style="font-size: 12px; color: #98A2B8">智能客服员工空间</span>
+      </div>
+    </div>
+    <div style="display: flex; flex-direction: column; gap: 2px">
+      <span style="font-size: 11px; letter-spacing: 0.06em; color: #8891A7; padding: 0 10px 6px">工作台</span>
+      <a href="#" style="display: flex; align-items: center; gap: 10px; padding: 10px; border-radius: 8px; color: #C7CDDB; text-decoration: none">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M22 12h-6l-2 3h-4l-2-3H2"></path><path d="M5.45 5.11 2 12v6a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-6l-3.45-6.89A2 2 0 0 0 16.76 4H7.24a2 2 0 0 0-1.79 1.11z"></path></svg>
+        <span style="flex: 1">人工处理台</span>
+        <span style="font-size: 12px; background: #2B3352; color: #FFFFFF; border-radius: 10px; padding: 1px 8px; font-family: 'JetBrains Mono', monospace">2</span>
+      </a>
+      <a href="#" style="display: flex; align-items: center; gap: 10px; padding: 10px; border-radius: 8px; background: #1E2540; color: #FFFFFF; text-decoration: none; font-weight: 500">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M22 12h-4l-3 9L9 3l-3 9H2"></path></svg>
+        Agent 运行监控
+      </a>
+      <a href="#" style="display: flex; align-items: center; gap: 10px; padding: 10px; border-radius: 8px; color: #C7CDDB; text-decoration: none">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m16 6 4 14"></path><path d="M12 6v14"></path><path d="M8 8v12"></path><path d="M4 4v16"></path></svg>
+        资源管理
+      </a>
+      <a href="#" style="display: flex; align-items: center; gap: 10px; padding: 10px; border-radius: 8px; color: #C7CDDB; text-decoration: none">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="6" cy="6" r="3"></circle><circle cx="6" cy="18" r="3"></circle><path d="M18 9a9 9 0 0 1-9 9"></path><circle cx="18" cy="6" r="3"></circle></svg>
+        Agent 处理流程
+      </a>
+    </div>
+  </nav>
+
+  <main style="flex: 999 1 560px; min-width: 0; display: flex; flex-direction: column">
+    <header style="display: flex; flex-wrap: wrap; align-items: center; gap: 12px; padding: 16px 28px; background: #FFFFFF; border-bottom: 1px solid #E4E7EC">
+      <div style="display: flex; flex-direction: column; gap: 2px; flex: 1 1 240px">
+        <h1 style="margin: 0; font-size: 20px; font-weight: 600">Agent 运行监控</h1>
+        <span style="color: #475467; font-size: 13px">每次 Agent 运行的节点、耗时、Token 和工具调用</span>
+      </div>
+      <div role="group" aria-label="时间范围" style="display: flex; border: 1px solid #D0D5DD; border-radius: 8px; overflow: hidden">
+        <button style="height: 38px; padding: 0 14px; border: 0; background: #F2F4F7; font: inherit; font-size: 13px; font-weight: 600; color: #0F172A; cursor: pointer">24 小时</button>
+        <button style="height: 38px; padding: 0 14px; border: 0; border-left: 1px solid #D0D5DD; background: #FFFFFF; font: inherit; font-size: 13px; color: #344054; cursor: pointer">7 天</button>
+        <button style="height: 38px; padding: 0 14px; border: 0; border-left: 1px solid #D0D5DD; background: #FFFFFF; font: inherit; font-size: 13px; color: #344054; cursor: pointer">30 天</button>
+      </div>
+      <a href="#" style="height: 38px; padding: 0 14px; border: 1px solid #D0D5DD; border-radius: 8px; display: flex; align-items: center; color: #344054; text-decoration: none; font-weight: 500; font-size: 13px">打开 LangSmith ↗</a>
+    </header>
+
+    <div style="display: flex; flex-wrap: wrap; gap: 12px; padding: 20px 28px 0">
+      <div style="flex: 1 1 180px; background: #FFFFFF; border: 1px solid #E4E7EC; border-radius: 12px; padding: 14px 16px; display: flex; flex-direction: column; gap: 6px">
+        <span style="font-size: 13px; color: #475467">运行次数</span>
+        <span style="font-size: 26px; font-weight: 600; font-family: 'JetBrains Mono', monospace">[N]</span>
+      </div>
+      <div style="flex: 1 1 180px; background: #FFFFFF; border: 1px solid #E4E7EC; border-radius: 12px; padding: 14px 16px; display: flex; flex-direction: column; gap: 6px">
+        <span style="font-size: 13px; color: #475467">P95 耗时</span>
+        <span style="font-size: 26px; font-weight: 600; font-family: 'JetBrains Mono', monospace">[x.x s]</span>
+      </div>
+      <div style="flex: 1 1 180px; background: #FFFFFF; border: 1px solid #E4E7EC; border-radius: 12px; padding: 14px 16px; display: flex; flex-direction: column; gap: 6px">
+        <span style="font-size: 13px; color: #475467">Token 总量</span>
+        <span style="font-size: 26px; font-weight: 600; font-family: 'JetBrains Mono', monospace">[N]</span>
+      </div>
+      <div style="flex: 1 1 180px; background: #FFFFFF; border: 1px solid #E4E7EC; border-radius: 12px; padding: 14px 16px; display: flex; flex-direction: column; gap: 6px">
+        <span style="font-size: 13px; color: #475467">转人工比例</span>
+        <span style="font-size: 26px; font-weight: 600; font-family: 'JetBrains Mono', monospace">[x%]</span>
+      </div>
+    </div>
+
+    <div style="display: flex; flex-wrap: wrap; gap: 16px; padding: 16px 28px 28px; align-items: flex-start">
+      <section aria-label="运行记录" style="flex: 999 1 520px; min-width: 0; background: #FFFFFF; border: 1px solid #E4E7EC; border-radius: 12px; overflow: hidden">
+        <div style="display: flex; align-items: center; justify-content: space-between; padding: 14px 16px; border-bottom: 1px solid #EAECF0">
+          <h2 style="margin: 0; font-size: 15px; font-weight: 600">运行记录</h2>
+          <span style="font-size: 12px; color: #475467">点击一行查看节点轨迹</span>
+        </div>
+        <div style="overflow-x: auto">
+          <table style="width: 100%; border-collapse: collapse; font-size: 13px; min-width: 620px">
+            <thead>
+              <tr style="background: #F9FAFB; color: #475467; text-align: left">
+                <th style="padding: 10px 16px; font-weight: 500">运行</th>
+                <th style="padding: 10px 16px; font-weight: 500">工单</th>
+                <th style="padding: 10px 16px; font-weight: 500">状态</th>
+                <th style="padding: 10px 16px; font-weight: 500; text-align: right">耗时</th>
+                <th style="padding: 10px 16px; font-weight: 500; text-align: right">Token</th>
+                <th style="padding: 10px 16px; font-weight: 500">开始时间</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr style="background: #F5F6FF; border-top: 1px solid #EAECF0">
+                <td style="padding: 12px 16px; font-family: 'JetBrains Mono', monospace; color: #3730A3; font-weight: 500">demo-run-101</td>
+                <td style="padding: 12px 16px; font-family: 'JetBrains Mono', monospace">#101</td>
+                <td style="padding: 12px 16px"><span style="font-size: 12px; padding: 2px 8px; border-radius: 6px; background: #EEF0FF; color: #3730A3; font-weight: 500">等待审批</span></td>
+                <td style="padding: 12px 16px; text-align: right; font-family: 'JetBrains Mono', monospace">[x.x s]</td>
+                <td style="padding: 12px 16px; text-align: right; font-family: 'JetBrains Mono', monospace">[N]</td>
+                <td style="padding: 12px 16px; color: #475467">[时间]</td>
+              </tr>
+              <tr style="border-top: 1px solid #EAECF0">
+                <td style="padding: 12px 16px; font-family: 'JetBrains Mono', monospace">demo-run-102</td>
+                <td style="padding: 12px 16px; font-family: 'JetBrains Mono', monospace">#102</td>
+                <td style="padding: 12px 16px"><span style="font-size: 12px; padding: 2px 8px; border-radius: 6px; background: #ECFDF3; color: #067647; font-weight: 500">已完成</span></td>
+                <td style="padding: 12px 16px; text-align: right; font-family: 'JetBrains Mono', monospace">[x.x s]</td>
+                <td style="padding: 12px 16px; text-align: right; font-family: 'JetBrains Mono', monospace">[N]</td>
+                <td style="padding: 12px 16px; color: #475467">[时间]</td>
+              </tr>
+              <tr style="border-top: 1px solid #EAECF0">
+                <td style="padding: 12px 16px; font-family: 'JetBrains Mono', monospace">demo-run-103</td>
+                <td style="padding: 12px 16px; font-family: 'JetBrains Mono', monospace">—</td>
+                <td style="padding: 12px 16px"><span style="font-size: 12px; padding: 2px 8px; border-radius: 6px; background: #FEF3F2; color: #B42318; font-weight: 500">失败</span></td>
+                <td style="padding: 12px 16px; text-align: right; font-family: 'JetBrains Mono', monospace">[x.x s]</td>
+                <td style="padding: 12px 16px; text-align: right; font-family: 'JetBrains Mono', monospace">[N]</td>
+                <td style="padding: 12px 16px; color: #475467">[时间]</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+      <aside aria-label="节点轨迹" style="flex: 1 1 320px; max-width: 420px; background: #FFFFFF; border: 1px solid #E4E7EC; border-radius: 12px; padding: 16px; display: flex; flex-direction: column; gap: 14px">
+        <div style="display: flex; align-items: center; gap: 8px">
+          <h2 style="margin: 0; font-size: 15px; font-weight: 600; flex: 1">节点轨迹</h2>
+          <span style="font-family: 'JetBrains Mono', monospace; font-size: 12px; color: #475467">demo-run-101</span>
+        </div>
+        <div style="display: flex; flex-direction: column; gap: 10px">
+          <div style="display: flex; flex-direction: column; gap: 4px">
+            <div style="display: flex; justify-content: space-between; font-size: 13px"><span style="font-family: 'JetBrains Mono', monospace">analyzer</span><span style="color: #475467">[ms]</span></div>
+            <div style="height: 8px; background: #F2F4F7; border-radius: 4px"><div style="height: 8px; width: 22%; background: #6366F1; border-radius: 4px"></div></div>
+          </div>
+          <div style="display: flex; flex-direction: column; gap: 4px">
+            <div style="display: flex; justify-content: space-between; font-size: 13px"><span style="font-family: 'JetBrains Mono', monospace">retriever</span><span style="color: #475467">[ms]</span></div>
+            <div style="height: 8px; background: #F2F4F7; border-radius: 4px"><div style="height: 8px; width: 18%; margin-left: 22%; background: #6366F1; border-radius: 4px"></div></div>
+          </div>
+          <div style="display: flex; flex-direction: column; gap: 4px">
+            <div style="display: flex; justify-content: space-between; font-size: 13px"><span style="font-family: 'JetBrains Mono', monospace">tool · query_shipment</span><span style="color: #B54708">等待审批</span></div>
+            <div style="height: 8px; background: #F2F4F7; border-radius: 4px"><div style="height: 8px; width: 35%; margin-left: 40%; background: repeating-linear-gradient(45deg, #F79009 0 6px, #FEC84B 6px 12px); border-radius: 4px"></div></div>
+          </div>
+          <div style="display: flex; flex-direction: column; gap: 4px">
+            <div style="display: flex; justify-content: space-between; font-size: 13px; color: #667085"><span style="font-family: 'JetBrains Mono', monospace">resolver → qa</span><span>未开始</span></div>
+            <div style="height: 8px; background: #F2F4F7; border-radius: 4px"></div>
+          </div>
+        </div>
+        <div style="display: flex; flex-direction: column; gap: 6px; padding: 12px; background: #F9FAFB; border-radius: 10px; font-size: 13px">
+          <div style="display: flex; justify-content: space-between"><span style="color: #475467">Prompt 版本</span><span style="font-family: 'JetBrains Mono', monospace">demo-v1</span></div>
+          <div style="display: flex; justify-content: space-between"><span style="color: #475467">工具选择模式</span><span>受控 ReAct</span></div>
+          <div style="display: flex; justify-content: space-between"><span style="color: #475467">输入 / 输出 Token</span><span style="font-family: 'JetBrains Mono', monospace">[N] / [N]</span></div>
+        </div>
+        <a href="#" style="font-size: 13px; font-weight: 500">打开工单 #101 →</a>
+      </aside>
+    </div>
+  </main>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":1440,"height":900}}'>
+class Component extends DCLogic {
+  renderVals() { return {}; }
+}
+</script>
+</body>
+</html>

@@ -1,3 +1,4 @@
+import '../styles/pages/workspace.css';
 import React from 'react';
 import { Clock3, Coins, Cpu, ShieldCheck } from 'lucide-react';
 

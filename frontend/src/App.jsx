@@ -1,10 +1,10 @@
 import { friendlyError } from './errors';
 import React, { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { AUTH_EXPIRED_EVENT, fetchHealth, fetchReviewQueue, login, logout } from './api/client';
-import { LoadingState, NavLink, Button, Notice } from './components/ui';
+import { LoadingState, NavLink, Button, Notice, Overlay } from './components/ui';
 import { consumeNavigationApproval, navigate, parseRoute, requestNavigationPermission, updateRouteParams } from './navigation';
 import { translateRole } from './i18n';
-import { Activity, ArrowLeft, GitBranch, LibraryBig, Inbox, LogOut, Menu, RefreshCw, ShieldCheck, MessagesSquare } from 'lucide-react';
+import { Activity, ArrowLeft, GitBranch, LibraryBig, Inbox, LogOut, Menu, RefreshCw, MessagesSquare } from 'lucide-react';
 const CustomerSupportPage = lazy(() => import('./components/CustomerSupportPage'));
 const TicketList = lazy(() => import('./components/TicketList'));
 const TicketDetails = lazy(() => import('./components/TicketDetails'));
@@ -32,6 +32,12 @@ export default function App() {
   const [ticketsError, setTicketsError] = useState('');
   const [serviceStatus, setServiceStatus] = useState('checking');
   const [mobileNav, setMobileNav] = useState(false);
+  useEffect(() => {
+    const desktop = window.matchMedia('(min-width: 1024px)');
+    const closeOnDesktop = () => { if (desktop.matches) setMobileNav(false); };
+    desktop.addEventListener('change', closeOnDesktop);
+    return () => desktop.removeEventListener('change', closeOnDesktop);
+  }, []);
   const queueController = useRef(null);
   const routeRef = useRef(route);
   routeRef.current = route;
@@ -130,26 +136,34 @@ export default function App() {
     total: tickets.length,
     high: tickets.filter(ticket => ['urgent', 'high'].includes(ticket.priority)).length
   }), [tickets]);
-  const content = route.entry === 'workflow' ? <main className="wf-public" id="main-content" tabIndex={-1}><WorkflowPage onBack={() => navigate('#support')} /></main> : route.entry === 'customer' ? <CustomerSupportPage onWorkflowEntry={() => navigate('#workflow')} onStaffEntry={staffEntryEnabled ? () => navigate('#staff') : null} /> : !authenticated ? <main className="staff-login-page" id="main-content" tabIndex={-1}><section className="staff-login-card">
-        <NavLink href="#support" className="back-to-customer"><ArrowLeft size={16} />返回用户咨询</NavLink>
-        <div className="staff-login-heading"><span className="brand-mark"><MessagesSquare size={24} /></span><h1>登录员工后台</h1><p>SupportGPT 智能客服</p></div>
-        {authNotice && <Notice>{authNotice}</Notice>}
-        <form onSubmit={handleLogin} className="staff-login-form"><label htmlFor="username">用户名<input id="username" name="username" autoComplete="username" value={loginUser} onChange={event => setLoginUser(event.target.value)} required disabled={loginBusy} /></label><label htmlFor="password">密码<input id="password" name="password" type="password" autoComplete="current-password" value={loginPass} onChange={event => setLoginPass(event.target.value)} required disabled={loginBusy} /></label><Button type="submit" tone="primary" busy={loginBusy}>登录客服后台</Button></form><p className="staff-register">后台账号由管理员创建，不开放公开注册。</p>
-      </section></main> : <div className={`app-shell ${mobileNav ? 'nav-open' : ''}`}>
-          <aside className="app-sidebar" id="staff-navigation"><NavLink href="#staff/review" className="sidebar-brand"><span className="brand-mark"><MessagesSquare size={20} /></span><div><strong>SupportGPT</strong><small>智能客服工作空间</small></div></NavLink>
-            <nav className="sidebar-nav" aria-label="主要功能">
-              {[['workspace', '#staff/review', '人工处理台', Inbox, true], ['observability', '#staff/runs', 'Agent 运行监控', Activity, ['manager', 'admin'].includes(role)], ['resources', '#staff/resources', '资源管理', LibraryBig, role === 'admin'], ['workflow', '#staff/workflow', 'Agent 处理流程', GitBranch, true]].filter(item => item[4]).map(([view, href, label, Icon]) => <NavLink key={view} href={href} className={route.view === view ? 'active' : ''} aria-current={route.view === view ? 'page' : undefined}><Icon size={18} /><span>{label}</span></NavLink>)}
+  const staffNavigation = <> <NavLink href="#staff/review" className="sidebar-brand"><span className="brand-mark"><MessagesSquare size={20} /></span><div><strong>SupportGPT</strong><small>智能客服员工空间</small></div></NavLink>
+            <nav className="sidebar-nav" aria-label="主要功能"><span className="sidebar-group-label">工作台</span>
+              {[['workspace', '#staff/review', '人工处理台', Inbox, true], ['observability', '#staff/runs', 'Agent 运行监控', Activity, ['manager', 'admin'].includes(role)], ['resources', '#staff/resources', '资源管理', LibraryBig, role === 'admin'], ['workflow', '#staff/workflow', 'Agent 处理流程', GitBranch, true]].filter(item => item[4]).map(([view, href, label, Icon]) => <NavLink key={view} href={href} className={route.view === view ? 'active' : ''} aria-current={route.view === view ? 'page' : undefined}><Icon size={18} /><span>{label}</span>{view === 'workspace' && route.view === 'workspace' && !ticketsLoading && !ticketsError && <span className="sidebar-count" aria-label={`${stats.total} 张工单`}>{stats.total}</span>}</NavLink>)}
             </nav>
             <NavLink href="#support" className="sidebar-support"><MessagesSquare size={16} />用户咨询</NavLink>
-            <div className={`sidebar-runtime runtime-${serviceStatus}`}><ShieldCheck size={16} /><span>{{
+            <div className="sidebar-footer"><div className={`sidebar-runtime runtime-${serviceStatus}`}><span className="service-dot" aria-hidden="true" /><span>{{
             healthy: '服务连接正常',
             checking: '正在检查服务',
             degraded: '部分服务不可用',
             offline: '无法连接服务'
-          }[serviceStatus]}</span><small>最近一次健康检查结果</small></div>
+          }[serviceStatus]}</span></div>
             <div className="sidebar-account"><span className="account-avatar">{(username || '客').slice(0, 1)}</span><div><strong>{username || '当前员工'}</strong><small>{translateRole(role)}</small></div><Button className="icon-button" onClick={handleLogout} aria-label="退出登录"><LogOut size={17} /></Button></div>
-          </aside>
-          <div className="app-main"><header className="app-topbar"><Button className="icon-button mobile-menu" aria-label="切换导航" aria-expanded={mobileNav} aria-controls="staff-navigation" onClick={() => setMobileNav(!mobileNav)}><Menu size={20} /></Button><div><h1>{VIEW_TITLES[route.view]}</h1><p>{{
+          </div> </>;
+  const content = route.entry === 'workflow' ? <main className="wf-public" id="main-content" tabIndex={-1}><WorkflowPage onBack={() => navigate('#support')} /></main> : route.entry === 'customer' ? <CustomerSupportPage onWorkflowEntry={() => navigate('#workflow')} onStaffEntry={staffEntryEnabled ? () => navigate('#staff') : null} /> : !authenticated ? <main className="staff-login-page" id="main-content" tabIndex={-1}>
+      <section className="login-brand-panel" aria-label="SupportGPT 员工空间">
+        <div className="login-brand"><span className="brand-mark"><MessagesSquare size={20} /></span><strong>SupportGPT</strong></div>
+        <div className="login-brand-copy"><h2>Agent 先处理，<br />人工把关关键一步。</h2><p>涉及订单、退款和账户的操作，都会在这里等待员工确认。每一次运行都有完整轨迹可查。</p><ul><li>人工处理台：审批回复与工具调用</li><li>运行监控：节点、耗时与 Token</li><li>资源管理：工具、Prompt 与知识库</li></ul></div>
+        <p className="staff-register">后台账号由管理员创建，不开放公开注册。</p>
+      </section>
+      <section className="login-form-panel"><div className="staff-login-card">
+        <NavLink href="#support" className="back-to-customer"><ArrowLeft size={16} />返回用户咨询</NavLink>
+        <div className="staff-login-heading"><h1>登录员工后台</h1><p>使用你的员工账号继续</p></div>
+        {authNotice && <Notice>{authNotice}</Notice>}
+        <form onSubmit={handleLogin} className="staff-login-form"><label htmlFor="username">用户名<input id="username" name="username" autoComplete="username" value={loginUser} onChange={event => setLoginUser(event.target.value)} required disabled={loginBusy} /></label><label htmlFor="password">密码<input id="password" name="password" type="password" autoComplete="current-password" value={loginPass} onChange={event => setLoginPass(event.target.value)} required disabled={loginBusy} /></label><Button type="submit" tone="primary" size="lg" busy={loginBusy}>登录客服后台</Button></form>
+      </div></section></main> : <div className={`app-shell ${mobileNav ? 'nav-open' : ''}`}>
+          <aside className="app-sidebar" id="staff-navigation">{staffNavigation}</aside>
+          {mobileNav && <Overlay drawer title="工作台导航" id="staff-navigation-mobile" className="navigation-drawer" onClose={() => setMobileNav(false)}><div className="app-sidebar">{staffNavigation}</div></Overlay>}
+          <div className="app-main"><header className="app-topbar"><Button className="icon-button mobile-menu" aria-label="切换导航" aria-expanded={mobileNav} aria-controls="staff-navigation-mobile" onClick={() => setMobileNav(!mobileNav)}><Menu size={20} /></Button><div><h1>{VIEW_TITLES[route.view]}</h1><p>{{
               workspace: '处理需要人工确认的回复和业务结果',
               observability: '查看运行记录并追查调用过程',
               resources: '管理工具、提示词和知识文档',

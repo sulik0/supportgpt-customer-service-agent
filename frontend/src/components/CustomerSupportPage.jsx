@@ -1,6 +1,7 @@
+import '../styles/pages/support.css';
 import { friendlyError } from '../errors';
 import React, { useEffect, useRef, useState } from 'react';
-import { AlertTriangle, ArrowRight, Bot, CheckCircle2, Clock3, Headphones, GitBranch, RefreshCw, Send, ShieldCheck, Sparkles, Star } from 'lucide-react';
+import { AlertTriangle, Bot, CheckCircle2, Clock3, MessagesSquare, GitBranch, RefreshCw, Send, ShieldCheck, Star } from 'lucide-react';
 import { fetchSupportHistory, submitSupportRequest, submitUserFeedback } from '../api/client';
 const EXAMPLE_QUESTIONS = ['我的订单还没有收到，能帮我查一下吗？', '我想了解退款需要满足什么条件？', 'API 一直超时，应该如何排查？'];
 const DEMO_CUSTOMER_HINTS = {
@@ -213,13 +214,13 @@ export default function CustomerSupportPage({
   return <main className="customer-portal" id="main-content" tabIndex={-1}>
       <header className="customer-header">
         <div className="customer-brand">
-          <span><Sparkles size={20} /></span>
+          <span><MessagesSquare size={18} /></span>
           <div><strong>SupportGPT</strong><small>智能客户服务</small></div>
         </div>
         <div className="customer-header-actions">
-        {onWorkflowEntry && <button type="button" className="staff-entry" onClick={onWorkflowEntry}><GitBranch size={16} /> 项目架构</button>}
+        {onWorkflowEntry && <button type="button" className="staff-entry staff-entry-workflow" onClick={onWorkflowEntry}><GitBranch size={16} /> 了解它如何工作</button>}
         {onStaffEntry && <button type="button" className="staff-entry" onClick={onStaffEntry}>
-            <Headphones size={16} /> 客服员工入口 <ArrowRight size={15} />
+            员工入口
           </button>}
         </div>
       </header>

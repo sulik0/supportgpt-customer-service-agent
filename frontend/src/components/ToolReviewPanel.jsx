@@ -1,3 +1,4 @@
+import '../styles/pages/workspace.css';
 import { friendlyError } from '../errors';
 import React, { useEffect, useState } from 'react';
 import { fetchToolReviews, resolveToolAction } from '../api/client';

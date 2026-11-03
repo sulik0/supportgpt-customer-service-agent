@@ -1,0 +1,114 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<title>客户咨询</title>
+
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&amp;family=JetBrains+Mono:wght@400;500&amp;family=Noto+Sans+SC:wght@400;500;600;700&amp;display=swap" rel="stylesheet">
+<style>
+body{margin:0}
+a{color:#4338CA}a:hover{color:#3730A3}
+</style>
+</helmet>
+<div style="min-height: 900px; background: #F6F7F9; font-family: Inter, 'Noto Sans SC', 'PingFang SC', sans-serif; color: #0F172A; font-size: 14px; display: flex; flex-direction: column">
+
+  <header style="display: flex; flex-wrap: wrap; align-items: center; gap: 12px; padding: 14px 32px; background: #FFFFFF; border-bottom: 1px solid #E4E7EC">
+    <div style="width: 32px; height: 32px; border-radius: 9px; background: #4F46E5; display: flex; align-items: center; justify-content: center">
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#FFFFFF" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path></svg>
+    </div>
+    <div style="display: flex; flex-direction: column; flex: 1">
+      <span style="font-weight: 600; font-size: 15px">SupportGPT</span>
+      <span style="font-size: 12px; color: #475467">智能客户服务</span>
+    </div>
+    <a href="#" style="height: 36px; padding: 0 12px; display: flex; align-items: center; gap: 6px; border-radius: 8px; color: #344054; text-decoration: none; font-weight: 500">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true"><circle cx="6" cy="6" r="3"></circle><circle cx="6" cy="18" r="3"></circle><path d="M18 9a9 9 0 0 1-9 9"></path><circle cx="18" cy="6" r="3"></circle></svg>
+      了解它如何工作
+    </a>
+    <a href="#" style="height: 36px; padding: 0 14px; display: flex; align-items: center; gap: 6px; border-radius: 8px; border: 1px solid #D0D5DD; color: #344054; text-decoration: none; font-weight: 500">员工入口</a>
+  </header>
+
+  <div style="flex: 1; display: flex; flex-wrap: wrap; gap: 24px; padding: 28px 32px; max-width: 1280px; width: 100%; margin: 0 auto; box-sizing: border-box; align-items: stretch">
+
+    <section aria-label="对话" style="flex: 999 1 560px; min-width: 0; background: #FFFFFF; border: 1px solid #E4E7EC; border-radius: 16px; display: flex; flex-direction: column; overflow: hidden">
+      <div style="display: flex; flex-wrap: wrap; align-items: center; gap: 12px; padding: 14px 20px; border-bottom: 1px solid #EAECF0">
+        <div style="display: flex; flex-direction: column; flex: 1 1 200px">
+          <span style="font-weight: 600">在线客服</span>
+          <span style="font-size: 12px; color: #475467">通常在几秒内回复 · 必要时转人工确认</span>
+        </div>
+        <label style="display: flex; align-items: center; gap: 8px; font-size: 13px; color: #475467">
+          演示客户
+          <select style="height: 36px; padding: 0 10px; border: 1px solid #D0D5DD; border-radius: 8px; font: inherit; font-size: 13px; background: #FFFFFF; color: #0F172A">
+            <option>贾·多萨（VIP 客户）</option>
+          </select>
+        </label>
+        <button style="height: 36px; padding: 0 12px; border: 1px solid #D0D5DD; border-radius: 8px; background: #FFFFFF; font: inherit; font-size: 13px; font-weight: 500; color: #344054; cursor: pointer">新对话</button>
+      </div>
+
+      <div style="flex: 1; display: flex; flex-direction: column; gap: 20px; padding: 24px; background: #FBFBFC">
+        <div style="display: flex; gap: 10px; max-width: 78%">
+          <div style="width: 30px; height: 30px; border-radius: 15px; background: #EEF0FF; color: #4338CA; flex: none; display: flex; align-items: center; justify-content: center; font-size: 11px; font-weight: 700">AI</div>
+          <div style="background: #FFFFFF; border: 1px solid #EAECF0; border-radius: 4px 14px 14px 14px; padding: 12px 14px; line-height: 1.7">您好，我是 SupportGPT 智能客服。请告诉我您遇到的问题，我会直接回复处理结果；需要人工确认时，也会说明下一步。</div>
+        </div>
+
+        <div style="display: flex; justify-content: flex-end">
+          <div style="background: #4338CA; color: #FFFFFF; border-radius: 14px 4px 14px 14px; padding: 12px 14px; line-height: 1.7; max-width: 70%">我的订单还没有收到，能帮我查一下吗？</div>
+        </div>
+
+        <div style="display: flex; gap: 10px; max-width: 78%">
+          <div style="width: 30px; height: 30px; border-radius: 15px; background: #EEF0FF; color: #4338CA; flex: none; display: flex; align-items: center; justify-content: center; font-size: 11px; font-weight: 700">AI</div>
+          <div style="display: flex; flex-direction: column; gap: 8px">
+            <div style="background: #FFFFFF; border: 1px solid #EAECF0; border-radius: 4px 14px 14px 14px; padding: 12px 14px; line-height: 1.7">已收到。我需要查询您的物流信息，这一步需要工作人员确认后执行。</div>
+            <div style="display: flex; align-items: center; gap: 10px; padding: 10px 12px; border-radius: 10px; background: #FFFAEB; border: 1px solid #FEDF89; color: #93370D; font-size: 13px">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><circle cx="12" cy="12" r="9"></circle><path d="M12 7v5l3 2"></path></svg>
+              <span style="flex: 1">已转人工确认 · 工单 <span style="font-family: 'JetBrains Mono', monospace">#101</span></span>
+              <a href="#" style="color: #93370D; font-weight: 600">查看进度</a>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div style="padding: 14px 20px 18px; border-top: 1px solid #EAECF0; display: flex; flex-direction: column; gap: 10px">
+        <div style="display: flex; flex-wrap: wrap; gap: 8px">
+          <button style="height: 32px; padding: 0 12px; border-radius: 16px; border: 1px solid #D0D5DD; background: #FFFFFF; font: inherit; font-size: 13px; color: #344054; cursor: pointer">我想了解退款政策</button>
+          <button style="height: 32px; padding: 0 12px; border-radius: 16px; border: 1px solid #D0D5DD; background: #FFFFFF; font: inherit; font-size: 13px; color: #344054; cursor: pointer">API 一直超时，应该如何排查？</button>
+        </div>
+        <div style="display: flex; align-items: flex-end; gap: 10px; border: 1px solid #D0D5DD; border-radius: 12px; padding: 8px 8px 8px 14px; background: #FFFFFF">
+          <label for="msg" style="position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0)">输入您的问题</label>
+          <textarea id="msg" rows="2" placeholder="输入您的问题，Enter 发送，Shift + Enter 换行" style="flex: 1; border: 0; outline: none; resize: none; font: inherit; font-size: 14px; line-height: 1.6; padding: 4px 0"></textarea>
+          <button aria-label="发送" style="width: 44px; height: 44px; border: 0; border-radius: 10px; background: #4338CA; color: #FFFFFF; display: flex; align-items: center; justify-content: center; cursor: pointer">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h14"></path><path d="m13 6 6 6-6 6"></path></svg>
+          </button>
+        </div>
+      </div>
+    </section>
+
+    <aside style="flex: 1 1 280px; max-width: 340px; display: flex; flex-direction: column; gap: 16px">
+      <div style="background: #FFFFFF; border: 1px solid #E4E7EC; border-radius: 16px; padding: 18px; display: flex; flex-direction: column; gap: 14px">
+        <h2 style="margin: 0; font-size: 15px; font-weight: 600">本次咨询进度</h2>
+        <ol style="margin: 0; padding: 0; list-style: none; display: flex; flex-direction: column; gap: 12px">
+          <li style="display: flex; align-items: center; gap: 10px"><span style="width: 22px; height: 22px; border-radius: 11px; background: #ECFDF3; color: #067647; display: flex; align-items: center; justify-content: center; font-size: 12px; font-weight: 700">✓</span><span>理解问题</span></li>
+          <li style="display: flex; align-items: center; gap: 10px"><span style="width: 22px; height: 22px; border-radius: 11px; background: #ECFDF3; color: #067647; display: flex; align-items: center; justify-content: center; font-size: 12px; font-weight: 700">✓</span><span>查询相关资料</span></li>
+          <li style="display: flex; align-items: center; gap: 10px"><span style="width: 22px; height: 22px; border-radius: 11px; background: #EEF0FF; color: #3730A3; display: flex; align-items: center; justify-content: center; font-size: 12px; font-weight: 700">3</span><span style="font-weight: 600; color: #3730A3">等待人工确认</span></li>
+          <li style="display: flex; align-items: center; gap: 10px"><span style="width: 22px; height: 22px; border-radius: 11px; border: 1.5px solid #D0D5DD; box-sizing: border-box; color: #667085; display: flex; align-items: center; justify-content: center; font-size: 12px">4</span><span style="color: #667085">回复处理结果</span></li>
+        </ol>
+      </div>
+      <div style="background: #FFFFFF; border: 1px solid #E4E7EC; border-radius: 16px; padding: 18px; display: flex; flex-direction: column; gap: 8px">
+        <h2 style="margin: 0; font-size: 15px; font-weight: 600">我们能帮您</h2>
+        <span style="color: #475467; line-height: 1.7; font-size: 13px">查询订单、退款、账户和技术问题。涉及订单或资金的操作，会先由工作人员确认。</span>
+      </div>
+    </aside>
+  </div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":1440,"height":900}}'>
+class Component extends DCLogic {
+  renderVals() { return {}; }
+}
+</script>
+</body>
+</html>

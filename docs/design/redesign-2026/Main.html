@@ -1,0 +1,254 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<title>人工处理台</title>
+
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&amp;family=JetBrains+Mono:wght@400;500&amp;family=Noto+Sans+SC:wght@400;500;600;700&amp;display=swap" rel="stylesheet">
+<style>
+body{margin:0}
+a{color:#4338CA}a:hover{color:#3730A3}
+</style>
+</helmet>
+<div style="display: flex; flex-wrap: wrap; min-height: 900px; background: #F6F7F9; font-family: Inter, 'Noto Sans SC', 'PingFang SC', sans-serif; color: #0F172A; font-size: 14px">
+
+  <nav aria-label="主导航" style="flex: 1 1 232px; max-width: 248px; min-width: 232px; background: #0E1325; color: #C7CDDB; display: flex; flex-direction: column; padding: 20px 14px; gap: 24px; box-sizing: border-box">
+    <div style="display: flex; align-items: center; gap: 10px; padding: 0 6px">
+      <div style="width: 32px; height: 32px; border-radius: 9px; background: #4F46E5; display: flex; align-items: center; justify-content: center">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#FFFFFF" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path></svg>
+      </div>
+      <div style="display: flex; flex-direction: column">
+        <span style="color: #FFFFFF; font-weight: 600; font-size: 15px">SupportGPT</span>
+        <span style="font-size: 12px; color: #98A2B8">智能客服员工空间</span>
+      </div>
+    </div>
+
+    <div style="display: flex; flex-direction: column; gap: 2px">
+      <span style="font-size: 11px; letter-spacing: 0.06em; color: #8891A7; padding: 0 10px 6px">工作台</span>
+      <a href="#" style="display: flex; align-items: center; gap: 10px; padding: 10px; border-radius: 8px; background: #1E2540; color: #FFFFFF; text-decoration: none; font-weight: 500">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M22 12h-6l-2 3h-4l-2-3H2"></path><path d="M5.45 5.11 2 12v6a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-6l-3.45-6.89A2 2 0 0 0 16.76 4H7.24a2 2 0 0 0-1.79 1.11z"></path></svg>
+        <span style="flex: 1">人工处理台</span>
+        <span style="font-size: 12px; background: #4F46E5; color: #FFFFFF; border-radius: 10px; padding: 1px 8px; font-family: 'JetBrains Mono', monospace">2</span>
+      </a>
+      <a href="#" style="display: flex; align-items: center; gap: 10px; padding: 10px; border-radius: 8px; color: #C7CDDB; text-decoration: none">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M22 12h-4l-3 9L9 3l-3 9H2"></path></svg>
+        Agent 运行监控
+      </a>
+      <a href="#" style="display: flex; align-items: center; gap: 10px; padding: 10px; border-radius: 8px; color: #C7CDDB; text-decoration: none">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m16 6 4 14"></path><path d="M12 6v14"></path><path d="M8 8v12"></path><path d="M4 4v16"></path></svg>
+        资源管理
+      </a>
+      <a href="#" style="display: flex; align-items: center; gap: 10px; padding: 10px; border-radius: 8px; color: #C7CDDB; text-decoration: none">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="6" cy="6" r="3"></circle><circle cx="6" cy="18" r="3"></circle><path d="M18 9a9 9 0 0 1-9 9"></path><circle cx="18" cy="6" r="3"></circle></svg>
+        Agent 处理流程
+      </a>
+    </div>
+
+    <div style="flex: 1"></div>
+
+    <div style="display: flex; flex-direction: column; gap: 12px; padding: 12px; border-radius: 10px; background: #161C33">
+      <div style="display: flex; align-items: center; gap: 8px; font-size: 13px">
+        <span style="width: 8px; height: 8px; border-radius: 4px; background: #32D583"></span>
+        <span style="color: #FFFFFF">服务连接正常</span>
+      </div>
+      <div style="display: flex; align-items: center; gap: 10px">
+        <div style="width: 32px; height: 32px; border-radius: 16px; background: #2B3352; color: #FFFFFF; display: flex; align-items: center; justify-content: center; font-weight: 600; font-size: 13px">D</div>
+        <div style="display: flex; flex-direction: column; flex: 1; min-width: 0">
+          <span style="color: #FFFFFF; font-size: 13px">demo-admin</span>
+          <span style="font-size: 12px; color: #98A2B8">管理员</span>
+        </div>
+        <button aria-label="退出登录" style="width: 32px; height: 32px; border: 0; border-radius: 8px; background: transparent; color: #98A2B8; display: flex; align-items: center; justify-content: center; cursor: pointer">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"></path><polyline points="16 17 21 12 16 7"></polyline><line x1="21" y1="12" x2="9" y2="12"></line></svg>
+        </button>
+      </div>
+    </div>
+  </nav>
+
+  <main style="flex: 999 1 560px; min-width: 0; display: flex; flex-direction: column">
+    <header style="display: flex; flex-wrap: wrap; align-items: center; gap: 16px; padding: 16px 28px; background: #FFFFFF; border-bottom: 1px solid #E4E7EC">
+      <div style="display: flex; flex-direction: column; gap: 2px; flex: 1 1 240px">
+        <h1 style="margin: 0; font-size: 20px; font-weight: 600">人工处理台</h1>
+        <span style="color: #475467; font-size: 13px">处理需要人工确认的回复和业务结果</span>
+      </div>
+      <label style="display: flex; align-items: center; gap: 8px; height: 40px; padding: 0 12px; border: 1px solid #D0D5DD; border-radius: 8px; background: #FFFFFF; flex: 0 1 300px; color: #667085">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><circle cx="11" cy="11" r="7"></circle><path d="m21 21-4.3-4.3"></path></svg>
+        <input placeholder="搜索客户、主题或编号" style="border: 0; outline: none; flex: 1; font: inherit; font-size: 14px; background: transparent; min-width: 0">
+        <kbd style="font-family: 'JetBrains Mono', monospace; font-size: 11px; border: 1px solid #E4E7EC; border-radius: 4px; padding: 1px 5px; color: #667085">/</kbd>
+      </label>
+      <button style="height: 40px; padding: 0 14px; border: 1px solid #D0D5DD; border-radius: 8px; background: #FFFFFF; font: inherit; font-weight: 500; display: flex; align-items: center; gap: 8px; color: #344054; cursor: pointer">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M21 12a9 9 0 1 1-3-6.7L21 8"></path><path d="M21 3v5h-5"></path></svg>
+        刷新
+      </button>
+    </header>
+
+    <div style="display: flex; flex-wrap: wrap; gap: 12px; padding: 20px 28px 0">
+      <div style="flex: 1 1 180px; background: #FFFFFF; border: 1px solid #E4E7EC; border-radius: 12px; padding: 14px 16px; display: flex; flex-direction: column; gap: 6px">
+        <span style="font-size: 13px; color: #475467">待人工处理</span>
+        <span style="font-size: 26px; font-weight: 600; font-family: 'JetBrains Mono', monospace">2</span>
+      </div>
+      <div style="flex: 1 1 180px; background: #FFFFFF; border: 1px solid #E4E7EC; border-radius: 12px; padding: 14px 16px; display: flex; flex-direction: column; gap: 6px">
+        <span style="font-size: 13px; color: #475467">需工具审批</span>
+        <span style="font-size: 26px; font-weight: 600; font-family: 'JetBrains Mono', monospace; color: #4338CA">1</span>
+      </div>
+      <div style="flex: 1 1 180px; background: #FFFFFF; border: 1px solid #E4E7EC; border-radius: 12px; padding: 14px 16px; display: flex; flex-direction: column; gap: 6px">
+        <span style="font-size: 13px; color: #475467">高优先级</span>
+        <span style="font-size: 26px; font-weight: 600; font-family: 'JetBrains Mono', monospace; color: #B54708">1</span>
+      </div>
+      <div style="flex: 1 1 180px; background: #FFFFFF; border: 1px solid #E4E7EC; border-radius: 12px; padding: 14px 16px; display: flex; flex-direction: column; gap: 6px">
+        <span style="font-size: 13px; color: #475467">负面情绪</span>
+        <span style="font-size: 26px; font-weight: 600; font-family: 'JetBrains Mono', monospace">0</span>
+      </div>
+    </div>
+
+    <div style="display: flex; flex-wrap: wrap; gap: 16px; padding: 16px 28px 28px; align-items: flex-start">
+
+      <section aria-label="待处理队列" style="flex: 1 1 300px; max-width: 360px; background: #FFFFFF; border: 1px solid #E4E7EC; border-radius: 12px; display: flex; flex-direction: column; overflow: hidden">
+        <div style="display: flex; align-items: center; justify-content: space-between; padding: 14px 16px; border-bottom: 1px solid #EAECF0">
+          <h2 style="margin: 0; font-size: 15px; font-weight: 600">待处理队列</h2>
+          <span style="font-size: 12px; color: #475467">2 张工单</span>
+        </div>
+        <div style="display: flex; flex-wrap: wrap; gap: 6px; padding: 12px 16px; border-bottom: 1px solid #EAECF0">
+          <button style="height: 30px; padding: 0 12px; border-radius: 15px; border: 1px solid #4338CA; background: #EEF0FF; color: #3730A3; font: inherit; font-size: 13px; cursor: pointer">全部</button>
+          <button style="height: 30px; padding: 0 12px; border-radius: 15px; border: 1px solid #D0D5DD; background: #FFFFFF; color: #344054; font: inherit; font-size: 13px; cursor: pointer">需审批</button>
+          <button style="height: 30px; padding: 0 12px; border-radius: 15px; border: 1px solid #D0D5DD; background: #FFFFFF; color: #344054; font: inherit; font-size: 13px; cursor: pointer">高优先级</button>
+          <button style="height: 30px; padding: 0 12px; border-radius: 15px; border: 1px solid #D0D5DD; background: #FFFFFF; color: #344054; font: inherit; font-size: 13px; display: flex; align-items: center; gap: 4px; cursor: pointer">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M3 6h18M7 12h10M10 18h4"></path></svg>
+            筛选
+          </button>
+        </div>
+
+        <a href="#" style="display: flex; flex-direction: column; gap: 8px; padding: 14px 16px; background: #F5F6FF; text-decoration: none; color: inherit; border-bottom: 1px solid #EAECF0; box-shadow: inset 3px 0 0 #4F46E5">
+          <div style="display: flex; align-items: center; gap: 8px">
+            <span style="font-family: 'JetBrains Mono', monospace; font-size: 12px; color: #475467">#101</span>
+            <span style="font-size: 12px; color: #475467">demo-customer</span>
+            <span style="flex: 1"></span>
+            <span style="font-size: 12px; color: #667085">3 分钟前</span>
+          </div>
+          <span style="font-weight: 600; font-size: 14px">物流延迟，需要核实</span>
+          <span style="font-size: 13px; color: #475467; line-height: 1.5">我的订单还没有收到，能帮我查一下吗？</span>
+          <div style="display: flex; flex-wrap: wrap; gap: 6px">
+            <span style="font-size: 12px; padding: 2px 8px; border-radius: 6px; background: #FFFAEB; color: #B54708; font-weight: 500">高优先级</span>
+            <span style="font-size: 12px; padding: 2px 8px; border-radius: 6px; background: #EEF0FF; color: #3730A3; font-weight: 500">待工具审批</span>
+            <span style="font-size: 12px; padding: 2px 8px; border-radius: 6px; background: #F2F4F7; color: #344054">订单与物流</span>
+          </div>
+        </a>
+
+        <a href="#" style="display: flex; flex-direction: column; gap: 8px; padding: 14px 16px; text-decoration: none; color: inherit">
+          <div style="display: flex; align-items: center; gap: 8px">
+            <span style="font-family: 'JetBrains Mono', monospace; font-size: 12px; color: #475467">#102</span>
+            <span style="font-size: 12px; color: #475467">demo-customer</span>
+            <span style="flex: 1"></span>
+            <span style="font-size: 12px; color: #667085">12 分钟前</span>
+          </div>
+          <span style="font-weight: 600; font-size: 14px">退款申请等待确认</span>
+          <span style="font-size: 13px; color: #475467; line-height: 1.5">请确认订单退款是否符合政策。</span>
+          <div style="display: flex; flex-wrap: wrap; gap: 6px">
+            <span style="font-size: 12px; padding: 2px 8px; border-radius: 6px; background: #F2F4F7; color: #344054">中优先级</span>
+            <span style="font-size: 12px; padding: 2px 8px; border-radius: 6px; background: #F2F4F7; color: #344054">账务</span>
+          </div>
+        </a>
+      </section>
+
+      <section aria-label="工单详情" style="flex: 999 1 420px; min-width: 0; display: flex; flex-direction: column; gap: 16px">
+        <div style="background: #FFFFFF; border: 1px solid #E4E7EC; border-radius: 12px; padding: 20px; display: flex; flex-direction: column; gap: 14px">
+          <div style="display: flex; flex-wrap: wrap; align-items: center; gap: 8px">
+            <span style="font-family: 'JetBrains Mono', monospace; font-size: 12px; color: #475467">工单 #101</span>
+            <span style="font-size: 12px; padding: 2px 8px; border-radius: 6px; background: #EEF0FF; color: #3730A3; font-weight: 500">待审批</span>
+            <span style="font-size: 12px; padding: 2px 8px; border-radius: 6px; background: #FFFAEB; color: #B54708; font-weight: 500">高优先级</span>
+            <span style="flex: 1"></span>
+            <span style="font-size: 12px; color: #475467">识别版本 demo-v1</span>
+          </div>
+          <h2 style="margin: 0; font-size: 22px; font-weight: 600">物流延迟，需要核实</h2>
+          <div style="display: flex; gap: 12px; padding: 14px; background: #F9FAFB; border-radius: 10px">
+            <div style="width: 32px; height: 32px; border-radius: 16px; background: #E4E7EC; flex: none; display: flex; align-items: center; justify-content: center; font-size: 12px; font-weight: 600; color: #344054">客</div>
+            <div style="display: flex; flex-direction: column; gap: 4px">
+              <span style="font-size: 12px; color: #475467">demo-customer · VIP 客户 · 本次使用中文</span>
+              <span style="font-size: 15px; line-height: 1.6">我的订单还没有收到，能帮我查一下吗？</span>
+            </div>
+          </div>
+        </div>
+
+        <div style="background: #FFFFFF; border: 1px solid #E4E7EC; border-radius: 12px; padding: 20px; display: flex; flex-direction: column; gap: 14px">
+          <div style="display: flex; align-items: center; gap: 10px">
+            <div style="width: 28px; height: 28px; border-radius: 8px; background: #EEF0FF; color: #4338CA; display: flex; align-items: center; justify-content: center">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3l1.9 5.8L20 10l-5 3.6L16.5 20 12 16.6 7.5 20 9 13.6 4 10l6.1-1.2z"></path></svg>
+            </div>
+            <h3 style="margin: 0; font-size: 15px; font-weight: 600; flex: 1">Agent 回复草稿</h3>
+            <span style="font-size: 12px; color: #067647; background: #ECFDF3; padding: 2px 8px; border-radius: 6px; font-weight: 500">质检通过</span>
+          </div>
+          <label for="draft" style="font-size: 13px; color: #475467">可编辑后发送给客户</label>
+          <textarea id="draft" rows="5" style="font: inherit; font-size: 14px; line-height: 1.7; padding: 12px 14px; border: 1px solid #D0D5DD; border-radius: 10px; resize: vertical; color: #0F172A">您好，已为您查询到订单 [订单号]。物流显示包裹目前在转运中心，预计 [日期] 送达。核实结果需要人工确认后再告知您，我们会尽快回复。</textarea>
+          <div style="display: flex; flex-wrap: wrap; gap: 8px; align-items: center">
+            <span style="font-size: 12px; color: #475467">引用知识</span>
+            <a href="#" style="font-size: 12px; padding: 3px 10px; border-radius: 6px; background: #F2F4F7; color: #344054; text-decoration: none">物流延迟处理政策 §2</a>
+            <a href="#" style="font-size: 12px; padding: 3px 10px; border-radius: 6px; background: #F2F4F7; color: #344054; text-decoration: none">VIP 客户服务承诺</a>
+          </div>
+          <div style="display: flex; flex-wrap: wrap; gap: 10px; justify-content: flex-end; padding-top: 6px; border-top: 1px solid #EAECF0">
+            <button style="height: 44px; padding: 0 16px; border: 1px solid #D0D5DD; border-radius: 8px; background: #FFFFFF; font: inherit; font-weight: 500; color: #344054; cursor: pointer">转交其他团队</button>
+            <button style="height: 44px; padding: 0 16px; border: 1px solid #FDA29B; border-radius: 8px; background: #FFFFFF; font: inherit; font-weight: 500; color: #B42318; cursor: pointer">驳回草稿</button>
+            <button style="height: 44px; padding: 0 20px; border: 0; border-radius: 8px; background: #4338CA; font: inherit; font-weight: 600; color: #FFFFFF; cursor: pointer">批准并发送</button>
+          </div>
+        </div>
+      </section>
+
+      <aside aria-label="Agent 处理轨迹" style="flex: 1 1 300px; max-width: 360px; display: flex; flex-direction: column; gap: 16px">
+        <div style="background: #FFFFFF; border: 1px solid #C7CBFB; border-radius: 12px; overflow: hidden">
+          <div style="padding: 14px 16px; background: #F5F6FF; border-bottom: 1px solid #DCDFFD; display: flex; align-items: center; gap: 8px">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#4338CA" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"></path></svg>
+            <h3 style="margin: 0; font-size: 14px; font-weight: 600; color: #3730A3">工具调用待审批</h3>
+          </div>
+          <div style="padding: 16px; display: flex; flex-direction: column; gap: 12px">
+            <div style="display: flex; justify-content: space-between; align-items: center">
+              <span style="font-family: 'JetBrains Mono', monospace; font-size: 13px; font-weight: 500">query_shipment</span>
+              <span style="font-size: 12px; color: #B54708; background: #FFFAEB; padding: 2px 8px; border-radius: 6px">读取 · 中风险</span>
+            </div>
+            <pre style="margin: 0; padding: 10px 12px; background: #0E1325; color: #D6DAF5; border-radius: 8px; font-family: 'JetBrains Mono', monospace; font-size: 12px; line-height: 1.6; white-space: pre-wrap">{
+  "customer_id": "demo-customer",
+  "order_id": "[订单号]"
+}</pre>
+            <div style="display: flex; gap: 8px">
+              <button style="flex: 1; height: 40px; border: 1px solid #D0D5DD; border-radius: 8px; background: #FFFFFF; font: inherit; font-weight: 500; color: #344054; cursor: pointer">拒绝</button>
+              <button style="flex: 1; height: 40px; border: 0; border-radius: 8px; background: #4338CA; font: inherit; font-weight: 600; color: #FFFFFF; cursor: pointer">允许执行</button>
+            </div>
+          </div>
+        </div>
+
+        <div style="background: #FFFFFF; border: 1px solid #E4E7EC; border-radius: 12px; padding: 16px; display: flex; flex-direction: column; gap: 14px">
+          <h3 style="margin: 0; font-size: 14px; font-weight: 600">处理轨迹</h3>
+          <ol style="margin: 0; padding: 0; list-style: none; display: flex; flex-direction: column; gap: 0">
+            <li style="display: flex; gap: 12px">
+              <div style="display: flex; flex-direction: column; align-items: center"><span style="width: 10px; height: 10px; border-radius: 5px; background: #12B76A; margin-top: 4px"></span><span style="flex: 1; width: 2px; background: #E4E7EC; min-height: 28px"></span></div>
+              <div style="display: flex; flex-direction: column; gap: 2px; padding-bottom: 12px"><span style="font-size: 13px; font-weight: 500">理解问题</span><span style="font-size: 12px; color: #475467">意图：物流查询 · 情绪：中性</span></div>
+            </li>
+            <li style="display: flex; gap: 12px">
+              <div style="display: flex; flex-direction: column; align-items: center"><span style="width: 10px; height: 10px; border-radius: 5px; background: #12B76A; margin-top: 4px"></span><span style="flex: 1; width: 2px; background: #E4E7EC; min-height: 28px"></span></div>
+              <div style="display: flex; flex-direction: column; gap: 2px; padding-bottom: 12px"><span style="font-size: 13px; font-weight: 500">检索知识</span><span style="font-size: 12px; color: #475467">命中 2 篇政策文档</span></div>
+            </li>
+            <li style="display: flex; gap: 12px">
+              <div style="display: flex; flex-direction: column; align-items: center"><span style="width: 10px; height: 10px; border-radius: 5px; background: #4F46E5; margin-top: 4px; box-shadow: 0 0 0 4px #E0E3FF"></span><span style="flex: 1; width: 2px; background: #E4E7EC; min-height: 28px"></span></div>
+              <div style="display: flex; flex-direction: column; gap: 2px; padding-bottom: 12px"><span style="font-size: 13px; font-weight: 600; color: #3730A3">等待工具审批</span><span style="font-size: 12px; color: #475467">query_shipment</span></div>
+            </li>
+            <li style="display: flex; gap: 12px">
+              <div style="display: flex; flex-direction: column; align-items: center"><span style="width: 10px; height: 10px; border-radius: 5px; border: 2px solid #D0D5DD; box-sizing: border-box; margin-top: 4px"></span></div>
+              <div style="display: flex; flex-direction: column; gap: 2px"><span style="font-size: 13px; color: #667085">生成回复并质检</span></div>
+            </li>
+          </ol>
+          <a href="#" style="font-size: 13px; font-weight: 500">在运行监控中查看完整记录 →</a>
+        </div>
+      </aside>
+    </div>
+  </main>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":1440,"height":900}}'>
+class Component extends DCLogic {
+  renderVals() { return {}; }
+}
+</script>
+</body>
+</html>

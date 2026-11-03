@@ -1,0 +1,358 @@
+/* Migrated from layout.css; page declarations intentionally preserved. */
+
+.obs-runs-card {
+  background: #fff;
+  border: 1px solid var(--color-border);
+  border-radius: 8px;
+  overflow: hidden;
+}
+
+.obs-hero {
+  display: flex;
+  justify-content: space-between;
+  align-items: start;
+  flex-wrap: wrap;
+  gap: 16px;
+  margin-bottom: 24px;
+}
+
+.obs-hero > div:first-child {
+  max-width: 640px;
+}
+
+.obs-hero h2 {
+  margin-bottom: 8px;
+}
+
+.obs-hero p {
+  color: var(--color-text-secondary);
+  margin: 0;
+}
+
+.obs-eyebrow {
+  font-size: 12px;
+  color: var(--color-text-secondary);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+
+.obs-hero-actions {
+  display: flex;
+  gap: 8px;
+}
+
+.obs-summary-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  border: 1px solid var(--color-border);
+  border-radius: 8px;
+  margin-bottom: 24px;
+  overflow: hidden;
+}
+
+.obs-summary-card {
+  padding: 16px;
+  border-right: 1px solid var(--color-border);
+}
+
+.obs-summary-card:last-child {
+  border: 0;
+}
+
+.obs-summary-icon {
+  display: none;
+}
+
+.obs-summary-label, .obs-summary-hint {
+  color: var(--color-text-secondary);
+  font-size: 12px;
+}
+
+.obs-summary-value {
+  font-size: 24px;
+  line-height: 1.5;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  margin: 4px 0;
+}
+
+.obs-table-heading {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 16px 24px;
+  border-bottom: 1px solid var(--color-border);
+}
+
+.obs-table-heading h3 {
+  margin: 0;
+}
+
+.obs-table-heading p {
+  font-size: 12px;
+  color: var(--color-text-secondary);
+  margin: 4px 0 0;
+}
+
+.obs-table-controls {
+  display: grid;
+  gap: 8px;
+}
+
+.obs-table-controls > span {
+  font-size: 12px;
+  text-align: right;
+  color: var(--color-text-secondary);
+}
+
+.obs-ticket-search {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.obs-ticket-search input {
+  width: 160px;
+}
+
+.obs-table-wrap {
+  overflow-x: auto;
+}
+
+.obs-table {
+  border-collapse: collapse;
+  width: 100%;
+  text-align: left;
+}
+
+.obs-table th {
+  padding: 12px 16px;
+  font-weight: 500;
+  color: var(--color-text-secondary);
+  font-size: 12px;
+  background: var(--color-surface-muted);
+  white-space: nowrap;
+}
+
+.obs-table td {
+  padding: 16px;
+  border-top: 1px solid var(--color-border);
+  font-size: 13px;
+  vertical-align: top;
+}
+
+.obs-table tbody tr {
+  cursor: pointer;
+}
+
+.obs-table tbody tr:hover {
+  background: var(--color-surface-muted);
+}
+
+.obs-table td small {
+  display: block;
+  margin-top: 4px;
+  white-space: nowrap;
+}
+
+.obs-table td strong {
+  font-variant-numeric: tabular-nums;
+}
+
+.obs-table td:first-child {
+  min-width: 140px;
+}
+
+.obs-pagination {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  padding: 16px 24px;
+  border-top: 1px solid var(--color-border);
+}
+
+.obs-detail-header {
+  padding: 24px;
+}
+
+.obs-detail-header h2 {
+  font: 14px/1.6 var(--font-mono);
+  overflow-wrap: anywhere;
+}
+
+.obs-detail-content {
+  padding: 0 24px 24px;
+}
+
+.obs-detail-section {
+  padding: 24px 0;
+  border-top: 1px solid var(--color-border);
+}
+
+.obs-detail-section p:last-child {
+  margin-bottom: 0;
+}
+
+.obs-trace-box {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 12px;
+  background: var(--color-surface-muted);
+  border: 1px solid var(--color-border);
+  border-radius: 6px;
+  margin-bottom: 12px;
+}
+
+.obs-trace-box code {
+  flex: 1;
+  min-width: 0;
+}
+
+.obs-helper {
+  color: var(--color-text-secondary);
+  font-size: 12px;
+  margin-top: 12px;
+}
+
+.obs-workflow {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.obs-node {
+  padding: 6px 8px;
+  border: 1px solid var(--color-border);
+  border-radius: 4px;
+  font-size: 12px;
+}
+
+.obs-node span {
+  color: var(--color-text-secondary);
+  margin-right: 8px;
+}
+
+.obs-kv-grid, .obs-analyzer-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
+}
+
+.obs-kv-grid dt, .obs-analyzer-grid dt {
+  font-size: 12px;
+  margin-bottom: 4px;
+}
+
+.obs-kv-grid dd {
+  overflow-wrap: anywhere;
+}
+
+.obs-analyzer-snapshot {
+  margin-top: 24px;
+  padding: 16px;
+  background: var(--color-surface-muted);
+  border-radius: 8px;
+}
+
+.obs-snapshot-heading {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 16px;
+}
+
+.obs-snapshot-heading > div {
+  display: grid;
+}
+
+.obs-snapshot-heading span {
+  color: var(--color-text-secondary);
+  font-size: 12px;
+}
+
+.obs-compact-list {
+  display: grid;
+  gap: 8px;
+}
+
+.obs-compact-list > div {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 0;
+  border-bottom: 1px solid var(--color-border);
+}
+
+.obs-compact-list span {
+  flex: 1;
+  overflow-wrap: anywhere;
+}
+
+.obs-compact-list em {
+  font-size: 12px;
+  color: var(--color-text-secondary);
+  font-style: normal;
+}
+
+.obs-error-section {
+  color: var(--color-danger);
+}
+
+.obs-text-snapshot {
+  margin-top: 16px;
+}
+
+.obs-text-snapshot p {
+  margin-top: 8px;
+  padding: 16px;
+  background: var(--color-surface-muted);
+  border-radius: 6px;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+@media (max-width: 1023px) {
+.obs-summary-grid {
+    grid-template-columns: 1fr 1fr;
+  }
+.obs-summary-card:nth-child(2) {
+    border-right: 0;
+  }
+.obs-summary-card:nth-child(-n+2) {
+    border-bottom: 1px solid var(--color-border);
+  }
+}
+
+@media (max-width: 767px) {
+.obs-hero-actions {
+    flex-wrap: wrap;
+  }
+.obs-table-heading {
+    padding: 16px;
+  }
+.obs-ticket-search {
+    flex-wrap: wrap;
+  }
+.obs-ticket-search input {
+    width: min(160px, 100%);
+  }
+.obs-table-controls {
+    width: 100%;
+  }
+.obs-table-controls > span {
+    text-align: left;
+  }
+.obs-detail-content, .obs-detail-header {
+    padding-left: 16px;
+    padding-right: 16px;
+  }
+.obs-kv-grid, .obs-analyzer-grid {
+    grid-template-columns: 1fr;
+  }
+}

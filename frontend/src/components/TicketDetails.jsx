@@ -1,3 +1,4 @@
+import '../styles/pages/workspace.css';
 import { friendlyError } from '../errors';
 import React, { useEffect, useRef, useState } from 'react';
 import { createLatestRequest } from '../latestRequest';

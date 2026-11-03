@@ -1,3 +1,4 @@
+import '../styles/pages/observability.css';
 import { friendlyError } from '../errors';
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Activity, AlertTriangle, Bot, Check, Clock3, Copy, ExternalLink, RefreshCw, Route, Search, ShieldAlert, Sparkles, X } from 'lucide-react';
