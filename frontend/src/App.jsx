@@ -170,7 +170,10 @@ export default function App() {
               workflow: '静态演示：了解系统怎样处理请求'
             }[route.view]}</p></div><NavLink href="#support" className="topbar-support">用户咨询</NavLink>{route.view === 'workspace' && <Button onClick={loadTickets} busy={ticketsLoading} aria-label="刷新工单"><RefreshCw size={16} /><span>刷新</span></Button>}</header>
             <main className="app-content" id="main-content" tabIndex={-1}>{!allowed ? <Notice>您的角色无权查看此页面。<NavLink href="#staff/review">返回人工处理台</NavLink></Notice> : route.view === 'workflow' ? <WorkflowPage embedded /> : route.view === 'resources' ? <ResourceManagementPage route={route} /> : route.view === 'observability' ? <ObservabilityPage route={route} /> : <section className={`workspace-page ${selectedTicket ? 'has-selection' : ''}`}>
-              <div className="workspace-summary"><p>当前人工处理队列</p><span>{ticketsLoading ? '加载中…' : ticketsError ? '暂不可用' : `${stats.total} 张工单`}</span>{!ticketsLoading && !ticketsError && stats.high > 0 && <span className="status-badge badge-warning">{stats.high} 张高优先级</span>}</div>
+              <div className="workspace-summary" aria-label="当前人工处理队列统计" aria-live="polite">
+                <section className="workspace-stat-card"><span>当前人工处理队列</span><strong>{ticketsLoading ? <><span className="ui-skeleton workspace-stat-skeleton" aria-hidden="true" /><span className="sr-only">加载中…</span></> : ticketsError ? '暂不可用' : stats.total}</strong><small>待人工处理工单</small></section>
+                <section className="workspace-stat-card"><span>高优先级</span><strong>{ticketsLoading ? <><span className="ui-skeleton workspace-stat-skeleton" aria-hidden="true" /><span className="sr-only">加载中…</span></> : ticketsError ? '暂不可用' : stats.high}</strong><small>紧急与高优先级工单</small></section>
+              </div>
               <div className="grid-dashboard"><TicketList tickets={tickets} selectedId={selectedTicket?.id} onSelect={ticket => updateRouteParams({
               ticket: ticket.id
             }, false)} loading={ticketsLoading} error={ticketsError} onRetry={loadTickets} route={route} /><div className="workspace-detail"><Button className="mobile-detail-back" onClick={() => updateRouteParams({

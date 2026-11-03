@@ -3,8 +3,9 @@ import { friendlyError } from '../errors';
 import React, { useEffect, useRef, useState } from 'react';
 import { createLatestRequest } from '../latestRequest';
 import { useConfirm, useUnsavedChanges } from './uiHooks';
+import { Badge, Button, Card, EmptyState, Skeleton } from './ui';
 import ToolReviewPanel from './ToolReviewPanel';
-import { AlertTriangle, BookOpen, CheckCircle2, ChevronDown, ClipboardCheck, FileText, RefreshCw, ShieldAlert, ShoppingBag, Sparkles, User, XCircle } from 'lucide-react';
+import { AlertTriangle, BookOpen, CheckCircle2, ChevronDown, ClipboardCheck, RefreshCw, ShieldAlert, ShoppingBag, Sparkles, User, XCircle } from 'lucide-react';
 import { evaluateResponse, fetchCustomerContext, fetchTicketAgentResult, submitApproval } from '../api/client';
 import { translateEscalationReason, translateOrderItem, translatePriority, translateStatus, translateSubject, translateTier } from '../i18n';
 export default function TicketDetails({
@@ -123,18 +124,7 @@ export default function TicketDetails({
     }
   }
   if (!ticket) {
-    return <section className="ticket-empty-state">
-        <span className="empty-state-icon"><ClipboardCheck size={34} /></span>
-        <span className="section-label">等待处理</span>
-        <h2>从人工队列中选择一张工单</h2>
-        <p>普通问题由 Agent 自动回复。这里显示需要人工确认或审批的工单；选择一张即可查看已保存的回复和处理原因。</p>
-        <div className="empty-workflow">
-          <span>1. 理解问题</span><i />
-          <span>2. 查询相关资料</span><i />
-          <span>3. 生成回复</span><i />
-          <span>4. 人工确认</span>
-        </div>
-      </section>;
+    return <Card className="ticket-empty-state"><EmptyState icon={<ClipboardCheck size={34} />} title="从人工队列中选择一张工单" description="普通问题由 Agent 自动回复。这里显示需要人工确认或审批的工单；选择一张即可查看已保存的回复和处理原因。"><div className="empty-workflow"><span>1. 理解问题</span><span>2. 查询相关资料</span><span>3. 生成回复</span><span>4. 人工确认</span></div></EmptyState></Card>;
   }
   const citations = chatOutput?.citations || [];
   const recentOrders = customer?.recent_orders || [];
@@ -142,72 +132,42 @@ export default function TicketDetails({
   const reviewReasons = Array.from(new Set((chatOutput?.review_reasons?.length ? chatOutput.review_reasons : [chatOutput?.escalation_reason]).map(translateEscalationReason).filter(Boolean)));
   return <section className="ticket-detail">
       {confirmation}
+      <div className="workspace-detail-main">
+      <Card className="ticket-overview">
       <header className="ticket-detail-header">
         <div>
           <div className="ticket-detail-meta">
-            <span>工单 #{ticket.id}</span>
-            <span className={`status-chip status-${ticket.status || 'open'}`}>{translateStatus(ticket.status)}</span>
-            <span className={`priority-chip priority-${ticket.priority || 'medium'}`}>{translatePriority(ticket.priority)}优先级</span>
+            <span className="workspace-mono">工单 #{ticket.id}</span>
+            <Badge tone={ticket.status === 'resolved' ? 'success' : ticket.status === 'pending_approval' ? 'accent' : 'neutral'}>{translateStatus(ticket.status)}</Badge>
+            <Badge tone={['urgent', 'high'].includes(ticket.priority) ? 'warning' : 'neutral'}>{translatePriority(ticket.priority)}优先级</Badge>
           </div>
           <h2>{translateSubject(ticket.subject)}</h2>
-          <p>客户 {ticket.customer_id} · 本次使用的知识库版本：{chatOutput?.kb_version || '加载中'}</p>
+          <p>客户 {ticket.customer_id} · 本次使用的知识库版本：{chatOutput?.kb_version || (loading ? '加载中' : '暂不可用')}</p>
         </div>
         <button className="btn btn-secondary compact-button" onClick={refreshDetails} disabled={loading}>
           <RefreshCw size={15} className={loading ? 'spin' : ''} /> 刷新已保存的结果
         </button>
       </header>
 
-      <ToolReviewPanel ticketId={ticket.id} userRole={userRole} onActionComplete={onActionComplete} />
-
+      <blockquote className="workspace-customer-quote"><span className="workspace-customer-avatar" aria-hidden="true"><User size={16} /></span><div><span>客户 {ticket.customer_id} · 客户提交的原始内容</span><p>{ticket.description}</p></div></blockquote>
+      </Card>
       <p className="saved-result-notice">此页读取已保存的处理结果，不会重新运行 Agent。</p>
 
-      <div className="case-context-grid">
-        <article className="detail-card issue-card">
-          <div className="card-heading"><span className="card-icon blue"><FileText size={17} /></span><div><span>客户提出的问题</span><small>客户提交的原始内容</small></div></div>
-          <p>{ticket.description}</p>
-        </article>
-
-        <article className="detail-card customer-card">
-          <div className="card-heading"><span className="card-icon purple"><User size={17} /></span><div><span>客户资料</span><small>来自本地 CRM 演示适配器</small></div></div>
-          {customer ? <div className="customer-facts">
-              <div><span>客户</span><strong>{customer.name}</strong></div>
-              <div><span>等级</span><strong>{translateTier(customer.tier)}</strong></div>
-              <div><span>未结工单</span><strong>{customer.open_tickets_count}</strong></div>
-              <div><span>最近订单</span><strong>{recentOrders.length}</strong></div>
-            </div> : <div className="context-placeholder">正在读取客户资料…</div>}
-        </article>
-      </div>
-
-      {customer && recentOrders.length > 0 && <details className="orders-disclosure">
-          <summary><span><ShoppingBag size={16} /> 最近订单</span><span>{recentOrders.length} 笔 <ChevronDown size={15} /></span></summary>
-          <div className="orders-grid">
-            {recentOrders.map(order => <div className="order-item" key={order.order_id}>
-                <div><strong>{order.order_id}</strong><span>{translateStatus(order.status)}</span></div>
-                <p>{order.items.map(translateOrderItem).join('、')}</p>
-                <b>${order.total_amount}</b>
-              </div>)}
-          </div>
-        </details>}
-
-      {loading && <div className="agent-loading-card">
-          <span className="agent-orbit"><Sparkles size={22} /></span>
-          <div><strong>正在读取已保存的处理结果</strong><p>正在加载客户资料、引用文档和回复草稿，请稍候……</p></div>
-          <span className="loading-dots"><i /><i /><i /></span>
-        </div>}
+      {loading && <Card className="agent-loading-card"><div className="workspace-skeleton" role="status"><span>正在读取已保存的处理结果</span><Skeleton width="50%" height={20} /><Skeleton height={100} /><Skeleton width="75%" /><span className="sr-only">正在加载客户资料、引用文档和回复草稿，请稍候</span></div></Card>}
 
       {!loading && loadError && <div className="detail-error"><AlertTriangle size={19} /><div><strong>处理结果加载失败</strong><span>{loadError}</span></div><button className="btn btn-secondary" onClick={refreshDetails}>重新加载</button></div>}
 
-      {!loading && chatOutput && <article className="assistant-panel">
+      {!loading && chatOutput && <Card className="assistant-panel">
           <header className="assistant-heading">
             <div className="assistant-title">
               <span className="assistant-logo"><Sparkles size={19} /></span>
               <div><span>SupportGPT 回复建议</span><small>已保存的回复和检查结果</small></div>
             </div>
             <div className="assistant-badges">
-              <span className="evidence-badge"><BookOpen size={13} /> {citations.length} 条知识依据</span>
-              {chatOutput.qa_score != null && <span className="evidence-badge">QA {chatOutput.qa_score.toFixed(2)}</span>}
-              {chatOutput.hallucination_detected && <span className="risk-badge"><ShieldAlert size={13} /> 回复可能缺少依据</span>}
-              {chatOutput.approval_required ? <span className="review-badge"><ShieldAlert size={13} /> 待人工审批</span> : <span className="passed-badge"><CheckCircle2 size={13} /> 自动校验通过</span>}
+              <Badge><BookOpen size={13} /> {citations.length} 条知识依据</Badge>
+              {chatOutput.qa_score != null && <Badge>QA {chatOutput.qa_score.toFixed(2)}</Badge>}
+              {chatOutput.hallucination_detected && <Badge tone="danger"><ShieldAlert size={13} /> 回复可能缺少依据</Badge>}
+              {chatOutput.approval_required ? <Badge tone="warning"><ShieldAlert size={13} /> 待人工审批</Badge> : <Badge tone="success"><CheckCircle2 size={13} /> 自动校验通过</Badge>}
             </div>
           </header>
 
@@ -232,6 +192,7 @@ export default function TicketDetails({
             <textarea aria-label="回复草稿" value={editedResponse} onChange={event => setEditedResponse(event.target.value)} placeholder="已保存的 Agent 回复草稿会显示在这里……" />
           </div>
 
+          {citations.length > 0 && <div className="workspace-citation-tags" aria-label="引用知识"><span>引用知识</span>{citations.map((citation, index) => <Badge key={`${citation.source}-${index}`}><BookOpen size={12} />{citation.source}</Badge>)}</div>}
           <details className="reference-disclosure">
             <summary>
               <span><BookOpen size={16} /> 查看知识引用与检索依据</span>
@@ -239,23 +200,23 @@ export default function TicketDetails({
             </summary>
             <div className="reference-list">
               {citations.length === 0 ? <p className="no-reference">本次未检索到可引用的知识文档。</p> : citations.map((citation, index) => <div className="reference-item" key={`${citation.source}-${index}`}>
-                  <div><span>{index + 1}</span><strong>{citation.source}</strong><em>相关度 {citation.score}</em></div>
+                  <div><Badge><BookOpen size={12} />{citation.source}</Badge><em>相关度 {citation.score}</em></div>
                   <p>{citation.text}</p>
                 </div>)}
             </div>
           </details>
 
           <footer className="assistant-actions">
-            <div>
-              {chatOutput.approval_required ? <>
-                  <button onClick={() => handleApproval('approved')} className="btn btn-primary" disabled={responseChanged}><CheckCircle2 size={16} /> 批准原回复</button>
-                  <button onClick={() => handleApproval('modified')} className="btn btn-secondary" disabled={!responseChanged}>批准修改后的回复</button>
-                  <button onClick={() => handleApproval('rejected')} className="btn btn-danger"><XCircle size={16} /> 拒绝回复</button>
-                </> : <span className="no-review-needed"><CheckCircle2 size={16} /> 此回复无需人工审批</span>}
-            </div>
             {canRunEvaluation && <button onClick={triggerEvaluation} className="btn btn-quiet" disabled={evalLoading}>
                 <Sparkles size={14} className={evalLoading ? 'spin' : ''} /> {evalLoading ? '评测中…' : '运行质量评测'}
               </button>}
+            <div>
+              {chatOutput.approval_required ? <>
+                  <Button onClick={() => handleApproval('rejected')} tone="danger" size="lg"><XCircle size={16} /> 拒绝回复</Button>
+                  <Button onClick={() => handleApproval('approved')} tone="primary" size="lg" disabled={responseChanged}><CheckCircle2 size={16} /> 批准原回复</Button>
+                  <Button onClick={() => handleApproval('modified')} tone={responseChanged ? 'primary' : 'secondary'} size="lg" disabled={!responseChanged}>批准修改后的回复</Button>
+                </> : <span className="no-review-needed"><CheckCircle2 size={16} /> 此回复无需人工审批</span>}
+            </div>
           </footer>
 
           {actionNotice && <div className="action-notice success" role="status">{actionNotice}</div>}
@@ -270,6 +231,38 @@ export default function TicketDetails({
                 <div><span>回答相关性</span><strong>{evaluation.answer_relevance}</strong></div>
               </div>
             </section>}
-        </article>}
+        </Card>}
+      <div className="case-context-grid">
+        <article className="detail-card customer-card">
+          <div className="card-heading"><span className="card-icon"><User size={17} /></span><div><span>客户资料</span><small>来自本地 CRM 演示适配器</small></div></div>
+          {customer ? <div className="customer-facts">
+              <div><span>客户</span><strong>{customer.name}</strong></div>
+              <div><span>等级</span><strong>{translateTier(customer.tier)}</strong></div>
+              <div><span>未结工单</span><strong>{customer.open_tickets_count}</strong></div>
+              <div><span>最近订单</span><strong>{recentOrders.length}</strong></div>
+            </div> : <div className="workspace-skeleton" role="status"><span className="sr-only">{loadError ? '客户资料暂不可用' : '正在读取客户资料…'}</span>{loadError ? <span>客户资料暂不可用</span> : <><Skeleton /><Skeleton width="70%" /></>}</div>}
+        </article>
+      </div>
+
+      {customer && recentOrders.length > 0 && <details className="orders-disclosure">
+          <summary><span><ShoppingBag size={16} /> 最近订单</span><span>{recentOrders.length} 笔 <ChevronDown size={15} /></span></summary>
+          <div className="orders-grid">
+            {recentOrders.map(order => <div className="order-item" key={order.order_id}>
+                <div><strong>{order.order_id}</strong><span>{translateStatus(order.status)}</span></div>
+                <p>{order.items.map(translateOrderItem).join('、')}</p>
+                <b>${order.total_amount}</b>
+              </div>)}
+          </div>
+        </details>}
+
+      </div>
+      <aside className="workspace-review-column" aria-label="业务操作核实与处理轨迹">
+        <ToolReviewPanel ticketId={ticket.id} userRole={userRole} onActionComplete={onActionComplete} />
+        {!loading && chatOutput?.tool_calls?.length > 0 && <Card title="工具调用轨迹" className="workspace-run-trace">
+          <div className="workspace-tool-trace"><ol>{chatOutput.tool_calls.map((call, index) => <li key={`${call.tool_name}-${index}`}>
+            <span className="workspace-trace-dot" aria-hidden="true" /><div><code>{call.tool_name}</code><span>{{ success: '调用成功', error: '调用失败', failed: '调用失败', denied: '调用被拒绝', blocked: '调用被阻止' }[call.status] || call.status || '未记录状态'}</span>{call.latency_ms != null && <span className="workspace-mono">{call.latency_ms} ms</span>}{call.error && <span>{call.error}</span>}</div>
+          </li>)}</ol></div>
+        </Card>}
+      </aside>
     </section>;
 }

@@ -1,7 +1,8 @@
 import '../styles/pages/workspace.css';
 import React, { useMemo } from 'react';
-import { AlertCircle, ChevronRight, Inbox, MessageSquare, RefreshCw, Search } from 'lucide-react';
+import { AlertCircle, Inbox, MessageSquare, Search } from 'lucide-react';
 import { DEPARTMENT_LABELS, translateDepartment, translatePriority, translateSentiment, translateStatus, translateSubject } from '../i18n';
+import { Badge, Button, EmptyState, Skeleton } from './ui';
 import { filterTickets } from './ticketFilters';
 import { updateRouteParams } from '../navigation';
 export default function TicketList({
@@ -82,45 +83,30 @@ export default function TicketList({
       </div>
 
       <div className="ticket-list" aria-live="polite">
-        {loading && tickets.length === 0 ? <div className="queue-empty queue-request-state">
-            <RefreshCw className="spin" size={28} />
-            <strong>正在加载待处理工单</strong>
-            <span>请稍候……</span>
-          </div> : error ? <div className="queue-empty queue-request-state error" role="alert">
-            <AlertCircle size={28} />
-            <strong>工单队列加载失败</strong>
-            <span>{error}</span>
-            <button type="button" className="btn btn-secondary" onClick={onRetry}>重试</button>
-          </div> : filteredTickets.length === 0 ? <div className="queue-empty">
-            <Inbox size={28} />
-            <strong>{tickets.length === 0 ? '暂无待处理工单' : '没有匹配的工单'}</strong>
-            <span>{tickets.length === 0 ? 'Agent 发现异常或需要审批时会自动加入这里' : '请调整搜索词、部门、优先级或情绪筛选'}</span>
-          </div> : filteredTickets.map(ticket => {
+        {loading && tickets.length === 0 ? <div className="workspace-skeleton" role="status">
+            <span className="sr-only">正在加载待处理工单，请稍候</span>
+            {[0, 1, 2].map(index => <div className="queue-skeleton-row" key={index}><Skeleton width="45%" /><Skeleton height={20} /><Skeleton /><Skeleton width="65%" /></div>)}
+          </div> : error ? <EmptyState className="queue-request-state" role="alert" icon={<AlertCircle size={28} />} title="工单队列加载失败" description={error} actions={<Button onClick={onRetry}>重试</Button>} />
+          : filteredTickets.length === 0 ? <EmptyState icon={<Inbox size={28} />} title={tickets.length === 0 ? '暂无待处理工单' : '没有匹配的工单'} description={tickets.length === 0 ? 'Agent 发现异常或需要审批时会自动加入这里' : '请调整搜索词、部门、优先级或情绪筛选'} /> : filteredTickets.map(ticket => {
         const isSelected = ticket.id === selectedId;
         const priority = ticket.priority || 'medium';
         const status = ticket.status || 'open';
         return <button type="button" key={ticket.id} className={`ticket-row ${isSelected ? 'selected' : ''}`} onClick={() => onSelect(ticket)} aria-pressed={isSelected}>
-              <span className={`priority-rail priority-${priority}`} />
               <span className="ticket-row-body">
                 <span className="ticket-row-meta">
-                  <span>#{ticket.id}</span>
+                  <span className="workspace-mono">#{ticket.id}</span>
                   <span>{ticket.customer_id}</span>
-                  <span className={`status-dot status-${status}`} />
-                  <span>{translateStatus(status)}</span>
-                  {ticket.requires_tool_review && <span>业务待核实</span>}
                 </span>
                 <strong>{translateSubject(ticket.subject)}</strong>
                 <span className="ticket-row-preview">{ticket.description || '未填写问题描述'}</span>
                 <span className="ticket-row-footer">
-                  <span>{translateDepartment(ticket.department)}</span>
-                  <span className={`mini-priority priority-text-${priority}`}>
-                    {['urgent', 'high'].includes(priority) && <AlertCircle size={12} />}
-                    {translatePriority(priority)}优先级
-                  </span>
-                  <span><MessageSquare size={12} /> {translateSentiment(ticket.sentiment)}</span>
+                  <Badge tone={status === 'resolved' ? 'success' : status === 'pending_approval' ? 'accent' : 'neutral'}>{translateStatus(status)}</Badge>
+                  <Badge tone={['urgent', 'high'].includes(priority) ? 'warning' : 'neutral'}>{translatePriority(priority)}优先级</Badge>
+                  {ticket.requires_tool_review && <Badge tone="accent">业务待核实</Badge>}
+                  <Badge>{translateDepartment(ticket.department)}</Badge>
+                  <Badge><MessageSquare size={12} />{translateSentiment(ticket.sentiment)}</Badge>
                 </span>
               </span>
-              <ChevronRight className="ticket-row-arrow" size={17} />
             </button>;
       })}
       </div>
