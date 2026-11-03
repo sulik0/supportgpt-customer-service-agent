@@ -4,6 +4,7 @@ import time
 from typing import Any, Dict
 
 from src.decision import decision_service
+from src.agents.record_queries import requested_record_tool
 from src.agents.scope import has_support_topic, out_of_scope_reason, scope_context_updates
 from src.guardrails.jailbreak_detection import detect_jailbreak
 from src.guardrails.pii_detection import anonymize_pii
@@ -304,7 +305,8 @@ class TicketAnalyzerAgent:
         candidates: list[IntentType] = []
         if _BILLING_DOMAIN.search(normalized):
             candidates.append(IntentType.BILLING_DISPUTE)
-            if _ORDER_STATUS.search(normalized):
+            # 查询订单的发票不是物流请求；保留明确的订单状态/物流歧义。
+            if _ORDER_STATUS.search(normalized.replace("查询订单", "订单")):
                 candidates.append(IntentType.ORDER_STATUS)
         elif _API_INCIDENT.search(normalized):
             candidates.append(IntentType.OUTAGE_REPORT)
@@ -317,7 +319,10 @@ class TicketAnalyzerAgent:
                 candidates.append(IntentType.ORDER_STATUS)
             if _ACCOUNT_INCIDENT.search(normalized):
                 candidates.append(IntentType.ACCOUNT_SUPPORT)
-            if _WARRANTY_ACTION.search(normalized):
+            if (
+                _WARRANTY_ACTION.search(normalized)
+                or requested_record_tool(normalized) == "warranty.get_entitlements"
+            ):
                 candidates.append(IntentType.WARRANTY_CLAIM)
             if _FEEDBACK.search(normalized):
                 candidates.append(IntentType.FEEDBACK)
