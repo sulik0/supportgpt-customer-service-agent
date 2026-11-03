@@ -2,6 +2,7 @@ import React, { useId, useState } from 'react';
 import { ArrowRight, CheckCircle2, RotateCcw, ShieldCheck } from 'lucide-react';
 import { ACTION_STATES, ACTION_TRANSITIONS, FAULT_SCENARIOS, PARTICIPANTS, diagramEdges, outgoingTransitions, stateLabel } from './toolGovernanceDemo.js';
 import './tool-governance-diagram.css';
+import { Badge, Button, Chip } from './ui';
 
 const STATES_BY_ID = Object.fromEntries(ACTION_STATES.map((item) => [item.id, item]));
 const EDGES = diagramEdges();
@@ -32,7 +33,7 @@ function StateMachine({ selected, onSelect }) {
       <title id={`${markerId}-title`}>高风险 Action 完整状态机</title>
       <desc id={`${markerId}-desc`}>包括操作审批、执行、未知结果对账、人工确认和补偿。点击状态查看可执行命令；下方的迁移清单提供等价文字说明。</desc>
       <defs><marker id={markerId} viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse"><path d="M 0 0 L 10 5 L 0 10 z" fill="context-stroke" /></marker></defs>
-      <rect x="8" y="12" width="1284" height="135" rx="12" className="tg-stage-background" />
+      <rect x="8" y="12" width="1284" height="135" className="tg-stage-background" />
       <text x="24" y="34" className="tg-stage-title">① 申请 → 独立审批 → 异步执行</text>
       <text x="620" y="378" className="tg-stage-title">② 结果不确定 → 查询实际结果 / 人工核实</text>
       <text x="985" y="582" className="tg-stage-title">③ 成功后单独发起补偿</text>
@@ -40,9 +41,10 @@ function StateMachine({ selected, onSelect }) {
       {ACTION_STATES.map((item) => {
         const manualOnly = item.id === 'compensation_unknown';
         const terminal = outgoingTransitions(item.id).length === 0;
-        return <g key={item.id} role="button" tabIndex={0} aria-label={`${item.label}，${item.id}`} aria-pressed={selected === item.id} className={`tg-state ${selected === item.id ? 'is-selected' : ''} ${terminal ? 'is-terminal' : ''} ${item.id.includes('failed') || item.id === 'rejected' ? 'is-negative' : ''} ${manualOnly || item.id === 'unknown' ? 'needs-attention' : ''}`} onClick={() => onSelect(item.id)} onKeyDown={(event) => { if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); onSelect(item.id); } }}>
-          <rect x={item.x - 92} y={item.y - 34} width="184" height="68" rx="9" />
-          <text x={item.x} y={item.y - 4} textAnchor="middle" className="tg-state-label">{item.label}</text>
+        return <g key={item.id} role="button" tabIndex={0} aria-label={`${item.label}，${item.id}`} aria-pressed={selected === item.id} className={`tg-state ${selected === item.id ? 'is-selected' : ''} ${terminal ? 'is-terminal' : ''} ${item.id.includes('failed') || item.id === 'rejected' ? 'is-negative' : ''} ${manualOnly || item.id === 'unknown' || item.id === 'pending_approval' || item.id === 'compensation_pending' ? 'needs-attention' : ''} ${item.id === 'succeeded' || item.id === 'compensated' ? 'is-success' : ''}`} onClick={() => onSelect(item.id)} onKeyDown={(event) => { if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); onSelect(item.id); } }}>
+          <rect x={item.x - 92} y={item.y - 34} width="184" height="68" className="tg-state-card" />
+          <rect x={item.x - 80} y={item.y - 25} width="160" height="26" className="tg-state-badge" />
+          <text x={item.x} y={item.y - 7} textAnchor="middle" className="tg-state-label">{item.label}</text>
           <text x={item.x} y={item.y + 18} textAnchor="middle" className="tg-state-code">{item.id}</text>
         </g>;
       })}
@@ -59,7 +61,7 @@ function SequenceChart({ scenario, currentStep }) {
     <svg className="tg-sequence-svg" viewBox={`0 0 1280 ${height}`} role="img" aria-labelledby={`${markerId}-title`}>
       <title id={`${markerId}-title`}>{scenario.title}：参与者之间的消息时序</title>
       <defs><marker id={markerId} viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto"><path d="M 0 0 L 10 5 L 0 10 z" fill="context-stroke" /></marker></defs>
-      {PARTICIPANTS.map((label, index) => <g key={label}><rect x={x(index) - 94} y="12" width="188" height="42" rx="7" className="tg-participant" /><text x={x(index)} y="38" textAnchor="middle" className="tg-state-label">{label}</text><line x1={x(index)} y1="54" x2={x(index)} y2={height - 22} className="tg-lifeline" /></g>)}
+      {PARTICIPANTS.map((label, index) => <g key={label}><rect x={x(index) - 94} y="12" width="188" height="42" className="tg-participant" /><text x={x(index)} y="38" textAnchor="middle" className="tg-state-label">{label}</text><line x1={x(index)} y1="54" x2={x(index)} y2={height - 22} className="tg-lifeline" /></g>)}
       {scenario.steps.map((item, index) => {
         const y = 105 + index * 80;
         const fromX = x(item.from);
@@ -68,7 +70,7 @@ function SequenceChart({ scenario, currentStep }) {
         const direction = Math.sign(toX - fromX);
         const path = self ? `M ${fromX} ${y} h 64 v 24 h -60` : `M ${fromX} ${y} L ${toX - direction * 5} ${y}`;
         return <g key={index} className={`tg-message ${index === currentStep ? 'is-current' : ''} ${index > currentStep ? 'is-future' : ''}`}>
-          {index === currentStep && <rect x="6" y={y - 32} width="1268" height="65" rx="7" className="tg-sequence-highlight" />}
+          {index === currentStep && <rect x="6" y={y - 32} width="1268" height="65" className="tg-sequence-highlight" />}
           <path d={path} markerEnd={`url(#${markerId})`} />
           <text x={self ? fromX - 8 : (fromX + toX) / 2} y={y - 12} textAnchor={self ? 'end' : 'middle'}>{index + 1}. {item.text}</text>
         </g>;
@@ -87,7 +89,7 @@ export default function ToolGovernanceDiagram() {
 
   return <div className="tg-demo">
     <section className="tg-panel">
-      <div className="wf-section-heading"><div><h2>先分清四类记录</h2><p>同一笔业务可以有多个执行或对账消息。消息投递成功，不代表业务操作成功。</p></div><span className="wf-demo-label">静态演示 · 不连接真实业务</span></div>
+      <div className="wf-section-heading"><div><h2>先分清四类记录</h2><p>同一笔业务可以有多个执行或对账消息。消息投递成功，不代表业务操作成功。</p></div><Badge className="wf-demo-label">静态演示 · 不连接真实业务</Badge></div>
       <div className="tg-relationship-grid">
         {[
           ['Action', '这笔业务目前是什么结果？', '保存操作参数、审批、业务状态、版本和审计事件。跨工单的相同整单退款申请复用同一个 Action。'],
@@ -116,12 +118,12 @@ export default function ToolGovernanceDiagram() {
 
     <section className="tg-panel">
       <div className="wf-section-heading"><div><h2>故障发生后，四类记录怎样一起变化？</h2><p>选择场景，逐步查看消息顺序和每一步保存的状态。这里的 v1 / v2 是示意，不是固定数据库版本。</p></div></div>
-      <div className="wf-tabs">{Object.entries(FAULT_SCENARIOS).map(([key, item]) => <button type="button" key={key} className={scenarioKey === key ? 'active' : ''} aria-pressed={scenarioKey === key} onClick={() => { setScenarioKey(key); setCurrentStep(0); }}>{item.title}</button>)}</div>
-      <div className="wf-example"><div><small>场景说明</small><p>{scenario.summary}</p></div><div className="wf-controls"><button type="button" className="btn btn-secondary" onClick={() => setCurrentStep(0)}><RotateCcw size={15} /> 重置</button><button type="button" className="btn btn-primary" disabled={currentStep === scenario.steps.length - 1} onClick={() => setCurrentStep((index) => Math.min(index + 1, scenario.steps.length - 1))}>{currentStep === scenario.steps.length - 1 ? '演示完成' : '下一步'}<ArrowRight size={15} /></button></div></div>
+      <div className="wf-tabs">{Object.entries(FAULT_SCENARIOS).map(([key, item]) => <Chip key={key} selected={scenarioKey === key} onClick={() => { setScenarioKey(key); setCurrentStep(0); }}>{item.title}</Chip>)}</div>
+      <div className="wf-example"><div><small>场景说明</small><p>{scenario.summary}</p></div><div className="wf-controls"><Button onClick={() => setCurrentStep(0)}><RotateCcw size={15} /> 重置</Button><Button tone="primary" disabled={currentStep === scenario.steps.length - 1} onClick={() => setCurrentStep((index) => Math.min(index + 1, scenario.steps.length - 1))}>{currentStep === scenario.steps.length - 1 ? '演示完成' : '下一步'}<ArrowRight size={15} /></Button></div></div>
       <div className="tg-snapshot" role="status" aria-live="polite">{[['Action', `${stateLabel(current.action)} · ${current.action}`], ['Outbox', current.outbox], ['Worker Lease', current.lease], ['Review', current.review]].map(([name, value]) => <div key={name}><span>{name}</span><strong>{value}</strong></div>)}</div>
       <p className="tg-current-note"><CheckCircle2 size={17} /><span>第 {currentStep + 1} / {scenario.steps.length} 步：{current.note}</span></p>
       <SequenceChart scenario={scenario} currentStep={currentStep} />
-      <ol className="tg-step-list" aria-label="选择时序步骤">{scenario.steps.map((item, index) => <li key={index}><button type="button" aria-current={currentStep === index ? 'step' : undefined} onClick={() => setCurrentStep(index)}><span>{index + 1}</span><div><strong>{item.text}</strong><small>{PARTICIPANTS[item.from]} → {PARTICIPANTS[item.to]}</small></div></button></li>)}</ol>
+      <ol className="tg-step-list" aria-label="选择时序步骤">{scenario.steps.map((item, index) => <li key={index}><button type="button" className={index < currentStep ? 'is-complete' : ''} aria-current={currentStep === index ? 'step' : undefined} onClick={() => setCurrentStep(index)}><span>{index + 1}</span><div><strong>{item.text}</strong><small>{PARTICIPANTS[item.from]} → {PARTICIPANTS[item.to]}</small></div></button></li>)}</ol>
     </section>
 
     <section className="tg-panel tg-boundaries"><h2>讲解时需要说明的实现边界</h2><ul><li>去重当前只覆盖同一客户、同一订单的整单退款申请；失败或拒绝后不会自动创建第二个申请。</li><li>PostgreSQL 16 多进程演练已验证并发申请、慢调用续租、外部成功后进程崩溃及旧凭证失效。外部系统使用持久化 Mock，不等于真实支付或 OMS 验收。</li><li>Lease 和 Fencing 保护本地状态，不能撤销已发出的外部请求。真实接口仍需支持幂等键与可靠的结果查询，不能宣称分布式 Exactly Once。</li><li>DLQ 不是业务失败。人工确认必须查证外部事实；当前系统保存证据和审计记录，不自动验证外部凭证真伪。</li><li>当前已 resolved 的 Review 不会自动重新打开。如果原操作曾经对账关闭核实任务，后续补偿又出现未知结果，这个重复核实场景仍需要完善。本次只展示现有实现，不修改业务行为。</li><li>页面为代码对应的流程说明，不读取线上任务、客户资料或真实租约，不提供审批、重试或退款按钮。</li></ul></section>

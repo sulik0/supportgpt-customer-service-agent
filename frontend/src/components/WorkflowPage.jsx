@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { ArrowDown, ArrowLeft, ArrowRight, CheckCircle2, Database, GitBranch, Layers, RotateCcw, ShieldCheck } from 'lucide-react';
 import './workflow.css';
+import { Badge, Button, Chip, MetricCard } from './ui';
 import ToolGovernanceDiagram from './ToolGovernanceDiagram';
 
 // 演示配置对应当前 graph.py；不执行 Agent，也不读取真实客户数据。
@@ -156,31 +157,31 @@ export default function WorkflowPage({
     const parentActive = branch && visited.includes('context_enrichment');
     const skipped = step >= 0 && !scenario.path.includes(branch ? 'context_enrichment' : key);
     return <button type="button" className={`wf-node ${selected === key ? 'is-selected' : ''} ${visited.includes(key) || parentActive ? 'is-visited' : ''} ${current === key ? 'is-current' : ''} ${skipped ? 'is-skipped' : ''}`} onClick={() => setSelected(key)} aria-pressed={selected === key}>
-      <span className="wf-node-top"><code>{node.code}</code>{(visited.includes(key) || parentActive) && <CheckCircle2 size={15} aria-label="演示已走到这一步" />}</span>
+      <span className="wf-node-top"><span className="wf-step-number" aria-hidden="true">{branch ? (key === 'tooling' ? '4a' : '4b') : STAGES.indexOf(key) + 1}</span><code>{node.code}</code>{(visited.includes(key) || parentActive) && <CheckCircle2 size={15} aria-label="演示已走到这一步" />}</span>
       <strong>{node.name}</strong><span>{node.summary}</span>
       {skipped && <em className="wf-skipped-label">这个场景不执行此步骤</em>}
       {key === 'context_enrichment' && <em>以下两类查询同时执行 ↓</em>}
     </button>;
   }
-  return <section className="wf-page">
-    {onBack && <button className="wf-back" type="button" onClick={onBack}><ArrowLeft size={16} /> 返回用户咨询</button>}
-    <div className="wf-hero"><div><span className="wf-eyebrow"><GitBranch size={16} /> SupportGPT 智能客服 Agent · 处理流程演示</span><Heading>{view === 'workflow' ? '用户提问后，Agent 怎样完成处理？' : '高风险操作怎样审批、执行和恢复？'}</Heading><p>{view === 'workflow' ? 'Agent 先理解问题，再查询业务和知识、生成并检查回复，最后决定直接返回结果还是等待人工确认。' : '通过状态机和故障时序，查看 Action、Outbox、Worker Lease 与 Review 如何共同保护一笔业务操作。'}</p></div><span className="wf-demo-label">Demo · 静态演示，不会实际运行 Agent</span></div>
+  return <section className={`wf-page ${embedded ? 'wf-embedded' : 'wf-standalone'}`}>
+    {onBack && <Button className="wf-back" onClick={onBack}><ArrowLeft size={16} /> 返回用户咨询</Button>}
+    <div className="wf-hero"><div><span className="wf-eyebrow"><GitBranch size={16} /> SupportGPT 智能客服 Agent · 处理流程演示</span><Heading>{view === 'workflow' ? '用户提问后，Agent 怎样完成处理？' : '高风险操作怎样审批、执行和恢复？'}</Heading><p>{view === 'workflow' ? 'Agent 先理解问题，再查询业务和知识、生成并检查回复，最后决定直接返回结果还是等待人工确认。' : '通过状态机和故障时序，查看 Action、Outbox、Worker Lease 与 Review 如何共同保护一笔业务操作。'}</p></div><Badge className="wf-demo-label">Demo · 静态演示，不会实际运行 Agent</Badge></div>
     <nav className="wf-view-switch" aria-label="选择架构演示"><button type="button" aria-pressed={view === 'workflow'} onClick={() => setView('workflow')}>Agent 处理流程</button><button type="button" aria-pressed={view === 'governance'} onClick={() => setView('governance')}>高风险操作与故障恢复</button></nav>
     {view === 'governance' ? <ToolGovernanceDiagram /> : <>
-    <div className="wf-overview">{[['7', 'LangGraph 流程节点'], ['6', 'Skill 处理能力'], ['9', '已注册的业务工具'], ['OTel', '记录调用过程与运行指标']].map(([value, label]) => <div key={label}><strong>{value}</strong><span>{label}</span></div>)}</div>
+    <div className="wf-overview">{[['7', 'LangGraph 流程节点'], ['6', 'Skill 处理能力'], ['9', '已注册的业务工具'], ['OTel', '记录调用过程与运行指标']].map(([value, label]) => <MetricCard key={label} label={label} value={value} />)}</div>
     <section className="wf-scenarios" aria-label="演示场景">
       <div className="wf-section-heading"><div><h2>选一个场景，逐步查看系统怎样处理</h2><p>点击“下一步”查看处理顺序。演示只在当前页面运行，不向后端提交请求，不调用模型，也不展示真实客户数据或耗时。</p></div></div>
-      <div className="wf-tabs">{Object.entries(SCENARIOS).map(([key, item]) => <button type="button" key={key} aria-pressed={key === scenarioKey} className={key === scenarioKey ? 'active' : ''} onClick={() => {
+      <div className="wf-tabs">{Object.entries(SCENARIOS).map(([key, item]) => <Chip key={key} selected={key === scenarioKey} onClick={() => {
             setScenarioKey(key);
             setStep(-1);
             setSelected('analyzer');
-          }}>{item.title}</button>)}</div>
-      <div className="wf-example"><div><small>示例输入</small><p>{scenario.question}</p></div><div className="wf-controls"><button type="button" className="btn btn-secondary" onClick={() => {
+          }}>{item.title}</Chip>)}</div>
+      <div className="wf-example"><div><small>示例输入</small><pre>{scenario.question}</pre></div><div className="wf-controls"><Button onClick={() => {
               setStep(-1);
               setSelected('analyzer');
-            }}><RotateCcw size={15} /> 重置</button><button type="button" className="btn btn-primary" onClick={nextStep} disabled={finished}>{step < 0 ? '开始演示' : finished ? '演示完成' : '下一步'}<ArrowRight size={15} /></button></div></div>
+            }}><RotateCcw size={15} /> 重置</Button><Button tone="primary" onClick={nextStep} disabled={finished}>{step < 0 ? '开始演示' : finished ? '演示完成' : '下一步'}<ArrowRight size={15} /></Button></div></div>
       <p className="wf-scenario-result" role="status">{step < 0 ? scenario.result : `当前步骤：${NODES[current].name}（${step + 1} / ${scenario.path.length}）${finished ? '。' + scenario.result : '。点击节点可查看输入、输出和设计说明。'}`}</p>
-      <div className="wf-path" aria-label="当前场景路径">{scenario.path.map((key, index) => <React.Fragment key={key}>{index > 0 && <ArrowRight size={12} />}<span className={current === key ? 'current' : visited.includes(key) ? 'visited' : ''}>{NODES[key].name}</span></React.Fragment>)}</div>
+      <div className="wf-path" aria-label="当前场景路径">{scenario.path.map((key, index) => <React.Fragment key={key}>{index > 0 && <ArrowRight size={12} />}<Badge tone={current === key ? 'accent' : visited.includes(key) ? 'success' : 'neutral'} className={current === key ? 'current' : visited.includes(key) ? 'visited' : ''}>{NODES[key].name}</Badge></React.Fragment>)}</div>
     </section>
     <div className="wf-layout">
       <section className="wf-graph" aria-label="完整 Workflow 架构图"><div className="wf-section-heading"><h2><GitBranch size={18} /> 完整处理流程</h2><span>点击节点查看详情</span></div>
@@ -192,7 +193,7 @@ export default function WorkflowPage({
           {key === 'approval_gate' && <div className="wf-approval"><Database size={17} /><div><strong>需要审批，且已启用持久执行</strong><p>暂停任务 → 保存检查点 → 人工通过、修改或拒绝回复 → 恢复任务</p><small>回复审批和退款等高风险工具操作的审批分开进行。</small></div></div>}
         </React.Fragment>)}</div>
       </section>
-      <aside className="wf-details" aria-label="节点详情"><div className="wf-detail-card"><span className="wf-eyebrow">节点说明</span><h2>{detail.name}</h2><code>{detail.code}</code><div className="wf-tags">{detail.tags.map(tag => <span key={tag}>{tag}</span>)}</div><dl><dt>接收什么</dt><dd>{detail.input}</dd><dt>产生什么</dt><dd>{detail.output}</dd><dt>为什么这样处理</dt><dd>{detail.design}</dd></dl></div>
+      <aside className="wf-details" aria-label="节点详情"><div className="wf-detail-card"><span className="wf-eyebrow">节点说明</span><h2>{detail.name}</h2><code>{detail.code}</code><div className="wf-tags">{detail.tags.map(tag => <Badge key={tag}>{tag}</Badge>)}</div><dl><dt>接收什么</dt><dd><pre>{detail.input}</pre></dd><dt>产生什么</dt><dd><pre>{detail.output}</pre></dd><dt>为什么这样处理</dt><dd>{detail.design}</dd></dl></div>
         <div className="wf-detail-card"><h3><Layers size={17} /> 节点之间传递什么？</h3><p>各节点通过 AgentState（流程状态）共享问题分类、所用 Skill、查询资料、文档引用、回复草稿和检查结果。Checkpoint（检查点）保存流程进度；工单、AgentRun（运行记录）、审批和工具调用记录另存到数据库。</p></div>
         <div className="wf-detail-card wf-boundary"><h3>这个演示不代表什么？</h3><p>页面按当前代码展示流程，所选场景只是示例。真实请求执行哪些步骤，仍由用户问题、后端配置、风险和回复质量决定。</p><p>工具使用本地 Mock（模拟数据），模型和 Jev 是否启用取决于后端配置。仓库提供 16 篇初始化知识文档，但当前部署不一定已导入全部文档。</p></div>
       </aside>
