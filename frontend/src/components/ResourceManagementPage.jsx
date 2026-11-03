@@ -1,10 +1,11 @@
 import '../styles/pages/resources.css';
 import { friendlyError } from '../errors';
 import React, { useEffect, useMemo, useState } from 'react';
-import { AlertTriangle, BookOpen, CheckCircle2, FileCode2, Plus, RefreshCw, Save, Settings2, ShieldCheck, Trash2, Wrench } from 'lucide-react';
+import { BookOpen, FileCode2, Plus, RefreshCw, Save, ShieldCheck, Trash2, Wrench } from 'lucide-react';
 import { createPromptCandidate, deleteAdminRagDocument, fetchAdminPrompts, fetchAdminRagDocuments, fetchAdminTools, reindexAdminRagDocuments, saveAdminRagDocument, updateAdminTool } from '../api/client';
 import { translateRisk, translateRole } from '../i18n';
 import { updateRouteParams } from '../navigation';
+import { Badge, Button, Card, EmptyState, Notice, Skeleton } from './ui';
 import { useConfirm, useUnsavedChanges } from './uiHooks';
 const EMPTY_DOCUMENT = {
   id: '',
@@ -267,19 +268,14 @@ export default function ResourceManagementPage({
       {confirmation}
       <div className="resource-hero">
         <div>
-          <span className="resource-eyebrow"><ShieldCheck size={14} /> 管理员专属</span>
-          <h2>管理工具、提示词和知识文档</h2>
-          <p>管理员可以启停工具、创建提示词候选版本，以及编辑知识文档。工具权限和提示词发布规则仍按现有配置执行。</p>
+          <p>管理员可启停工具、创建提示词候选版本及编辑知识文档；权限与发布规则保持不变。</p>
         </div>
-        <button className="btn btn-secondary" onClick={() => loadResources()} disabled={loading || Boolean(busyKey)}>
+        <Button tone="secondary" onClick={() => loadResources()} disabled={loading || Boolean(busyKey)}>
           <RefreshCw size={15} className={loading ? 'spin' : ''} /> 刷新当前列表
-        </button>
+        </Button>
       </div>
 
-      {notice && <div className={`resource-notice ${notice.type}`} role={notice.type === 'error' ? 'alert' : 'status'}>
-          {notice.type === 'success' ? <CheckCircle2 size={16} /> : <AlertTriangle size={16} />}
-          {notice.text}
-        </div>}
+      {notice && <Notice tone={notice.type}>{notice.text}</Notice>}
 
       <div className="resource-tabs" role="tablist" aria-label="资源类型">
         {[['tools', '业务工具', Wrench, tools.length], ['prompts', '提示词版本', FileCode2, prompts?.bundles?.length], ['rag', '知识文档', BookOpen, documents.length]].map(([tab, label, Icon, count], index) => <button key={tab} id={`resource-tab-${tab}`} role="tab" aria-selected={activeTab === tab} aria-controls={`resource-panel-${tab}`} tabIndex={activeTab === tab ? 0 : -1} className={activeTab === tab ? 'active' : ''} disabled={Boolean(busyKey)} onClick={() => changeTab(tab)} onKeyDown={event => {
@@ -292,8 +288,8 @@ export default function ResourceManagementPage({
       }}><Icon size={16} />{label}<span>{loaded[tab] ? count : '—'}</span></button>)}
       </div>
 
-      {loading ? <div className="resource-loading"><RefreshCw className="spin" /> 正在加载资源…</div> : null}
-      {loadError && <div className="ui-notice notice-error" role="alert">{loadError}<button className="btn btn-secondary" onClick={() => loadResources()}>重试</button></div>}
+      {loading ? <Card className="resource-loading-card"><div className="resource-skeleton" role="status"><span className="sr-only">正在加载资源…</span><Skeleton height={24} width="40%" />{[0, 1, 2].map(index => <div className="resource-skeleton-row" key={index}><Skeleton height={20} /><Skeleton width="65%" /><Skeleton width="85%" /></div>)}</div></Card> : null}
+      {loadError && <Notice><div className="resource-notice-content"><span>{loadError}</span><Button tone="secondary" onClick={() => loadResources()}>重试</Button></div></Notice>}
       {!loading && !loadError && ['tools', 'rag'].includes(activeTab) && <label className="resource-search">筛选当前列表<input value={query} onChange={event => setQuery(event.target.value)} placeholder={activeTab === 'tools' ? '工具名称或说明' : '文档标题、类别、版本或 ID'} /></label>}
 
       {!loading && !loadError && activeTab === 'tools' && <div className="resource-section" role="tabpanel" id="resource-panel-tools" aria-labelledby="resource-tab-tools">
@@ -302,7 +298,7 @@ export default function ResourceManagementPage({
             <div><span>已启用</span><strong>{toolStats.enabled}</strong></div>
             <div><span>高风险</span><strong>{toolStats.highRisk}</strong></div>
           </div>
-          <div className="data-table-wrap">
+          <div className="resource-table-wrap" role="region" aria-label="业务工具表格" tabIndex={0}>
             <table className="data-table tool-table"><caption className="sr-only">已注册业务工具及权限配置</caption><thead><tr>{['工具与参数', '操作类型', '风险', '最低角色', '版本', '状态', '操作'].map(label => <th key={label} scope="col">{label}</th>)}</tr></thead>
               <tbody>{tools.filter(tool => `${tool.name} ${tool.description}`.toLowerCase().includes(query.toLowerCase())).map(tool => <tr key={tool.name}>
                 <td><code>{tool.name}</code><p>{tool.description}</p><details><summary>参数与意图范围</summary><pre>{JSON.stringify({
@@ -310,11 +306,11 @@ export default function ResourceManagementPage({
                       output: tool.output_schema,
                       allowed_intents: tool.allowed_intents
                     }, null, 2)}</pre></details>{tool.disabled_reason && <p className="tool-disabled-reason">停用原因：{tool.disabled_reason}</p>}</td>
-                <td>{tool.operation_type === 'write' ? '写操作' : '只读查询'}</td><td><span className={`status-badge badge-${tool.risk_level === 'high' ? 'warning' : 'neutral'}`}>{translateRisk(tool.risk_level)}</span></td><td>{translateRole(tool.min_role)}</td><td><code>{tool.version}</code></td><td><span className={`resource-status ${tool.enabled ? 'enabled' : 'disabled'}`}>{tool.enabled ? '已启用' : '已停用'}</span></td>
-                <td><button className={`btn ${tool.enabled ? 'btn-danger-outline' : 'btn-secondary'}`} disabled={Boolean(busyKey)} onClick={() => toggleTool(tool)}>{busyKey === tool.name ? '保存中…' : tool.enabled ? '停用' : '启用'}</button></td>
+                <td>{tool.operation_type === 'write' ? '写操作' : '只读查询'}</td><td><Badge tone={tool.risk_level === 'high' ? 'warning' : 'neutral'}>{translateRisk(tool.risk_level)}</Badge></td><td>{translateRole(tool.min_role)}</td><td><code>{tool.version}</code></td><td><Badge tone={tool.enabled ? 'success' : 'neutral'}>{tool.enabled ? '已启用' : '已停用'}</Badge></td>
+                <td><Button tone={tool.enabled ? 'danger' : 'secondary'} disabled={Boolean(busyKey)} onClick={() => toggleTool(tool)}>{busyKey === tool.name ? '保存中…' : tool.enabled ? '停用' : '启用'}</Button></td>
               </tr>)}</tbody>
             </table>
-            {!tools.some(tool => `${tool.name} ${tool.description}`.toLowerCase().includes(query.toLowerCase())) && <div className="resource-empty">{query ? '没有符合筛选条件的工具，请调整关键词。' : '当前没有已注册工具。'}</div>}
+            {!tools.some(tool => `${tool.name} ${tool.description}`.toLowerCase().includes(query.toLowerCase())) && <EmptyState icon={<Wrench size={28} />} title={query ? '没有符合筛选条件的工具' : '当前没有已注册工具'} description={query ? '请调整关键词。' : undefined} />}
           </div>
         </div>}
 
@@ -322,36 +318,37 @@ export default function ResourceManagementPage({
           <div className="prompt-admin-main">
             <div className="resource-section-heading">
               <div><h3>Prompt Bundle（提示词版本包）</h3><p>每个版本包按内容 Hash（摘要）保存。保存后不能覆盖原版本，需要创建新版本。</p></div>
-              <button className="btn btn-primary" disabled={Boolean(promptDraft) || Boolean(busyKey)} onClick={beginPromptCandidate}><Plus size={15} /> 创建候选版本</button>
+              <Button tone="primary" disabled={Boolean(promptDraft) || Boolean(busyKey)} onClick={beginPromptCandidate}><Plus size={15} /> 创建候选版本</Button>
             </div>
             <div className="prompt-environments">
               {['production', 'staging'].map(environment => {
             const bundle = prompts.effective[environment];
-            return <div key={environment}><span>{environment === 'production' ? '生产环境' : '预发布环境'}</span><strong>{bundle.version}</strong><code>{shortHash(bundle.bundle_id)}</code></div>;
+            return <Card key={environment} className="resource-environment-card"><span>{environment === 'production' ? '生产环境' : '预发布环境'}</span><div className="resource-version-heading"><strong className="resource-mono">{bundle.version}</strong><Badge tone="accent">当前版本</Badge></div><code title={bundle.bundle_id}>{shortHash(bundle.bundle_id)}</code></Card>;
           })}
             </div>
             <div className="prompt-bundle-list">
+              {prompts.bundles.length === 0 && <EmptyState icon={<FileCode2 size={28} />} title="暂无提示词版本包" />}
               {prompts.bundles.map(bundle => <details key={bundle.bundle_id}>
-                  <summary><div><strong>{bundle.version}</strong><code>{shortHash(bundle.bundle_id)}</code></div><span>{Object.keys(bundle.payload.templates).length} 个节点</span></summary>
+                  <summary><div><div className="resource-version-heading"><strong className="resource-mono">{bundle.version}</strong>{bundle.bundle_id === prompts.effective.production.bundle_id && <Badge tone="accent">生产当前版本</Badge>}{bundle.bundle_id === prompts.effective.staging.bundle_id && <Badge tone="accent">预发布当前版本</Badge>}</div><code title={bundle.bundle_id}>{shortHash(bundle.bundle_id)}</code></div><span>{Object.keys(bundle.payload.templates).length} 个节点</span></summary>
                   <pre>{JSON.stringify(bundle.payload, null, 2)}</pre>
                 </details>)}
             </div>
           </div>
 
-          <aside className="prompt-governance-card">
-            <ShieldCheck size={20} /><h3>怎样发布新版本？</h3>
+          <Card className="prompt-governance-card" title="怎样发布新版本？">
+            <ShieldCheck size={20} aria-hidden="true" />
             <p>这个页面只能保存候选版本，不能直接切换生产环境的提示词。发布前，需要通过 EvalOps，在同一测试集上比较当前版本和候选版本，并检查是否符合发布要求。</p>
-          </aside>
+          </Card>
 
           {promptDraft && <form className="prompt-editor" onSubmit={savePrompt}>
-              <div className="resource-section-heading"><div><h3>新建提示词候选版本</h3><p>保存时，后端会检查模板中的占位符是否符合 PromptOps 要求。</p></div><button type="button" className="icon-button" aria-label="关闭候选编辑器" onClick={async () => {
+              <div className="resource-section-heading"><div><h3>新建提示词候选版本</h3><p>保存时，后端会检查模板中的占位符是否符合 PromptOps 要求。</p></div><Button type="button" className="icon-button" aria-label="关闭候选编辑器" onClick={async () => {
             if (await ask({
               title: '放弃候选版本？',
               description: '尚未保存的提示词内容将丢弃。',
               confirmLabel: '放弃修改',
               danger: true
             })) setPromptDraft(null);
-          }} disabled={Boolean(busyKey)}>×</button></div>
+          }} disabled={Boolean(busyKey)}>×</Button></div>
               <label><span>版本标签</span><input value={promptDraft.version} onChange={event => setPromptDraft({
             ...promptDraft,
             version: event.target.value
@@ -363,45 +360,50 @@ export default function ResourceManagementPage({
             }[node]}</legend>
                   {['system', 'user'].map(role => <label key={role}><span>{role === 'system' ? 'System（系统提示词）' : 'User（用户输入模板）'}</span><textarea rows={role === 'system' ? 5 : 3} value={promptDraft.templates[node][role]} onChange={event => updatePromptTemplate(node, role, event.target.value)} required /></label>)}
                 </fieldset>)}
-              <p className="obs-helper">将保存 {promptDraft.version} 的新候选版本，包含 Analyzer、Resolver 与 QA 模板；生产和预发布指针不会改变。</p>
-              <div className="resource-form-actions"><button type="button" className="btn btn-secondary" disabled={Boolean(busyKey)} onClick={async () => {
+              <p className="resource-helper">将保存 {promptDraft.version} 的新候选版本，包含 Analyzer、Resolver 与 QA 模板；生产和预发布指针不会改变。</p>
+              <div className="resource-form-actions"><Button type="button" tone="secondary" disabled={Boolean(busyKey)} onClick={async () => {
             if (await ask({
               title: '放弃候选版本？',
               description: '尚未保存的提示词内容将丢弃。',
               confirmLabel: '放弃修改',
               danger: true
             })) setPromptDraft(null);
-          }}>取消</button><button className="btn btn-primary" disabled={Boolean(busyKey)}><Save size={15} /> {busyKey === 'prompt' ? '正在保存…' : '保存候选版本'}</button></div>
+          }}>取消</Button><Button type="submit" tone="primary" size="lg" disabled={Boolean(busyKey)}><Save size={15} /> {busyKey === 'prompt' ? '正在保存…' : '保存候选版本'}</Button></div>
             </form>}
         </div>}
 
       {!loading && !loadError && activeTab === 'rag' && <div className="resource-section rag-admin-layout" role="tabpanel" id="resource-panel-rag" aria-labelledby="resource-tab-rag">
           <div className="rag-document-list">
-            <div className="resource-section-heading"><div><h3>知识文档</h3><p>数据库保存文档原文，ChromaDB 保存用于检索的向量索引。</p></div><button className="btn btn-secondary" onClick={reindexDocuments} disabled={Boolean(busyKey)}><RefreshCw size={14} className={busyKey === 'reindex' ? 'spin' : ''} /> 重建全部文档索引</button></div>
-            {documents.length === 0 && <div className="resource-empty">还没有知识文档，可以在新建表单中添加第一篇。</div>}
-            {documents.length > 0 && !documents.some(document => `${document.id} ${document.title} ${document.category} ${document.version}`.toLowerCase().includes(query.toLowerCase())) && <div className="resource-empty">没有符合筛选条件的文档，请调整关键词。</div>}
-            {documents.filter(document => `${document.id} ${document.title} ${document.category} ${document.version}`.toLowerCase().includes(query.toLowerCase())).map(document => <article className={editingDocumentId === document.id ? 'selected' : ''} key={document.id}>
-                <button className="rag-document-main" onClick={async () => {
+            <div className="resource-section-heading"><div><h3>知识文档</h3><p>数据库保存文档原文，ChromaDB 保存用于检索的向量索引。</p></div><Button tone="secondary" onClick={reindexDocuments} disabled={Boolean(busyKey)}><RefreshCw size={14} className={busyKey === 'reindex' ? 'spin' : ''} /> 重建全部文档索引</Button></div>
+            {documents.length === 0 && <EmptyState icon={<BookOpen size={28} />} title="还没有知识文档" description="可以在新建表单中添加第一篇。" />}
+            {documents.length > 0 && !documents.some(document => `${document.id} ${document.title} ${document.category} ${document.version}`.toLowerCase().includes(query.toLowerCase())) && <EmptyState icon={<BookOpen size={28} />} title="没有符合筛选条件的文档" description="请调整关键词。" />}
+            {documents.length > 0 && <div className="resource-table-wrap" role="region" aria-label="知识文档表格" tabIndex={0}>
+              <table className="data-table rag-table"><caption className="sr-only">知识文档、分类、版本和操作</caption><thead><tr><th scope="col">文档</th><th scope="col">分类</th><th scope="col">版本</th><th scope="col">操作</th></tr></thead><tbody>
+              {documents.filter(document => `${document.id} ${document.title} ${document.category} ${document.version}`.toLowerCase().includes(query.toLowerCase())).map(document => <tr className={editingDocumentId === document.id ? 'selected' : ''} key={document.id}>
+                <td><Button className="rag-document-main" onClick={async () => {
             if (!dirty || (await ask({
               title: '切换文档？',
               description: '当前文档的未保存修改将丢弃。',
               confirmLabel: '放弃修改',
               danger: true
             }))) beginDocument(document);
-          }} disabled={Boolean(busyKey)}><strong>{document.title}</strong><span>{document.id}</span><p>{document.content.slice(0, 130)}{document.content.length > 130 ? '…' : ''}</p><div><em>{document.category}</em><em>{document.version}</em></div></button>
-                <button className="rag-delete" title="删除文档" aria-label={`删除文档 ${document.title}`} onClick={() => removeDocument(document)} disabled={Boolean(busyKey)}><Trash2 size={15} /></button>
-              </article>)}
+          }} disabled={Boolean(busyKey)} aria-pressed={editingDocumentId === document.id}><strong>{document.title}</strong><code>{document.id}</code><span>{document.content.slice(0, 130)}{document.content.length > 130 ? '…' : ''}</span></Button></td>
+                <td><Badge>{document.category}</Badge></td><td><code>{document.version}</code></td>
+                <td><Button tone="danger" title="删除文档" aria-label={`删除文档 ${document.title}`} onClick={() => removeDocument(document)} disabled={Boolean(busyKey)}><Trash2 size={15} />删除</Button></td>
+              </tr>)}
+              </tbody></table>
+            </div>}
           </div>
 
           <form className="rag-document-editor" onSubmit={saveDocument}>
-            <div className="resource-section-heading"><div><h3>{editingDocumentId ? '编辑文档' : '新建文档'}</h3><p>保存后，系统会将文档分成片段，并更新检索索引。</p></div>{editingDocumentId && <button type="button" className="btn btn-secondary" disabled={Boolean(busyKey)} onClick={async () => {
+            <div className="resource-section-heading"><div><h3>{editingDocumentId ? '编辑文档' : '新建文档'}</h3><p>保存后，系统会将文档分成片段，并更新检索索引。</p></div>{editingDocumentId && <Button type="button" tone="secondary" disabled={Boolean(busyKey)} onClick={async () => {
             if (!dirty || (await ask({
               title: '放弃当前文档修改？',
               description: '将打开空白文档表单，当前未保存的修改不会保留。',
               confirmLabel: '放弃修改',
               danger: true
             }))) beginDocument();
-          }}><Plus size={14} /> 新建</button>}</div>
+          }}><Plus size={14} /> 新建</Button>}</div>
             <fieldset className="resource-form-fields" disabled={Boolean(busyKey)}>
             <div className="rag-form-grid"><label><span>文档 ID</span><input value={documentDraft.id} disabled={Boolean(editingDocumentId)} onChange={event => setDocumentDraft({
                 ...documentDraft,
@@ -420,12 +422,12 @@ export default function ResourceManagementPage({
               ...documentDraft,
               content: event.target.value
             })} required /></label>
-            <label><span>文档附加信息（JSON）</span><textarea rows="5" value={documentDraft.metadata} onChange={event => setDocumentDraft({
+            <label><span>文档附加信息（JSON）</span><textarea className="resource-mono" rows="5" value={documentDraft.metadata} onChange={event => setDocumentDraft({
               ...documentDraft,
               metadata: event.target.value
             })} /></label>
             </fieldset>
-            <div className="resource-form-actions"><button className="btn btn-primary" disabled={Boolean(busyKey)}><Save size={15} /> {busyKey === 'document' ? '正在保存…' : '保存并更新索引'}</button></div>
+            <div className="resource-form-actions"><Button type="submit" tone="primary" size="lg" disabled={Boolean(busyKey)}><Save size={15} /> {busyKey === 'document' ? '正在保存…' : '保存并更新索引'}</Button></div>
           </form>
         </div>}
     </section>;
