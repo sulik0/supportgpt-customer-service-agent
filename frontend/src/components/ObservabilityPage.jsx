@@ -1,10 +1,10 @@
 import '../styles/pages/observability.css';
 import { friendlyError } from '../errors';
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Activity, AlertTriangle, Bot, Check, Clock3, Copy, ExternalLink, RefreshCw, Route, Search, ShieldAlert, Sparkles, X } from 'lucide-react';
+import { Bot, Check, Copy, ExternalLink, RefreshCw, Search, Sparkles } from 'lucide-react';
 import { fetchAgentRun, fetchAgentRuns } from '../api/client';
 import { translatePriority, translateSentiment } from '../i18n';
-import { Overlay } from './ui';
+import { Badge, Button, Card, EmptyState, MetricCard, Notice, Overlay, Skeleton } from './ui';
 import { updateRouteParams } from '../navigation';
 import { formatLatency, summarizeRuns, totalTokens } from './runMetrics';
 const PAGE_SIZE = 20;
@@ -51,7 +51,7 @@ function StrategyBadge({
   value
 }) {
   const normalized = value || 'not_run';
-  return <span className={`obs-strategy strategy-${normalized}`}>{STRATEGY_LABELS[normalized] || normalized}</span>;
+  return <Badge className="obs-strategy">{STRATEGY_LABELS[normalized] || normalized}</Badge>;
 }
 function formatDate(value) {
   if (!value) return '-';
@@ -84,20 +84,13 @@ function runStatus(run) {
     className: 'status-success'
   };
 }
-function SummaryCard({
-  icon,
-  label,
-  value,
-  hint
-}) {
-  return <div className="obs-summary-card glass-card">
-      <span className="obs-summary-icon">{icon}</span>
-      <div>
-        <div className="obs-summary-label">{label}</div>
-        <div className="obs-summary-value">{value}</div>
-        <div className="obs-summary-hint">{hint}</div>
-      </div>
-    </div>;
+function RunSkeleton({ label }) {
+  return <div className="obs-skeleton" role="status">
+    <span className="sr-only">{label}</span>
+    {[0, 1, 2].map(index => <div className="obs-skeleton-row" key={index}>
+      <Skeleton width="35%" /><Skeleton height={24} /><Skeleton width="70%" />
+    </div>)}
+  </div>;
 }
 function RunDetail({
   run,
@@ -111,7 +104,7 @@ function RunDetail({
   if (!run && !loading) return null;
   const snapshot = run?.execution_snapshot;
   const analyzer = snapshot?.analyzer_result || {};
-  return <Overlay title="Agent 运行详情" onClose={onClose} drawer>
+  return <Overlay title="Agent 运行详情" onClose={onClose} className="obs-detail-drawer" drawer>
         <div className="obs-detail-header">
           <div>
             <span className="obs-eyebrow">AgentRun（运行记录）</span>
@@ -119,34 +112,31 @@ function RunDetail({
           </div>
         </div>
 
-        {error ? <div className="ui-dialog-body"><div role="alert">{error}</div><button className="btn btn-secondary" onClick={onRetry}>重新加载</button></div> : loading ? <div className="obs-empty"><RefreshCw className="spin" size={20} /> 正在加载运行详情…</div> : <div className="obs-detail-content">
-            <section className="obs-detail-section">
-              <h3>查看本次调用过程</h3>
+        {error ? <div className="ui-dialog-body"><Notice>{error}</Notice><Button onClick={onRetry}>重新加载</Button></div> : loading ? <RunSkeleton label="正在加载运行详情…" /> : <div className="obs-detail-content">
+            <Card className="obs-detail-section" title="查看本次调用过程">
               <div className="obs-trace-box">
                 <code>{run.trace_id || '本次运行未采集 Trace ID'}</code>
                 {run.trace_id && <button className="obs-icon-button" onClick={() => onCopyTrace(run.trace_id)} title="复制 Trace ID" aria-label="复制 Trace ID">
                     {copiedTrace === run.trace_id ? <Check size={16} /> : <Copy size={16} />}
                   </button>}
               </div>
-              <a className="btn btn-primary obs-link-button" href={LANGSMITH_PROJECT_URL} target="_blank" rel="noreferrer">
+              <a className="btn btn-secondary obs-link-button" href={LANGSMITH_PROJECT_URL} target="_blank" rel="noreferrer">
                 在 LangSmith 中查看 <ExternalLink size={15} />
               </a>
               <p className="obs-helper">打开 LangSmith 项目后，用上方 Trace ID 搜索本次请求，查看各节点和服务调用的详情。</p>
-            </section>
+            </Card>
 
-            <section className="obs-detail-section">
-              <h3>本次执行了哪些步骤？</h3>
+            <Card className="obs-detail-section" title="本次执行了哪些步骤？">
               <p className="obs-helper">这是保存的执行路径，不表示实时进度或精确节点耗时。完整调用过程请查看 LangSmith。</p>
-              <div className="obs-workflow">
-                {(run.workflow_path || []).map((node, index) => <React.Fragment key={`${node}-${index}`}>
-                    <div className="obs-node"><span>{index + 1}</span>{NODE_LABELS[node] || node}</div>
-                    {index < run.workflow_path.length - 1 && <div className="obs-arrow">→</div>}
-                  </React.Fragment>)}
-              </div>
-            </section>
+              {(run.workflow_path || []).length ? <ol className="obs-workflow">
+                {run.workflow_path.map((node, index) => <li className="obs-node" key={`${node}-${index}`}>
+                  <span className="obs-node-index" aria-hidden="true">{index + 1}</span>
+                  <div><strong>{NODE_LABELS[node] || node}</strong><code>{node}</code></div>
+                </li>)}
+              </ol> : <EmptyState title="未记录执行步骤" />}
+            </Card>
 
-            <section className="obs-detail-section">
-              <h3>本次运行的配置与结果</h3>
+            <Card className="obs-detail-section" title="本次运行的配置与结果">
               <dl className="obs-kv-grid">
                 <div><dt>模型</dt><dd>{run.model_provider} / {run.model_name}</dd></div>
                 <div><dt>提示词版本</dt><dd>{run.prompt_version}</dd></div>
@@ -175,34 +165,32 @@ function RunDetail({
                     <div><dt>置信度</dt><dd>{typeof analyzer.confidence === 'number' ? analyzer.confidence.toFixed(2) : '-'}</dd></div>
                   </dl>
                 </div> : <p className="obs-snapshot-unavailable">这是一条旧记录，没有保存 Analyzer 和 QA 当时使用的处理方式。</p>}
-            </section>
+            </Card>
 
-            <section className="obs-detail-section">
-              <h3>工具与引用</h3>
+            <Card className="obs-detail-section" title="工具与引用">
               <div className="obs-compact-list">
                 {(run.tool_calls || []).length ? run.tool_calls.map((tool, index) => <div key={`${tool.tool_name}-${index}`}>
                     <Bot size={15} />
-                    <span>{tool.tool_name || '未命名工具'}</span>
+                    <code>{tool.tool_name || '未命名工具'}</code>
                     <em>{tool.status || '未知'}</em>
-                  </div>) : <p>本次运行没有记录工具调用。</p>}
+                  </div>) : <EmptyState className="obs-tools-empty" title="本次运行没有记录工具调用。" />}
                 {(run.citations || []).map((citation, index) => <div key={`${citation.source}-${index}`}>
                     <Sparkles size={15} />
                     <span>{citation.source || '未命名知识来源'}</span>
                     <em>知识引用</em>
                   </div>)}
               </div>
-            </section>
+            </Card>
 
-            {(run.workflow_errors || []).length > 0 && <section className="obs-detail-section obs-error-section">
-                <h3><AlertTriangle size={16} /> 执行过程中出现的异常</h3>
+            {(run.workflow_errors || []).length > 0 && <Notice>
+                <strong>执行过程中出现的异常</strong>
                 {run.workflow_errors.map((error, index) => <p key={index}>{error}</p>)}
-              </section>}
+              </Notice>}
 
-            <section className="obs-detail-section">
-              <h3>脱敏输入与回复</h3>
-              <div className="obs-text-snapshot"><strong>用户输入</strong><p>{run.input_text}</p></div>
-              <div className="obs-text-snapshot"><strong>Agent 回复</strong><p>{run.output_text}</p></div>
-            </section>
+            <Card className="obs-detail-section" title="脱敏输入与回复">
+              <div className="obs-text-snapshot"><strong>用户输入</strong><pre>{run.input_text}</pre></div>
+              <div className="obs-text-snapshot"><strong>Agent 回复</strong><pre>{run.output_text}</pre></div>
+            </Card>
           </div>}
     </Overlay>;
 }
@@ -312,35 +300,33 @@ export default function ObservabilityPage({
     return () => detailController.current?.abort();
   }, [route?.run]);
   return <section className="observability-page">
-      <div className="obs-hero glass-card">
+      <div className="obs-hero">
         <div>
-          <span className="obs-eyebrow"><Activity size={14} /> Agent 运行监控</span>
-          <h2>查看 Agent 怎样处理每次请求</h2>
-          <p>先查找运行记录，再用 Trace ID 到 LangSmith 查看流程步骤、模型调用、知识检索和工具调用。</p>
+          <h2>查看每次请求的处理记录</h2>
+          <p>查找运行记录，用 Trace ID 到 LangSmith 查看步骤、模型、知识检索和工具调用。</p>
         </div>
         <div className="obs-hero-actions">
           <button className="btn btn-secondary" onClick={loadRuns} disabled={loading}>
             <RefreshCw size={15} className={loading ? 'spin' : ''} /> 刷新
           </button>
-          <a className="btn btn-primary" href={LANGSMITH_PROJECT_URL} target="_blank" rel="noreferrer">
+          <a className="btn btn-secondary" href={LANGSMITH_PROJECT_URL} target="_blank" rel="noreferrer">
             打开 LangSmith <ExternalLink size={15} />
           </a>
         </div>
       </div>
 
-      {!HAS_PROJECT_URL && <div className="obs-config-notice">
-          <ShieldAlert size={17} />
+      {!HAS_PROJECT_URL && <Notice tone="warning">
           尚未配置 LangSmith 项目快捷入口，当前按钮会打开 LangSmith 首页。若本次 Trace 已上报，可复制 Trace ID 并在 LangSmith 中搜索。
-        </div>}
+        </Notice>}
 
       <div className="obs-summary-grid">
-        <SummaryCard icon={<Route size={20} />} label="运行记录数" value={loading || error ? '—' : page.total} hint="符合当前查询条件的记录" />
-        <SummaryCard icon={<Clock3 size={20} />} label="本页平均耗时" value={loading || error ? '—' : formatLatency(summary.averageLatency)} hint={`按本页 ${summary.latencyCount} 条已记录耗时计算`} />
-        <SummaryCard icon={<Bot size={20} />} label="本页 Token 用量" value={loading || error ? '—' : summary.totalTokens?.toLocaleString() ?? '—'} hint="本页已记录的模型输入与输出合计" />
-        <SummaryCard icon={<ShieldAlert size={20} />} label="本页建议人工处理" value={loading || error ? '—' : summary.reviewCount} hint="运行时的判断，不代表工单当前状态" />
+        <MetricCard label="运行记录数" value={loading ? <Skeleton height={35} width="70%" /> : error ? '—' : page.total} hint="符合当前查询条件的记录" />
+        <MetricCard label="本页平均耗时" value={loading ? <Skeleton height={35} width="70%" /> : error ? '—' : formatLatency(summary.averageLatency)} hint={loading || error ? '按本页已记录耗时计算' : `按本页 ${summary.latencyCount} 条已记录耗时计算`} />
+        <MetricCard label="本页 Token 用量" value={loading ? <Skeleton height={35} width="70%" /> : error ? '—' : summary.totalTokens?.toLocaleString() ?? '—'} hint="本页已记录的模型输入与输出合计" />
+        <MetricCard label="本页建议人工处理" value={loading ? <Skeleton height={35} width="70%" /> : error ? '—' : summary.reviewCount} hint="运行时的判断，不代表工单当前状态" />
       </div>
 
-      <div className="obs-runs-card glass-card">
+      <div className="obs-runs-card">
         <div className="obs-table-heading">
           <div>
             <h3>Agent 运行记录</h3>
@@ -357,14 +343,14 @@ export default function ObservabilityPage({
           </div>
         </div>
 
-        {error && <div className="obs-error-banner" role="alert"><AlertTriangle size={17} /> {error}<button className="btn btn-secondary" onClick={loadRuns}>重试</button></div>}
-        {loading ? <div className="obs-empty"><RefreshCw className="spin" size={20} /> 正在加载运行记录…</div> : error ? null : page.items.length === 0 ? <div className="obs-empty">{ticketFilter ? `工单 #${ticketFilter} 还没有运行记录。` : '还没有运行记录。请先在用户咨询页提交一个问题，或创建一张工单。'}</div> : <div className="obs-table-wrap">
+        {error && <div className="obs-list-error"><Notice><span>{error}</span><Button onClick={loadRuns}>重试</Button></Notice></div>}
+        {loading ? <RunSkeleton label="正在加载运行记录…" /> : error ? null : page.items.length === 0 ? <EmptyState title="暂无运行记录" description={ticketFilter ? `工单 #${ticketFilter} 还没有运行记录。` : '还没有运行记录。请先在用户咨询页提交一个问题，或创建一张工单。'} /> : <div className="obs-table-wrap" tabIndex={0} role="region" aria-label="Agent 运行记录，可横向滚动">
             <table className="obs-table">
-              <thead><tr><th scope="col">北京时间（UTC+8）</th><th scope="col">工单</th><th scope="col">运行 / Trace 编号</th><th scope="col">执行步骤</th><th scope="col">回复质量</th><th scope="col">耗时与用量</th><th scope="col">本次结果</th></tr></thead>
+              <thead><tr><th scope="col">北京时间（UTC+8）</th><th scope="col" className="obs-number">工单</th><th scope="col">运行 / Trace 编号</th><th scope="col" className="obs-number">执行步骤</th><th scope="col" className="obs-number">回复质量</th><th scope="col" className="obs-number">耗时</th><th scope="col" className="obs-number">Token</th><th scope="col">本次结果</th></tr></thead>
               <tbody>
                 {page.items.map(run => {
               const status = runStatus(run);
-              return <tr key={run.id} onClick={() => updateRouteParams({
+              return <tr key={run.id} className={route?.run === run.id ? 'is-selected' : ''} onClick={() => updateRouteParams({
                 run: run.id
               }, false)} tabIndex={0} aria-label={`查看运行 ${run.id}`} onKeyDown={event => {
                 if (['Enter', ' '].includes(event.key)) {
@@ -375,12 +361,13 @@ export default function ObservabilityPage({
                 }
               }}>
                       <td>{formatDate(run.created_at)}</td>
-                      <td>{run.ticket_id ? <strong>#{run.ticket_id}</strong> : <span>-</span>}</td>
-                      <td><code>{run.id.slice(0, 8)}</code><small>{run.trace_id ? `Trace ${run.trace_id.slice(0, 10)}…` : '无 Trace ID'}</small></td>
-                      <td><strong>{run.workflow_path?.length || 0} 个步骤</strong><small>{run.model_name}</small></td>
-                      <td><strong>{run.qa_score == null ? '-' : run.qa_score.toFixed(2)}</strong><small>{run.hallucination_detected == null ? '未记录质量判断' : run.hallucination_detected ? '可能缺少依据' : '未发现编造内容'}</small></td>
-                      <td><strong>{formatLatency(run.latency_seconds)}</strong><small>{totalTokens(run)?.toLocaleString() ?? '未记录'} Token</small></td>
-                      <td><span className={`obs-status ${status.className}`}>{status.label}</span></td>
+                      <td className="obs-number obs-mono">{run.ticket_id ? <strong>#{run.ticket_id}</strong> : <span>-</span>}</td>
+                      <td className="obs-mono"><code>{run.id.slice(0, 8)}</code><small>{run.trace_id ? `Trace ${run.trace_id.slice(0, 10)}…` : '无 Trace ID'}</small></td>
+                      <td className="obs-number"><strong>{run.workflow_path?.length || 0} 个步骤</strong><small>{run.model_name}</small></td>
+                      <td className="obs-number"><strong className="obs-mono">{run.qa_score == null ? '-' : run.qa_score.toFixed(2)}</strong><small>{run.hallucination_detected == null ? '未记录质量判断' : run.hallucination_detected ? '可能缺少依据' : '未发现编造内容'}</small></td>
+                      <td className="obs-number obs-mono">{formatLatency(run.latency_seconds)}</td>
+                      <td className="obs-number obs-mono">{totalTokens(run)?.toLocaleString() ?? '未记录'}</td>
+                      <td><Badge tone={status.className === 'status-error' ? 'danger' : status.className === 'status-review' ? 'accent' : 'success'}>{status.label}</Badge></td>
                     </tr>;
             })}
               </tbody>
