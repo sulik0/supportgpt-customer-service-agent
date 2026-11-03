@@ -1,4 +1,5 @@
 import '../styles/pages/support.css';
+import { Button, Chip } from './ui';
 import { friendlyError } from '../errors';
 import React, { useEffect, useRef, useState } from 'react';
 import { AlertTriangle, Bot, CheckCircle2, Clock3, MessagesSquare, GitBranch, RefreshCw, Send, ShieldCheck, Star } from 'lucide-react';
@@ -230,105 +231,118 @@ export default function CustomerSupportPage({
           <span className="customer-eyebrow"><ShieldCheck size={15} /> 智能客服演示</span>
           <h1>您好，需要什么帮助？</h1>
           <p>我可以协助查询订单、退款、账户和售后问题。需要人工确认时，页面会说明原因与处理状态。</p>
-          <div className="customer-capabilities">
-            <span><CheckCircle2 size={15} /> 订单与物流</span>
-            <span><CheckCircle2 size={15} /> 退款与售后</span>
-            <span><CheckCircle2 size={15} /> 账户与技术支持</span>
-          </div>
         </div>
 
-        <div className="support-card">
-          <div className="support-chat-toolbar">
-            <div className="support-form-heading">
-              <span className="support-bot"><Bot size={21} /></span>
-              <div><strong>SupportGPT 智能客服</strong><small>{historyLoading ? '正在加载最近七天对话' : historyError ? '历史对话暂不可用' : '显示最近七天的对话'}</small></div>
-            </div>
-            <button type="button" className="support-new-session" onClick={() => startNewConversation()} disabled={submitting || historyLoading}>
-              <RefreshCw size={14} /> 新对话
-            </button>
-          </div>
-
-          <label className="customer-selector support-customer-selector">
-            <span>Demo · 演示客户</span>
-            <select value={customerId} onChange={event => switchCustomer(event.target.value)} disabled={submitting || historyLoading}>
-              <option value="cust_101">简·多伊（VIP 客户）</option>
-              <option value="cust_102">约翰·史密斯（标准客户）</option>
-              <option value="cust_103">艾克米公司（企业客户）</option>
-              <option value="cust_201">张晓雨（标准客户 · 物流延迟）</option>
-              <option value="cust_202">李明（VIP 客户 · 设备保修）</option>
-              <option value="cust_203">星河科技 / 陈晨（企业客户 · API 与发票）</option>
-            </select>
-          </label>
-
-          {DEMO_CUSTOMER_HINTS[customerId] && <p className="support-privacy">{DEMO_CUSTOMER_HINTS[customerId]}以上客户和记录均为虚构演示数据。</p>}
-
-          <div className="support-conversation" ref={conversationRef} role="log" aria-label="当前对话记录" aria-live="polite" aria-relevant="additions" aria-busy={historyLoading}>
-            {historyLoading ? <div className="support-history-loading"><RefreshCw className="spin" size={16} /> 正在加载最近 7 天的对话记录……</div> : conversation.map((item, index) => {
-            const day = historyDay(item.createdAt);
-            const previousDay = index > 0 ? historyDay(conversation[index - 1].createdAt) : '';
-            return <React.Fragment key={item.id || `${item.role}-${item.ticketId || 'local'}-${index}`}>
-                  {day && day !== previousDay && <div className="support-history-day"><span>{day}</span></div>}
-                  <div className={`support-message ${item.role}`}>
-                    <span>{item.role === 'user' ? '您' : item.role === 'assistant' ? 'AI' : item.role === 'error' ? '异常' : '状态'}</span>
-                    <div>
-                      <p>{item.content}</p>
-                      {(item.ticketId || item.createdAt) && <small>{item.ticketId ? `工单 #${item.ticketId}` : ''}{item.ticketId && item.createdAt ? ' · ' : ''}{historyTime(item.createdAt)}</small>}
-                    </div>
-                  </div>
-                </React.Fragment>;
-          })}
-            {submitting && <div className="support-message status support-typing">
-                <span>AI</span><p><RefreshCw className="spin" size={13} /> 正在处理您的问题……</p>
-              </div>}
-          </div>
-
-          {historyError && <div className="support-history-error" role="alert">
-              <AlertTriangle size={16} />
-              <span>{historyError}</span>
-              <button type="button" onClick={() => loadHistory(customerId)} disabled={submitting || historyLoading}>重试</button>
-            </div>}
-
-          {result?.status === 'pending_human' && <div className={`support-status-panel ${result.handling_reason || 'manual_review'}`} role="status">
-              {result.handling_reason === 'processing_exception' ? <AlertTriangle size={18} /> : <Clock3 size={18} />}
-              <div>
-                <strong>{result.handling_reason === 'risk_review' ? '需要人工确认请求是否安全' : result.handling_reason === 'processing_exception' ? '处理过程中出现了异常' : result.handling_reason === 'quality_review' ? '需要人工检查回复是否可靠' : '已转交人工客服'}</strong>
-                <span>{result.message}</span>
+        <div className="support-layout">
+          <section className="support-card" aria-label="客户咨询">
+            <div className="support-chat-toolbar">
+              <div className="support-form-heading">
+                <span className="support-bot"><Bot size={21} /></span>
+                <div><strong>SupportGPT 智能客服</strong><small>{historyLoading ? '正在加载最近七天对话' : historyError ? '历史对话暂不可用' : '显示最近七天的对话'}</small></div>
               </div>
-            </div>}
+              <label className="customer-selector support-customer-selector">
+                <span>Demo · 演示客户</span>
+                <select value={customerId} onChange={event => switchCustomer(event.target.value)} disabled={submitting || historyLoading}>
+                  <option value="cust_101">简·多伊（VIP 客户）</option>
+                  <option value="cust_102">约翰·史密斯（标准客户）</option>
+                  <option value="cust_103">艾克米公司（企业客户）</option>
+                  <option value="cust_201">张晓雨（标准客户 · 物流延迟）</option>
+                  <option value="cust_202">李明（VIP 客户 · 设备保修）</option>
+                  <option value="cust_203">星河科技 / 陈晨（企业客户 · API 与发票）</option>
+                </select>
+              </label>
+              <Button className="support-new-session" onClick={() => startNewConversation()} disabled={submitting || historyLoading}>
+                <RefreshCw size={14} /> 新对话
+              </Button>
+            </div>
 
-          {result?.status === 'answered' && result.agent_run_id && result.feedback_token && (feedbackState === 'submitted' ? <div className="feedback-success" role="status"><CheckCircle2 size={17} /> 感谢您的评价，将用于改进服务质量。</div> : <form className="support-feedback support-feedback-compact" onSubmit={handleFeedback}>
-                <strong>这次回答对您有帮助吗？</strong>
-                <div className="feedback-rating" aria-label="回答评分">
-                  {[1, 2, 3, 4, 5].map(rating => <button type="button" key={rating} className={feedbackRating >= rating ? 'active' : ''} onClick={() => setFeedbackRating(rating)} aria-label={`${rating} 分`} aria-pressed={feedbackRating === rating} disabled={feedbackState === 'submitting'}>
-                      <Star size={18} fill={feedbackRating >= rating ? 'currentColor' : 'none'} />
-                    </button>)}
-                </div>
-                <textarea aria-label="评价补充说明（可选）" value={feedbackComment} onChange={event => setFeedbackComment(event.target.value)} placeholder="可选：告诉我们哪里做得好或需要改进" maxLength={2000} disabled={feedbackState === 'submitting'} />
-                {feedbackError && <span className="feedback-error" role="alert">{feedbackError}</span>}
-                <button type="submit" className="support-secondary" disabled={!feedbackRating || feedbackState === 'submitting'}>
-                  {feedbackState === 'submitting' ? '提交中……' : '提交评价'}
-                </button>
-              </form>)}
+            {DEMO_CUSTOMER_HINTS[customerId] && <p className="support-privacy">{DEMO_CUSTOMER_HINTS[customerId]}以上客户和记录均为虚构演示数据。</p>}
 
-          <form onSubmit={handleSubmit} className="support-form support-composer">
-            {conversation.length === 1 && <div className="question-examples">
-                <span>您可以这样问</span>
-                <div>{EXAMPLE_QUESTIONS.map(question => <button type="button" key={question} onClick={() => setMessage(question)} disabled={submitting || historyLoading}>{question}</button>)}</div>
+            <div className="support-conversation" ref={conversationRef} role="log" aria-label="当前对话记录" aria-live="polite" aria-relevant="additions" aria-busy={historyLoading}>
+              {historyLoading ? <div className="support-history-loading"><RefreshCw className="spin" size={16} /> 正在加载最近 7 天的对话记录……</div> : conversation.map((item, index) => {
+              const day = historyDay(item.createdAt);
+              const previousDay = index > 0 ? historyDay(conversation[index - 1].createdAt) : '';
+              return <React.Fragment key={item.id || `${item.role}-${item.ticketId || 'local'}-${index}`}>
+                    {day && day !== previousDay && <div className="support-history-day"><span>{day}</span></div>}
+                    <div className={`support-message ${item.role}`}>
+                      <span className="support-avatar">{item.role === 'user' ? '您' : item.role === 'assistant' ? 'AI' : item.role === 'error' ? '异常' : '状态'}</span>
+                      <div>
+                        <p>{item.content}</p>
+                        {(item.ticketId || item.createdAt) && <small>{item.ticketId ? `工单 #${item.ticketId}` : ''}{item.ticketId && item.createdAt ? ' · ' : ''}{historyTime(item.createdAt)}</small>}
+                      </div>
+                    </div>
+                  </React.Fragment>;
+            })}
+              {submitting && <div className="support-message status support-typing">
+                  <span className="support-avatar">AI</span><div><p><RefreshCw className="spin" size={13} /> 正在处理您的问题……</p></div>
+                </div>}
+            </div>
+
+            {historyError && <div className="support-history-error" role="alert">
+                <AlertTriangle size={16} />
+                <span>{historyError}</span>
+                <button type="button" onClick={() => loadHistory(customerId)} disabled={submitting || historyLoading}>重试</button>
               </div>}
 
-            <label className="support-message-field">
-              <span>输入您的问题</span>
-              <textarea value={message} onChange={event => setMessage(event.target.value)} placeholder="继续描述问题或补充订单号等信息……" maxLength={5000} disabled={submitting || historyLoading} required />
-              <small>{message.length} / 5000</small>
-            </label>
+            {result?.status === 'pending_human' && <div className={`support-status-panel ${result.handling_reason || 'manual_review'}`} role="status">
+                {result.handling_reason === 'processing_exception' ? <AlertTriangle size={18} /> : <Clock3 size={18} />}
+                <div>
+                  <strong>{result.handling_reason === 'risk_review' ? '需要人工确认请求是否安全' : result.handling_reason === 'processing_exception' ? '处理过程中出现了异常' : result.handling_reason === 'quality_review' ? '需要人工检查回复是否可靠' : '已转交人工客服'}</strong>
+                  <span>{result.message}</span>
+                  {result.ticket_id && <small className="support-ticket-id">工单 #{result.ticket_id}</small>}
+                </div>
+              </div>}
 
-            {error && <div className="support-error" role="alert">{error}</div>}
+            {result?.status === 'answered' && result.agent_run_id && result.feedback_token && (feedbackState === 'submitted' ? <div className="feedback-success" role="status"><CheckCircle2 size={17} /> 感谢您的评价，将用于改进服务质量。</div> : <form className="support-feedback support-feedback-compact" onSubmit={handleFeedback}>
+                  <strong>这次回答对您有帮助吗？</strong>
+                  <div className="feedback-rating" aria-label="回答评分">
+                    {[1, 2, 3, 4, 5].map(rating => <button type="button" key={rating} className={feedbackRating >= rating ? 'active' : ''} onClick={() => setFeedbackRating(rating)} aria-label={`${rating} 分`} aria-pressed={feedbackRating === rating} disabled={feedbackState === 'submitting'}>
+                        <Star size={18} fill={feedbackRating >= rating ? 'currentColor' : 'none'} />
+                      </button>)}
+                  </div>
+                  <textarea aria-label="评价补充说明（可选）" value={feedbackComment} onChange={event => setFeedbackComment(event.target.value)} placeholder="可选：告诉我们哪里做得好或需要改进" maxLength={2000} disabled={feedbackState === 'submitting'} />
+                  {feedbackError && <span className="feedback-error" role="alert">{feedbackError}</span>}
+                  <Button type="submit" className="support-secondary" disabled={!feedbackRating || feedbackState === 'submitting'}>
+                    {feedbackState === 'submitting' ? '提交中……' : '提交评价'}
+                  </Button>
+                </form>)}
 
-            <button className="support-submit" type="submit" disabled={submitting || historyLoading || !message.trim()}>
-              {submitting ? <><RefreshCw className="spin" size={17} /> 正在处理…</> : <><Send size={17} /> 发送问题</>}
-            </button>
-            <p className="support-privacy"><ShieldCheck size={13} /> 系统会隐藏识别出的敏感信息。请勿发送密码、验证码或密钥；需要人工处理时，页面会说明情况。</p>
-          </form>
+            <form onSubmit={handleSubmit} className="support-form support-composer">
+              {conversation.length === 1 && <div className="question-examples">
+                  <span>您可以这样问</span>
+                  <div>{EXAMPLE_QUESTIONS.map(question => <Chip key={question} onClick={() => setMessage(question)} disabled={submitting || historyLoading}>{question}</Chip>)}</div>
+                </div>}
+
+              <div className="support-input-container">
+                <label className="support-message-field">
+                  <span className="sr-only">输入您的问题</span>
+                  <textarea value={message} onChange={event => setMessage(event.target.value)} onKeyDown={event => {
+                    if (event.key === 'Enter' && !event.shiftKey && !event.nativeEvent.isComposing && event.keyCode !== 229) {
+                      event.preventDefault();
+                      event.currentTarget.form.requestSubmit();
+                    }
+                  }} rows={2} placeholder="输入您的问题，Enter 发送，Shift + Enter 换行" maxLength={5000} disabled={submitting || historyLoading} required />
+                </label>
+                <Button className="support-submit" tone="primary" size="lg" type="submit" aria-label={submitting ? '正在处理' : '发送问题'} title={submitting ? '正在处理' : '发送问题'} disabled={submitting || historyLoading || !message.trim()}>
+                  {submitting ? <RefreshCw className="spin" size={18} /> : <Send size={18} />}
+                </Button>
+              </div>
+              <small className="support-character-count">{message.length} / 5000</small>
+
+              {error && <div className="support-error" role="alert">{error}</div>}
+
+              <p className="support-privacy"><ShieldCheck size={13} /> 系统会隐藏识别出的敏感信息。请勿发送密码、验证码或密钥；需要人工处理时，页面会说明情况。</p>
+            </form>
+          </section>
+          <aside className="support-sidebar" aria-labelledby="support-capabilities-title">
+            <h2 id="support-capabilities-title">我们能帮您</h2>
+            <div className="customer-capabilities">
+              <span><CheckCircle2 size={15} /> 订单与物流</span>
+              <span><CheckCircle2 size={15} /> 退款与售后</span>
+              <span><CheckCircle2 size={15} /> 账户与技术支持</span>
+            </div>
+            <p>需要人工确认时，页面会说明原因与处理状态。</p>
+          </aside>
         </div>
       </section>
 
