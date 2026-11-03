@@ -513,3 +513,32 @@
   }
 
 }
+
+.support-workflow-examples {
+  min-width: 0;
+  font-size: var(--font-size-13);
+  overflow-wrap: anywhere;
+}
+
+.support-workflow-examples > p, .support-workflow-examples article {
+  margin: var(--space-3) var(--space-4);
+}
+
+.support-workflow-examples p {
+  color: var(--color-text-secondary);
+}
+
+.support-workflow-examples article {
+  padding-top: var(--space-3);
+  border-top: 1px solid var(--color-border-subtle);
+}
+
+.support-workflow-examples article p {
+  margin: var(--space-2) 0;
+}
+
+.support-workflow-examples .btn {
+  max-width: 100%;
+  white-space: normal;
+  text-align: left;
+}

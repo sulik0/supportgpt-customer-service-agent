@@ -3,6 +3,7 @@ import { ArrowDown, ArrowLeft, ArrowRight, CheckCircle2, Database, GitBranch, La
 import './workflow.css';
 import { Badge, Button, Chip, MetricCard } from './ui';
 import ToolGovernanceDiagram from './ToolGovernanceDiagram';
+import ToolLoopGuide from './ToolLoopGuide';
 
 // 演示配置对应当前 graph.py；不执行 Agent，也不读取真实客户数据。
 const NODES = {
@@ -169,6 +170,7 @@ export default function WorkflowPage({
     <nav className="wf-view-switch" aria-label="选择架构演示"><button type="button" aria-pressed={view === 'workflow'} onClick={() => setView('workflow')}>Agent 处理流程</button><button type="button" aria-pressed={view === 'governance'} onClick={() => setView('governance')}>高风险操作与故障恢复</button></nav>
     {view === 'governance' ? <ToolGovernanceDiagram /> : <>
     <div className="wf-overview">{[['7', 'LangGraph 流程节点'], ['6', 'Skill 处理能力'], ['9', '已注册的业务工具'], ['OTel', '记录调用过程与运行指标']].map(([value, label]) => <MetricCard key={label} label={label} value={value} />)}</div>
+    <ToolLoopGuide />
     <section className="wf-scenarios" aria-label="演示场景">
       <div className="wf-section-heading"><div><h2>选一个场景，逐步查看系统怎样处理</h2><p>点击“下一步”查看处理顺序。演示只在当前页面运行，不向后端提交请求，不调用模型，也不展示真实客户数据或耗时。</p></div></div>
       <div className="wf-tabs">{Object.entries(SCENARIOS).map(([key, item]) => <Chip key={key} selected={key === scenarioKey} onClick={() => {
