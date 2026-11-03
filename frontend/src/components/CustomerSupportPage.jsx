@@ -1,5 +1,6 @@
 import '../styles/pages/support.css';
 import { Button, Chip } from './ui';
+import { WORKFLOW_EXAMPLES } from './workflowExamples';
 import { friendlyError } from '../errors';
 import React, { useEffect, useRef, useState } from 'react';
 import { AlertTriangle, Bot, CheckCircle2, Clock3, MessagesSquare, GitBranch, RefreshCw, Send, ShieldCheck, Star } from 'lucide-react';
@@ -308,6 +309,18 @@ export default function CustomerSupportPage({
                 </form>)}
 
             <form onSubmit={handleSubmit} className="support-form support-composer">
+              <details className="support-workflow-examples">
+                <summary>真实工作流测试例子（仅填入，确认后发送）</summary>
+                <p>选择例子会切换到对应演示客户并替换输入框内容，不会自动发送。点击发送后运行后端工作流；业务记录为模拟数据。工具循环需要后端启用 react 模式，默认规则模式也可验证工具查询。</p>
+                {WORKFLOW_EXAMPLES.map(example => <article key={example.id}>
+                  <strong>{example.title} · {example.customerName}</strong>
+                  <p>{example.question}</p>
+                  <Button disabled={submitting || historyLoading} onClick={() => {
+                    if (customerId !== example.customerId) switchCustomer(example.customerId);
+                    setMessage(example.question);
+                  }}>填入：{example.title}</Button>
+                </article>)}
+              </details>
               {conversation.length === 1 && <div className="question-examples">
                   <span>您可以这样问</span>
                   <div>{EXAMPLE_QUESTIONS.map(question => <Chip key={question} onClick={() => setMessage(question)} disabled={submitting || historyLoading}>{question}</Chip>)}</div>
