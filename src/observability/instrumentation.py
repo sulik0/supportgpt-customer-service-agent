@@ -62,11 +62,18 @@ def instrument_dependencies(app: Any, sqlalchemy_engine: Any) -> None:
     try:
         from opentelemetry.instrumentation.fastapi import FastAPIInstrumentor
 
-        FastAPIInstrumentor.instrument_app(
-            app,
+        fastapi_kwargs = dict(
             excluded_urls=settings.OTEL_EXCLUDED_URLS,
             server_request_hook=_server_request_hook,
         )
+        try:
+            # 去掉 ASGI 的 http send / receive 子 Span。
+            FastAPIInstrumentor.instrument_app(
+                app, exclude_spans=["send", "receive"], **fastapi_kwargs
+            )
+        except TypeError:
+            # 旧版 instrumentation 不支持 exclude_spans。
+            FastAPIInstrumentor.instrument_app(app, **fastapi_kwargs)
         instrumentors.append("FastAPI")
     except Exception as exc:
         logger.warning("FastAPI instrumentation unavailable: %s", exc)

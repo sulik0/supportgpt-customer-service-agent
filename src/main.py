@@ -592,6 +592,9 @@ async def track_http_telemetry(request: Request, call_next):
     # Avoid polluting application metrics with health probes.
     if endpoint == "/health":
         return await call_next(request)
+    # CORS 预检不产生业务 Span 和指标。
+    if method == "OPTIONS":
+        return await call_next(request)
 
     request_id = request.headers.get("x-request-id") or uuid.uuid4().hex
     request_token = bind_request_id(request_id)

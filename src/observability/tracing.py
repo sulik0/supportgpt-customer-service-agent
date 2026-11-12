@@ -189,6 +189,11 @@ def reset_agent_trace_id(token: Token) -> None:
         return
 
 
+def is_langsmith_agent_context() -> bool:
+    """当前是否处于主 Agent Workflow 上下文。"""
+    return _langsmith_agent_context.get()
+
+
 @contextmanager
 def langsmith_agent_trace_context() -> Iterator[None]:
     """仅在主 Agent Workflow 执行期间允许 Span 进入 LangSmith。"""
@@ -214,7 +219,7 @@ def langsmith_span_attributes(
     return attributes
 
 
-def _llm_span_attributes() -> Dict[str, Any]:
+def _llm_span_attributes(operation: str = "") -> Dict[str, Any]:
     """记录模型识别信息，不上报 Prompt 和回复正文。"""
     from src.promptops.runtime import active_bundle
 
@@ -226,6 +231,8 @@ def _llm_span_attributes() -> Dict[str, Any]:
         model = settings.LLM_MODEL_NAME or "openai-compatible"
     else:
         model = "mock"
+    if operation:
+        model = _llm_metric_model(operation)
     return {
         **langsmith_span_attributes("llm"),
         "gen_ai.operation.name": "chat",
@@ -353,6 +360,27 @@ def mark_span_error(span: Any, error: BaseException) -> None:
         return
 
 
+def current_span_link() -> tuple[list, Dict[str, Any]]:
+    """捕获当前（HTTP）Span 的 Link 与可搜索属性；无有效 Span 时返回空。"""
+    try:
+        from opentelemetry import trace
+
+        context = trace.get_current_span().get_span_context()
+        if not context or not context.is_valid:
+            return [], {}
+        trace_id = format(context.trace_id, "032x")
+        return (
+            [trace.Link(context, {"link.reason": "http_request"})],
+            {
+                "http.trace_id": trace_id,
+                "http.span_id": format(context.span_id, "016x"),
+            },
+        )
+    except Exception as exc:
+        logger.debug("Unable to build span link: %s", exc)
+        return [], {}
+
+
 @contextmanager
 def observed_span(
     tracer: Any,
@@ -360,17 +388,29 @@ def observed_span(
     attributes: Optional[Dict[str, Any]] = None,
     *,
     root: bool = False,
+    link_to_current: bool = False,
 ) -> Iterator[Any]:
-    """创建统一 OTel Span，并以脱敏属性记录耗时和异常。"""
+    """创建统一 OTel Span，并以脱敏属性记录耗时和异常。
+
+    root=True 新开独立 Trace；link_to_current=True 时用 Span Link 关联开启前的当前 Span。
+    """
     started = time.perf_counter()
     span_context = None
+    links: list = []
+    attributes = dict(attributes or {})
     if root:
         from opentelemetry.context import Context
 
+        if link_to_current:
+            links, link_attributes = current_span_link()
+            if links:
+                attributes.update(link_attributes)
+                attributes.setdefault("request_id", get_request_id())
         span_context = Context()
     with tracer.start_as_current_span(
         name,
         context=span_context,
+        links=links or None,
         record_exception=False,
         set_status_on_exception=False,
     ) as span:
@@ -439,7 +479,7 @@ def trace_operation(*, name: str, component: str) -> Callable:
                             "observability.component": component,
                             "code.function.name": function.__qualname__,
                             "llm.operation": name if component == "llm" else None,
-                            **(_llm_span_attributes() if component == "llm" else {}),
+                            **(_llm_span_attributes(name) if component == "llm" else {}),
                         },
                     ) as span:
                         if (
@@ -507,7 +547,7 @@ def trace_operation(*, name: str, component: str) -> Callable:
                 {
                     "observability.component": component,
                     "code.function.name": function.__qualname__,
-                    **(_llm_span_attributes() if component == "llm" else {}),
+                    **(_llm_span_attributes(name) if component == "llm" else {}),
                 },
             ):
                 if component == "llm" and settings.LANGSMITH_CAPTURE_LLM_CONTENT:
@@ -562,17 +602,16 @@ def init_tracing() -> None:
             BatchSpanProcessor,
             ConsoleSpanExporter,
         )
-        from opentelemetry.sdk.trace.sampling import ParentBased, TraceIdRatioBased
 
         current_tracer_provider = trace.get_tracer_provider()
         if isinstance(current_tracer_provider, TracerProvider):
             tracer_provider = current_tracer_provider
         else:
+            from src.observability.span_filter import build_sampler
+
             tracer_provider = TracerProvider(
                 resource=resource,
-                sampler=ParentBased(
-                    TraceIdRatioBased(settings.OTEL_TRACE_SAMPLE_RATIO)
-                ),
+                sampler=build_sampler(settings.OTEL_TRACE_SAMPLE_RATIO),
             )
             trace.set_tracer_provider(tracer_provider)
 
@@ -581,14 +620,25 @@ def init_tracing() -> None:
                 OTLPSpanExporter,
             )
 
-            tracer_provider.add_span_processor(
-                BatchSpanProcessor(
-                    OTLPSpanExporter(
-                        endpoint=settings.OTEL_EXPORTER_OTLP_TRACES_ENDPOINT,
-                        timeout=settings.OTEL_EXPORTER_OTLP_TIMEOUT_SECONDS,
-                    )
+            otlp_processor = BatchSpanProcessor(
+                OTLPSpanExporter(
+                    endpoint=settings.OTEL_EXPORTER_OTLP_TRACES_ENDPOINT,
+                    timeout=settings.OTEL_EXPORTER_OTLP_TIMEOUT_SECONDS,
                 )
             )
+            from src.observability.span_filter import (
+                AgentSpansOnlyProcessor,
+                should_export_agent_spans_only,
+            )
+
+            agent_only = should_export_agent_spans_only(
+                settings.OTEL_EXPORT_AGENT_SPANS_ONLY,
+                settings.OTEL_EXPORTER_OTLP_TRACES_ENDPOINT,
+            )
+            if agent_only:
+                otlp_processor = AgentSpansOnlyProcessor(otlp_processor)
+            logger.info("OTLP trace export agent_spans_only=%s", agent_only)
+            tracer_provider.add_span_processor(otlp_processor)
         if settings.OTEL_CONSOLE_EXPORTER:
             tracer_provider.add_span_processor(
                 BatchSpanProcessor(ConsoleSpanExporter())

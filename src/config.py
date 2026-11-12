@@ -168,6 +168,8 @@ class Settings(BaseSettings):
     OTEL_CONSOLE_EXPORTER: bool = Field(default=False)
     OTEL_TRACE_SAMPLE_RATIO: float = Field(default=1.0, ge=0.0, le=1.0)
     OTEL_EXCLUDED_URLS: str = Field(default="health")
+    # 只导出 Agent 链路 Span；留空时按 Endpoint 自动判断（直连 LangSmith 开，Collector 关）。
+    OTEL_EXPORT_AGENT_SPANS_ONLY: Optional[bool] = Field(default=None)
     # 仅用于共享 .env 校验和 Collector 容器替换，业务代码不会使用或直连。
     OTEL_COLLECTOR_LANGSMITH_API_KEY: Optional[str] = Field(default=None)
     OTEL_COLLECTOR_LANGSMITH_PROJECT: str = Field(default="supportgpt-enterprise")

@@ -866,6 +866,7 @@ async def _run_agent_workflow_pinned(initial_state: Dict[str, Any]) -> Dict[str,
                     ),
                 },
                 root=True,
+                link_to_current=True,
             ) as span:
                 final_output = await compiled_graph.ainvoke(
                     state_input, config=graph_config
@@ -1037,6 +1038,7 @@ async def resume_agent_workflow(
                     "workflow.namespace": checkpoint_namespace,
                 },
                 root=True,
+                link_to_current=True,
             ):
                 output = await compiled_graph.ainvoke(
                     Command(resume=decision), config=graph_config
