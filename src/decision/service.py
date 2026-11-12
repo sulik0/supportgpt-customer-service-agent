@@ -24,6 +24,10 @@ _NEGATIVE_INTENTS = {
 }
 
 
+# operation_mode 不确定时的置信度上限，低于 0.8 会在 Risk Engine 记为中等风险信号。
+_UNCERTAIN_MODE_CONFIDENCE_CAP = 0.79
+
+
 class DecisionService:
     """把通用 DecisionProvider 限制在客服领域的封闭决策中。"""
 
@@ -79,21 +83,30 @@ class DecisionService:
                 accepted=False,
                 fallback_reason="needs_clarification",
             )
-        confidence = min(
-            float(answer.confidence or 0.0),
-            float(operation_mode.confidence or 0.0),
-        )
-        if confidence < settings.JEV_INTENT_CONFIDENCE_THRESHOLD:
+        # 意图是否采纳只看意图自身置信度；operation_mode 是辅助问题，不连带否决意图。
+        threshold = settings.JEV_INTENT_CONFIDENCE_THRESHOLD
+        intent_confidence = float(answer.confidence or 0.0)
+        if intent_confidence < threshold:
             return TicketIntentDecision(
                 result=result,
                 accepted=False,
                 fallback_reason="low_confidence",
             )
+        # operation_mode 置信度不足时，只下调写入 analysis 的置信度（触发中等风险信号），
+        # 不会比原先放松风险判断；范围外判定则按保守方向处理（见下）。
+        mode_value_confidence = float(operation_mode.confidence or 0.0)
+        mode_confident = mode_value_confidence >= threshold
+        confidence = (
+            min(intent_confidence, mode_value_confidence)
+            if mode_confident
+            else min(intent_confidence, _UNCERTAIN_MODE_CONFIDENCE_CAP)
+        )
         intent = normalize_intent(raw_intent)
         defaults = intent_defaults(intent)
         scope = result.answers.get("support_scope")
         outside_support = bool(
             intent == IntentType.INFORMATION_REQUEST
+            and mode_confident
             and str(operation_mode.value) == "information"
             and scope is not None
             and scope.kind == "choice"

@@ -54,9 +54,9 @@ _EXPLICIT_NEGATIVE_SENTIMENT = re.compile(
     r"多扣|重复扣款|不能退|无法退|退款失败|退款被拒|未收到|没收到|迟迟"
 )
 _API_INCIDENT = re.compile(
-    r"(?:\bapi\b|接口|服务).{0,50}"
+    r"(?:\bapi\b|接口|服务|集群|网关|生产环境|系统|\bcluster\b|\bgateway\b|\bproduction\b).{0,50}"
     r"(?:\b504\b|\b503\b|error|timeout|timing out|down|offline|crash|broken|"
-    r"connectivity|slow|报错|超时|宕机|离线|无法访问|故障|缓慢)|"
+    r"connectivity|slow|报错|超时|宕机|离线|无法访问|访问不了|挂了|全挂|故障|缓慢)|"
     r"(?:\b504\b|\b503\b|报错|超时|宕机|故障).{0,30}(?:\bapi\b|接口|服务)"
 )
 _ORDER_STATUS = re.compile(
@@ -74,7 +74,18 @@ _CANCELLATION_INFORMATION = re.compile(
 )
 _ACCOUNT_INCIDENT = re.compile(
     r"\b(?:cannot|can't|unable to) (?:log ?in|sign ?in)|account (?:is )?locked|"
-    r"invalid credentials|login keeps failing\b|无法登录|账户被锁|凭据失效"
+    r"invalid credentials|login keeps failing\b|无法登录|账户被锁|凭据失效|"
+    r"登录不了|登不上|登陆不了|密码错误|密码不对"
+)
+# 明确投诉诉求；“怎么投诉 / 如何投诉”这类流程咨询不算。
+_COMPLAINT_REQUEST = re.compile(
+    r"(?:我要|我想|我们要|我们想|要|想|准备|必须|需要)投诉|投诉(?:你们|贵司|客服|公司)|"
+    r"\b(?:file|make|lodge|submit) (?:a |an |my )?(?:formal )?complaint\b|"
+    r"\b(?:i|we) (?:want to |would like to |need to |will )?complain\b"
+)
+_COMPLAINT_INFORMATION = re.compile(
+    r"(?:怎么|如何|哪里|在哪|怎样|渠道|流程|方式).{0,8}投诉|"
+    r"\bhow (?:do|can|to|should)\b.{0,20}complain|\bwhere (?:do|can|to)\b.{0,20}complain"
 )
 _WARRANTY_ACTION = re.compile(
     r"\b(?:file|open|start|submit) (?:a )?(?:warranty )?claim\b|"
@@ -91,6 +102,14 @@ _CONTEXTUAL_ORDER_STATUS = re.compile(
     r"(?:它|这个|那个|刚才那个).{0,8}(?:到哪|状态|物流)|"
     r"(?:查|看).{0,6}(?:刚才|那个).{0,6}(?:订单|物流)?"
 )
+
+
+def is_explicit_complaint(normalized_text: str) -> bool:
+    """识别明确的投诉诉求，排除“怎么投诉”这类流程咨询。"""
+    return bool(
+        _COMPLAINT_REQUEST.search(normalized_text)
+        and not _COMPLAINT_INFORMATION.search(normalized_text)
+    )
 
 
 class TicketAnalyzerAgent:
@@ -261,12 +280,18 @@ class TicketAnalyzerAgent:
             )
 
             defaults = intent_defaults(normalized_intent)
+            priority, sentiment = self._escalate_complaint(
+                f"{clean_subject} {clean_description}",
+                normalized_intent,
+                defaults.priority,
+                sentiment,
+            )
             next_state = {
                 **state,
                 "description": clean_description,
                 "subject": clean_subject,
                 "sentiment": sentiment,
-                "priority": defaults.priority,
+                "priority": priority,
                 "intent": normalized_intent,
                 "department": defaults.department,
                 "analyzer_confidence": analyzer_confidence,
@@ -310,6 +335,9 @@ class TicketAnalyzerAgent:
                 candidates.append(IntentType.ORDER_STATUS)
         elif _API_INCIDENT.search(normalized):
             candidates.append(IntentType.OUTAGE_REPORT)
+        elif is_explicit_complaint(normalized):
+            # 项目没有独立投诉 Intent：归 feedback，再由升级逻辑提到 high 优先级。
+            candidates.append(IntentType.FEEDBACK)
         else:
             if _CANCELLATION_ACTION.search(
                 normalized
@@ -351,6 +379,20 @@ class TicketAnalyzerAgent:
             ),
             "confidence_score": 0.95,
         }
+
+    @staticmethod
+    def _escalate_complaint(
+        text: str, intent: IntentType, priority: str, sentiment: str
+    ) -> tuple[str, str]:
+        """明确投诉统一提为 high 优先级 + 负面情绪，由 Risk Engine 转人工。
+
+        不依赖模型输出：Jev / LLM 把投诉判成 feedback 或 information_request 时同样生效。
+        """
+        if intent not in {IntentType.FEEDBACK, IntentType.INFORMATION_REQUEST}:
+            return priority, sentiment
+        if not is_explicit_complaint(" ".join(text.lower().split())):
+            return priority, sentiment
+        return "high", "negative"
 
     @staticmethod
     def _confidence(value: Any) -> float:

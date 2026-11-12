@@ -471,3 +471,84 @@ async def test_qa_uses_jev_to_review_rule_grounded_response(monkeypatch):
     assert state["qa_strategy"] == "jev"
     assert state["qa_score"] == 0.91
     assert state["decision_records"][0]["accepted"] is True
+
+
+def _mode_answers(intent, intent_conf, mode, mode_conf, scope=None):
+    answers = {
+        "intent": DecisionAnswer(kind="choice", value=intent, confidence=intent_conf),
+        "operation_mode": DecisionAnswer(
+            kind="choice", value=mode, confidence=mode_conf
+        ),
+        "needs_clarification": DecisionAnswer(kind="noul", value=0.05),
+    }
+    if scope:
+        answers["support_scope"] = DecisionAnswer(
+            kind="choice", value=scope, confidence=0.95
+        )
+    return answers
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    ("intent", "mode"),
+    [
+        ("feedback", "unclear"),
+        ("account_support", "action"),
+        ("outage_report", "unclear"),
+    ],
+)
+async def test_decision_service_keeps_confident_intent_when_mode_is_unsure(
+    intent, mode
+):
+    provider = _StubDecisionProvider(
+        _result("intent_classification", _mode_answers(intent, 0.92, mode, 0.28))
+    )
+
+    decision = await DecisionService(provider).classify_ticket("text")
+
+    assert decision.accepted is True
+    assert decision.analysis["intent"].value == intent
+    # 辅助问题不确定时置信度被压到中等风险区间，不会比原先更宽松。
+    assert decision.analysis["confidence_score"] < 0.8
+
+
+@pytest.mark.asyncio
+async def test_decision_service_still_rejects_low_intent_confidence_with_sure_mode():
+    provider = _StubDecisionProvider(
+        _result(
+            "intent_classification",
+            _mode_answers("order_status", 0.5, "information", 0.99),
+        )
+    )
+
+    decision = await DecisionService(provider).classify_ticket("text")
+
+    assert decision.accepted is False
+    assert decision.fallback_reason == "low_confidence"
+
+
+@pytest.mark.asyncio
+async def test_decision_service_out_of_scope_needs_confident_operation_mode():
+    unsure = _StubDecisionProvider(
+        _result(
+            "intent_classification",
+            _mode_answers(
+                "information_request", 0.95, "information", 0.4, "benign_out_of_scope"
+            ),
+        )
+    )
+    sure = _StubDecisionProvider(
+        _result(
+            "intent_classification",
+            _mode_answers(
+                "information_request", 0.95, "information", 0.95, "benign_out_of_scope"
+            ),
+        )
+    )
+
+    unsure_decision = await DecisionService(unsure).classify_ticket("weather?")
+    sure_decision = await DecisionService(sure).classify_ticket("weather?")
+
+    assert unsure_decision.accepted is True
+    assert "request_scope" not in unsure_decision.analysis
+    assert sure_decision.analysis["request_scope"] == "out_of_scope"
