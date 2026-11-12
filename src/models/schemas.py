@@ -1,7 +1,9 @@
 from datetime import datetime
 from typing import Any, Dict, List, Optional
 
-from pydantic import BaseModel, EmailStr, Field
+from pydantic import BaseModel, EmailStr, Field, field_validator, model_validator
+
+from src.agents.public_text import strip_internal_citations
 
 
 # --- AUTH SCHEMAS ---
@@ -152,6 +154,12 @@ class PublicSupportResponse(BaseModel):
     agent_run_id: Optional[str] = None
     feedback_token: Optional[str] = None
 
+    @field_validator("response")
+    @classmethod
+    def _strip_citation_markers(cls, value: Optional[str]) -> Optional[str]:
+        """终端用户不应看到 [S1] 等内部证据编号。"""
+        return strip_internal_citations(value) if value else value
+
 
 class PublicInsightToolCall(BaseModel):
     """仅公开工具名称、状态与耗时。"""
@@ -202,6 +210,13 @@ class PublicConversationMessageResponse(BaseModel):
     status: str
     content: str
     created_at: datetime
+
+    @model_validator(mode="after")
+    def _strip_citation_markers(self):
+        """只清理助手回复，用户自己输入的内容保持原样。"""
+        if self.role != "user":
+            self.content = strip_internal_citations(self.content)
+        return self
 
 
 class PublicConversationHistoryResponse(BaseModel):

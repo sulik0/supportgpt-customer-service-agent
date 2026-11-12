@@ -101,6 +101,9 @@
 - [ ] PromptOps V1 使用文件型 Registry，后续需增加分布式发布、签名制品、独立留出集和人工语义校准；不能将 Mock 实验结果写成真实 Prompt 效果提升。
 
 - [x] 2026-09-08 完成 231 条全量测试，并通过固定 100 条 Baseline 的 PR Agent Quality Gate；CI / Docker 使用 Python 3.11。
+- [x] 2026-11-12 修复 LangSmith 直连链路 4 个次要问题（应用内 Agent Span 过滤、Workflow 根 Span 的 HTTP Span Link、DeepSeek 计价与未知模型 WARN、用户回复去引用标记），仅 Mock 测试验证。
+- [ ] 上述 Span 过滤与 Span Link 的线上效果、`deepseek-flash` 实际模型名是否命中计价表，需部署后在 LangSmith 用真实请求核对；真实模型下 `[S1]` 是否仍有变体（如“【S1】”之外的写法）尚未验证。
+- [ ] DeepSeek 价格按高峰价、cache miss 估算，未区分错峰与缓存命中，官方调价后需手动更新 `MODEL_PRICING`。
 - [ ] 旧的 Python 3.13 `.venv` 仍是混装环境，不再作为项目验收环境。
 - [ ] 当前新增表依赖 SQLAlchemy `create_all`，不等同于生产 Schema Migration。
 - [ ] Memory V1 的摘要/实体为确定性轻量实现，尚未建立长期语义 Memory；同 session 并发请求可安全追加，但两请求的起始上下文仍可能同时取到旧 revision。

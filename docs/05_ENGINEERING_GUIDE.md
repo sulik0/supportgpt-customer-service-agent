@@ -362,6 +362,14 @@ OTEL_COLLECTOR_LANGSMITH_API_KEY=<api-key>
 OTEL_COLLECTOR_LANGSMITH_PROJECT=supportgpt-enterprise
 ```
 
+**直连 LangSmith（如 Railway 线上）**：`OTEL_EXPORTER_OTLP_TRACES_ENDPOINT=https://api.smith.langchain.com/otel/v1/traces`，认证头通过标准 `OTEL_EXPORTER_OTLP_HEADERS` 配置。此时没有 Collector 过滤，应用内由 `src/observability/span_filter.py` 完成：
+
+- `OTEL_EXPORT_AGENT_SPANS_ONLY`：留空按 Endpoint 自动判断（`smith.langchain.com` 开启，其他关闭）；可显式设 `true/false`。开启后只导出带 `langsmith.export=True` 的 Span，以及 Agent Workflow 上下文内创建的子 Span（Tool、RAG、LLM、Jev httpx 等）；Redis / SQLAlchemy 子 Span 和 HTTP、`/staff/*`、`/observability/*` 等 Agent 之外的 Span 不导出。过滤逻辑 fail-open，异常只记 debug 日志。
+- FastAPI 不再产生 `http send/receive` 子 Span（`exclude_spans`，旧版 instrumentation 自动回退）；CORS 预检 `OPTIONS` 由采样器和 HTTP 中间件丢弃。
+- Workflow / Resume 根 Span 仍是独立 Trace，但带 Span Link 指向发起请求的 HTTP Span，并有 `http.trace_id`、`http.span_id`、`request_id` 属性，可在 LangSmith 按 metadata 搜索。过滤开启时 HTTP Span 本身不导出，Link 只作为关联线索。
+- 成本：`cost_tracking.py` 已加入 `deepseek-flash`、`deepseek-v4-pro`（价格按官方高峰价、cache miss 估算，查询日期 2026-11-12，单位已换算为每 1K tokens）；未知模型名打一次 WARN 并按 0 计，不再静默。LLM Span 的 `gen_ai.request.model` 按节点实际模型上报，`gen_ai.usage.*` 来自 Provider 返回的 Token。
+- 面向终端用户的 `/support/requests` 回复和 `/support/history` 助手消息，由 `src/agents/public_text.py` 确定性去掉 `[S1]`、`(S2)`、`（S2）`、`S1、S2` 等证据编号；员工端草稿和 citations 不变。
+
 本地 Collector 不可达时 Backend 在 preflight 阶段跳过 exporter，避免重试刷屏。Collector 启动后需重启 Backend 恢复上报。遥测始终 fail-open，不影响业务主链。
 
 ## Memory V1 运行规则
