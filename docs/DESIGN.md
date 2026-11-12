@@ -2,7 +2,7 @@
 
 > 状态：方案已确认，前端实现与本地验收已完成。本文前半部分保留设计依据，实际完成情况和未验证范围见第 12 节。
 >
-> 更新日期：2026-11-12。改造前代码参考：`df56423`。本次演示入口优化同时补充 `/customer-context` 的订单币种字段，不修改后端审批逻辑，不公开部署。
+> 更新日期：2026-11-12。改造前代码参考：`df56423`。演示入口已补充订单币种字段；本次任务 2 仅精简前端文案与信息层级，接口、权限和业务流程不变，不公开部署。
 
 ## 1. 产品定位与本轮范围
 
@@ -35,12 +35,12 @@ SupportGPT 是智能客服 Agent 平台，不是通用 Agent 构建器。用户�
 
 | 当前页面 | 主要 API / 数据来源 | 已有操作 | 不应假装已有的能力 |
 |---|---|---|---|
-| 用户咨询 | `/support/requests`、`/support/history`、`/feedback/user`、前端场景定义 | 空对话显示 4 张场景卡，覆盖工具查询、退款审批、安全拦截；点击选择客户并填入问题，不自动发送；提问、最近七天对话、新对话、评价 | 实时节点推送、真实客户登录、历史会话重命名或删除 |
-| 员工登录 | `/auth/token`、`VITE_DEMO_ACCOUNTS` | 员工登录、退出、会话过期处理；仅配置有效演示账号时显示填入按钮，不自动登录 | 公开员工注册、自动创建演示账号 |
-| 人工处理台 | `/staff/review-queue`、`/tickets/{id}/agent-result`、`/customer-context`、审批与 Tool Review API | 筛选、读取保存的回复、修改/通过/拒绝、按权限核实业务结果；按接口币种显示订单金额；事件时间统一显示北京时间 | 打开详情自动重跑 Agent、完整高风险 Action 管理控制台 |
-| Agent 运行监控 | `/observability/runs`、`/feedback/runs/{id}` | 工单查询、分页、快照、Analyzer/QA 策略、中文工具状态、Trace ID 与复制；仅配置项目 URL 时显示 LangSmith 跳转，无配置不显示警告 | 在本地完整复刻 LangSmith Span 树、实时节点耗时瀑布图 |
-| 资源管理 | `/admin/resources/tools`、`prompts`、`rag-documents` | 工具启停、查看 Prompt Bundle、创建候选版本、知识文档增改删、重建索引 | 注册任意新 Tool Handler、前端直接晋级/回滚 Prompt、知识检索调试台 |
-| Agent 处理流程 | 前端流程与故障场景定义 | 节点说明、场景逐步演示、Action 状态机、故障时序 | 真实执行、实时故障演练、真实 Trace 或耗时 |
+| 用户咨询 | `/support/requests`、`/support/history`、`/feedback/user`、前端场景定义 | 空对话 4 张场景卡只填入；提问、七天历史、新对话、评价；服务范围并入页首，移除侧栏，超过 4500 字显示计数 | 实时节点推送、真实客户登录、历史会话重命名或删除 |
+| 员工登录 | `/auth/token`、`VITE_DEMO_ACCOUNTS` | 登录、退出、过期处理；有效演示账号只填入；左栏为标题与 3 个要点，保留账号创建说明 | 公开员工注册、自动创建演示账号 |
+| 人工处理台 | `/staff/review-queue`、`/tickets/{id}/agent-result`、`/customer-context`、审批与 Tool Review API | 筛选、读取结果、修改/通过/拒绝、按权限核实；来源用 Badge，订单按币种显示，事件使用北京时间；保留风险与退款防重复提示 | 打开详情自动重跑 Agent、完整高风险 Action 管理控制台 |
+| Agent 运行监控 | `/observability/runs`、`/feedback/runs/{id}` | 工单查询、分页；列表只留主值，模型、质量判断与 Trace 移入详情；可复制 Trace ID，项目 URL 配置后显示外链 | 在本地完整复刻 LangSmith Span 树、实时节点耗时瀑布图 |
+| 资源管理 | `/admin/resources/tools`、`prompts`、`rag-documents` | 工具启停、Prompt 候选、知识文档增改删与索引重建；精简说明，保留发布限制、确认与错误提示 | 注册任意新 Tool Handler、前端直接晋级/回滚 Prompt、知识检索调试台 |
+| Agent 处理流程 | 前端流程与故障场景定义 | 节点输入/输出与最多 3 条设计要点、场景步进、Action 状态机、故障时序；配置用键值对，实现边界默认折叠 | 真实执行、实时故障演练、真实 Trace 或耗时 |
 
 API 权限仍由后端决定：人工队列允许 `agent / manager / admin`；运行监控允许 `manager / admin`；资源管理只允许 `admin`；业务结果人工确认遵循现有主管权限。
 
@@ -406,3 +406,62 @@ npm run dev:demo
 - 本地 Demo 验证覆盖 UI 和既有请求契约，不替代 Railway / Vercel 上的端到端验收；后端 401/403 权限另由隔离接口测试验证。真实模型、LangSmith 导出、退款与 Durable Resume 未在本轮重新进行线上验收。
 - 检查了窄屏布局与可见键盘焦点，但未在真实手机软键盘、屏幕阅读器及所有浏览器上完整测试。
 - 用户已授权本轮提交并推送 GitHub，允许触发 Railway / Vercel 自动部署。本轮不手工修改云端配置；本地验收不代表自动部署已成功，也不替代部署后的线上检查。
+
+## 13. 展示任务 2 交付说明（2026-11-12）
+
+本次只调整文案与信息层级；API、角色权限、请求提交、审批和恢复逻辑不变。咨询范围并入页首、字数超过 4500 才显示，运行列表次要信息移至详情，实现边界默认折叠。
+
+### 13.1 汉字数对比
+
+基线为任务 1 格式化提交 `aff35a1`。一次性 Node 脚本使用 Babel 解析 `frontend/src` 下所有 `.jsx` / `.js`，统计字符串字面量、模板文本与 JSX 文本中的 Unicode Han 字符；不统计注释、标识符和运行时接口数据，保留错误、读屏与权限文案在统计内。前后使用同一口径，脚本和中间 JSON 仅留在 `/tmp`，不提交。
+
+| 范围 | 修改前 | 修改后 | 减少 |
+|---|---:|---:|---:|
+| 流程页三个组件（WorkflowPage / ToolLoopGuide / ToolGovernanceDiagram） | 5041 | 2343 | 53.5% |
+| 上述组件与 toolGovernanceDemo 场景数据 | 7022 | 3807 | 45.8% |
+| 其余八个页面组件 | 4023 | 2982 | 25.9% |
+| frontend/src 全部 JS / JSX | 12265 | 8009 | 34.7% |
+
+完整文件表（路径相对 `frontend/src`）：
+
+| 文件 | 修改前 | 修改后 | 减少 |
+|---|---:|---:|---:|
+| `App.jsx` | 445 | 336 | 24.5% |
+| `api/client.js` | 215 | 215 | 0.0% |
+| `components/CustomerSupportPage.jsx` | 713 | 509 | 28.6% |
+| `components/MetricsGrid.jsx` | 69 | 48 | 30.4% |
+| `components/ObservabilityPage.jsx` | 736 | 541 | 26.5% |
+| `components/ResourceManagementPage.jsx` | 911 | 687 | 24.6% |
+| `components/TicketDetails.jsx` | 601 | 430 | 28.5% |
+| `components/TicketList.jsx` | 195 | 164 | 15.9% |
+| `components/ToolGovernanceDiagram.jsx` | 1077 | 634 | 41.1% |
+| `components/ToolLoopGuide.jsx` | 763 | 263 | 65.5% |
+| `components/ToolReviewPanel.jsx` | 353 | 267 | 24.4% |
+| `components/WorkflowPage.jsx` | 3201 | 1446 | 54.8% |
+| `components/runMetrics.js` | 0 | 0 | — |
+| `components/ticketFilters.js` | 0 | 0 | — |
+| `components/toolGovernanceDemo.js` | 1981 | 1464 | 26.1% |
+| `components/ui.jsx` | 10 | 10 | 0.0% |
+| `components/uiHooks.jsx` | 34 | 34 | 0.0% |
+| `components/workflowExamples.js` | 311 | 311 | 0.0% |
+| `demoAccounts.js` | 0 | 0 | — |
+| `errors.js` | 26 | 26 | 0.0% |
+| `formatters.js` | 32 | 32 | 0.0% |
+| `i18n.js` | 592 | 592 | 0.0% |
+| `latestRequest.js` | 0 | 0 | — |
+| `main.jsx` | 0 | 0 | — |
+| `navigation.js` | 0 | 0 | — |
+
+单文件未达到 25% 参考值的保留原因：
+
+- `App.jsx`（24.5%）：保留登录失败、过期、角色限制、账号创建说明与读屏文字。
+- `ResourceManagementPage.jsx`（24.6%）：保留未保存修改、停用和删除确认，JSON 错误、管理员权限及发布限制。
+- `ToolReviewPanel.jsx`（24.4%）：保留业务核实确认、主管权限、敏感信息提醒、“不能重复提交退款”与结果未知不能判失败。
+- `TicketList.jsx`（15.9%）：保留筛选字段、读屏标签、加载错误及恢复指引；重复队列说明和底部计数已删除。
+- API 错误、共享状态翻译、场景提问等非页面文件保持原样；`toolGovernanceDemo.js` 保留状态名、命令名、迁移与四类记录快照，流程页整体仍超过 40% 目标。
+
+### 13.2 验证与边界
+
+- `npm test`：24 项通过，包括与后端状态机一致的 15 个状态、25 条迁移及六套故障场景。既有文案断言仍核对“不会自动批准 AI 回复”和“人工核实”，精简后语义与断言均保留，无需改测试。
+- 一次性 AST 核对通过：原有确认弹窗、事件处理与禁用条件、表单约束、aria-label 和流程路径不变；节点摘要不超过 20 汉字、每个节点最多 3 个设计要点且每条不超过 25 汉字，场景结果不超过 40 汉字。
+- `npm run build` 通过；未改后端，未运行 pytest 或质量门禁，未调用模型，也未启动浏览器或开发服务。本次未做视觉验收。

@@ -78,7 +78,6 @@ export default function TicketList({
     <aside className="ticket-queue">
       <div className="queue-heading">
         <div>
-          <span className="section-label">处理队列</span>
           <h2>
             待人工处理 <em>{loading || error ? "—" : tickets.length}</em>
           </h2>
@@ -91,7 +90,7 @@ export default function TicketList({
           <input
             value={query}
             onChange={(event) => setQuery(event.target.value)}
-            placeholder="搜索客户、主题或编号"
+            placeholder="客户、主题或编号"
             aria-label="搜索工单"
           />
         </label>
@@ -136,7 +135,7 @@ export default function TicketList({
               ? "正在加载工单…"
               : error
                 ? "工单数量暂不可用"
-                : `符合条件 ${filteredTickets.length} 张`}
+                : `筛选 ${filteredTickets.length} 张`}
           </span>
           <button type="button" onClick={clearFilters} disabled={!hasFilters}>
             清除筛选
@@ -172,8 +171,8 @@ export default function TicketList({
             title={tickets.length === 0 ? "暂无待处理工单" : "没有匹配的工单"}
             description={
               tickets.length === 0
-                ? "Agent 发现异常或需要审批时会自动加入这里"
-                : "请调整搜索词、部门、优先级或情绪筛选"
+                ? "异常与待审批工单自动入队"
+                : "请调整关键词或筛选条件"
             }
           />
         ) : (
@@ -235,13 +234,7 @@ export default function TicketList({
         )}
       </div>
 
-      <div className="queue-footer">
-        {loading
-          ? "正在更新列表…"
-          : error
-            ? "连接恢复后可重新加载"
-            : `当前显示 ${filteredTickets.length} / ${tickets.length} 张工单`}
-      </div>
+      {error && <div className="queue-footer">连接恢复后可重新加载</div>}
     </aside>
   );
 }

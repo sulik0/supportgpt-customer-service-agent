@@ -18,70 +18,55 @@ export const ACTION_STATES = [
 ].map(([id, label, x, y]) => ({ id, label, x, y }));
 
 export const ACTION_TRANSITIONS = [
-  ["proposed", "pending_approval", "request_approval", "提交操作审批"],
+  ["proposed", "pending_approval", "request_approval", "提交审批"],
   ["pending_approval", "approved", "approve", "独立审批人批准"],
   ["pending_approval", "rejected", "reject", "独立审批人拒绝"],
-  ["approved", "queued", "enqueue", "在同一事务内保存执行消息"],
-  ["queued", "executing", "start_execution", "Worker 持有效租约开始执行"],
-  ["queued", "failed", "manual_failure", "满足人工核实条件后确认失败"],
-  ["executing", "succeeded", "succeed", "外部返回明确成功"],
-  ["executing", "failed", "fail", "外部返回明确失败"],
-  ["executing", "unknown", "mark_unknown", "超时、失联或发现上次执行中断"],
-  ["unknown", "reconciling", "start_reconciliation", "按原幂等键查询实际结果"],
-  ["unknown", "succeeded", "manual_success", "人工凭外部证据确认成功"],
-  ["unknown", "failed", "manual_failure", "人工凭外部证据确认失败"],
-  ["reconciling", "succeeded", "reconcile_success", "查询确认外部成功"],
-  ["reconciling", "failed", "reconcile_failure", "查询确认外部失败"],
-  [
-    "reconciling",
-    "unknown",
-    "reconcile_pending",
-    "暂时无法确认，等待下一次查询",
-  ],
-  ["reconciling", "succeeded", "manual_success", "人工凭外部证据确认成功"],
-  ["reconciling", "failed", "manual_failure", "人工凭外部证据确认失败"],
-  [
-    "succeeded",
-    "compensation_pending",
-    "request_compensation",
-    "单独发起补偿，不自动撤销成功结果",
-  ],
+  ["approved", "queued", "enqueue", "事务内入队"],
+  ["queued", "executing", "start_execution", "有效租约执行"],
+  ["queued", "failed", "manual_failure", "核实后确认失败"],
+  ["executing", "succeeded", "succeed", "外部确认成功"],
+  ["executing", "failed", "fail", "外部确认失败"],
+  ["executing", "unknown", "mark_unknown", "超时或中断"],
+  ["unknown", "reconciling", "start_reconciliation", "原幂等键查询"],
+  ["unknown", "succeeded", "manual_success", "凭外部证据确认成功"],
+  ["unknown", "failed", "manual_failure", "凭外部证据确认失败"],
+  ["reconciling", "succeeded", "reconcile_success", "对账成功"],
+  ["reconciling", "failed", "reconcile_failure", "对账失败"],
+  ["reconciling", "unknown", "reconcile_pending", "未确认，继续查询"],
+  ["reconciling", "succeeded", "manual_success", "凭外部证据确认成功"],
+  ["reconciling", "failed", "manual_failure", "凭外部证据确认失败"],
+  ["succeeded", "compensation_pending", "request_compensation", "独立申请补偿"],
   [
     "compensation_pending",
     "compensating",
     "start_compensation",
-    "Worker 开始已获授权的补偿",
+    "执行已授权补偿",
   ],
   [
     "compensation_pending",
     "compensation_failed",
     "manual_compensation_failure",
-    "满足核实条件后人工确认补偿失败",
+    "核实后确认补偿失败",
   ],
-  ["compensating", "compensated", "compensate_success", "外部明确确认补偿成功"],
+  ["compensating", "compensated", "compensate_success", "外部确认补偿成功"],
   [
     "compensating",
     "compensation_failed",
     "compensate_failure",
-    "外部明确确认补偿失败",
+    "外部确认补偿失败",
   ],
   [
     "compensating",
     "compensation_unknown",
     "mark_compensation_unknown",
-    "补偿超时或进程中断，不盲目重复补偿",
+    "补偿超时或中断",
   ],
-  [
-    "compensation_unknown",
-    "compensated",
-    "manual_compensated",
-    "人工核实补偿已经完成",
-  ],
+  ["compensation_unknown", "compensated", "manual_compensated", "核实补偿完成"],
   [
     "compensation_unknown",
     "compensation_failed",
     "manual_compensation_failure",
-    "人工核实补偿失败",
+    "核实补偿失败",
   ],
 ].map(([from, to, command, label]) => ({ from, to, command, label }));
 
@@ -107,9 +92,8 @@ const step = (from, to, text, action, outbox, lease, review, note) => ({
 
 export const FAULT_SCENARIOS = {
   timeout: {
-    title: "退款超时，先查询实际结果",
-    summary:
-      "超时只说明没有及时收到结果，不说明退款失败。执行消息完成后，另一个对账消息负责查结果。",
+    title: "退款超时先对账",
+    summary: "超时转 unknown，独立对账消息查询实际结果。",
     steps: [
       step(
         0,
@@ -119,7 +103,7 @@ export const FAULT_SCENARIOS = {
         "execute: pending",
         "尚未领取",
         "无",
-        "Action 的 queued 状态与 execute 消息在同一事务中保存。",
+        "queued 与 execute 消息同事务保存。",
       ),
       step(
         3,
@@ -129,7 +113,7 @@ export const FAULT_SCENARIOS = {
         "execute: processing",
         "A 持有 v1，有效",
         "无",
-        "领取版本仅为示例；实际版本由数据库更新产生。调用外部系统前先保存 executing。",
+        "调用前保存 executing，版本由数据库更新。",
       ),
       step(
         3,
@@ -139,7 +123,7 @@ export const FAULT_SCENARIOS = {
         "execute: processing",
         "A 定期续租",
         "无",
-        "外部网络调用期间不长时间持有数据库行锁。",
+        "网络调用不长持数据库行锁。",
       ),
       step(
         5,
@@ -149,7 +133,7 @@ export const FAULT_SCENARIOS = {
         "execute: processing；reconcile: pending",
         "A 仍需通过租约校验",
         "pending · unknown",
-        "保存 unknown、对账消息和核实任务。不会重新发送退款。",
+        "保存 unknown、对账与核实任务，不重发退款。",
       ),
       step(
         3,
@@ -159,7 +143,7 @@ export const FAULT_SCENARIOS = {
         "execute: succeeded；reconcile: pending",
         "execute 租约释放",
         "pending · unknown",
-        "execute 消息处理完成不等于退款成功；业务结果仍由 Action 表示。",
+        "消息完成非退款成功，业务结果看 Action。",
       ),
       step(
         4,
@@ -169,7 +153,7 @@ export const FAULT_SCENARIOS = {
         "reconcile: processing",
         "B 持有对账消息租约",
         "pending · unknown",
-        "对账使用单独的 Outbox 消息和租约。这里由 B 处理只是示例，也可以由 A 领取。",
+        "对账消息独立领取，A / B 均可处理。",
       ),
       step(
         4,
@@ -179,7 +163,7 @@ export const FAULT_SCENARIOS = {
         "reconcile: processing",
         "B 定期续租",
         "pending · unknown",
-        "只查结果，不再次执行写操作。",
+        "只查结果，不重发写操作。",
       ),
       step(
         5,
@@ -189,14 +173,13 @@ export const FAULT_SCENARIOS = {
         "reconcile: succeeded",
         "对账租约释放",
         "resolved · 系统确认",
-        "写回前再次校验租约。系统记录成功事件，并自动关闭人工核实任务。",
+        "校验租约后写回成功，关闭核实任务。",
       ),
     ],
   },
   crash: {
-    title: "外部成功后，Worker 崩溃",
-    summary:
-      "外部已经完成，本地还没有保存结果。新进程必须先对账，不能把 executing 当作重新退款的许可。",
+    title: "外部成功后崩溃",
+    summary: "外部成功但本地未写回，接管后先对账。",
     steps: [
       step(
         3,
@@ -206,7 +189,7 @@ export const FAULT_SCENARIOS = {
         "execute: processing",
         "A 持有 v1，有效",
         "无",
-        "本地已经记录“开始执行”。",
+        "本地记录已开始执行。",
       ),
       step(
         3,
@@ -216,7 +199,7 @@ export const FAULT_SCENARIOS = {
         "execute: processing",
         "A 持有 v1",
         "无",
-        "持久化模拟 OMS 在独立连接中保存结果，进程退出不会删除它。",
+        "独立连接持久化 OMS 结果，退出不丢失。",
       ),
       step(
         3,
@@ -236,7 +219,7 @@ export const FAULT_SCENARIOS = {
         "execute: processing",
         "B 持有新版本 v2",
         "无",
-        "数据库条件更新决定接管者，旧版本失效。",
+        "条件更新接管，旧版本失效。",
       ),
       step(
         4,
@@ -246,7 +229,7 @@ export const FAULT_SCENARIOS = {
         "execute: succeeded；reconcile: pending",
         "旧执行消息租约释放",
         "pending · unknown",
-        "不再次调用退款 Handler。",
+        "不重调退款 Handler。",
       ),
       step(
         4,
@@ -256,7 +239,7 @@ export const FAULT_SCENARIOS = {
         "reconcile: processing",
         "新的对账租约",
         "pending · unknown",
-        "以外部实际记录为准，而不是猜测上一次有没有成功。",
+        "以外部记录为准。",
       ),
       step(
         5,
@@ -266,14 +249,13 @@ export const FAULT_SCENARIOS = {
         "reconcile: succeeded",
         "租约释放",
         "resolved · 系统确认",
-        "PostgreSQL 多进程演练已经验证：该路径下外部写 Handler 只调用一次。",
+        "多进程演练验证该路径仅一次外部写调用。",
       ),
     ],
   },
   heartbeat: {
-    title: "调用较慢，Heartbeat 防止误接管",
-    summary:
-      "只要 A 仍持有效租约并持续续租，B 就不能因为调用超过初始租约时间而抢走任务。",
+    title: "慢调用持续续租",
+    summary: "A 持有效租约并续租时，B 不能接管。",
     steps: [
       step(
         3,
@@ -283,7 +265,7 @@ export const FAULT_SCENARIOS = {
         "execute: processing",
         "A 持有 v1，有效",
         "无",
-        "租约包含 owner、version 和 expires_at。",
+        "租约校验 owner、version、expires_at。",
       ),
       step(
         3,
@@ -293,7 +275,7 @@ export const FAULT_SCENARIOS = {
         "execute: processing",
         "A 的租约仍有效",
         "无",
-        "调用尚未超过 Tool 超时，但可能超过初始租约时长。",
+        "调用未超 Tool 时限，但可超过初始租期。",
       ),
       step(
         3,
@@ -303,7 +285,7 @@ export const FAULT_SCENARIOS = {
         "execute: processing",
         "A / v1，到期时间延后",
         "无",
-        "约每 lease_seconds / 3 续租一次，不改变本次领取版本。",
+        "约每 lease_seconds / 3 续租，版本不变。",
       ),
       step(
         4,
@@ -313,7 +295,7 @@ export const FAULT_SCENARIOS = {
         "execute: processing",
         "仍由 A 持有",
         "无",
-        "续租后的到期时间尚未到达，B 领取不到这条消息。",
+        "租约有效，B 无法领取。",
       ),
       step(
         5,
@@ -323,14 +305,13 @@ export const FAULT_SCENARIOS = {
         "execute: succeeded",
         "租约释放",
         "无",
-        "慢调用不会仅因为耗时较长就生成未知结果或人工任务。",
+        "慢调用不因此转 unknown 或生成人工任务。",
       ),
     ],
   },
   stale: {
-    title: "旧 Worker 返回，不能覆盖新结果",
-    summary:
-      "续租防止误接管；Fencing（领取版本校验）防止已经失去资格的 Worker 再写回。",
+    title: "旧 Worker 写回被拒",
+    summary: "Fencing 校验领取版本，阻止旧 Worker 写回。",
     steps: [
       step(
         3,
@@ -340,7 +321,7 @@ export const FAULT_SCENARIOS = {
         "execute: processing",
         "A / v1，有效",
         "无",
-        "本次 owner 和 version 被保存为不可变的领取凭证。",
+        "owner 与 version 固定为领取凭证。",
       ),
       step(
         3,
@@ -350,7 +331,7 @@ export const FAULT_SCENARIOS = {
         "execute: processing",
         "A 的租约过期",
         "无",
-        "到期不是退款失败，只表示 A 不能再代表系统提交状态。",
+        "到期仅代表 A 失去写回资格，非退款失败。",
       ),
       step(
         4,
@@ -360,7 +341,7 @@ export const FAULT_SCENARIOS = {
         "execute: processing",
         "B / v2，有效",
         "无",
-        "只有当前 owner、当前版本且未过期的 Worker 有资格更新状态。",
+        "仅当前持有者、版本与有效租约可写回。",
       ),
       step(
         5,
@@ -370,7 +351,7 @@ export const FAULT_SCENARIOS = {
         "execute: processing",
         "仍由 B / v2 持有",
         "无",
-        "旧 HTTP 调用可能继续完成，租约不能撤销已经发生的外部操作。",
+        "租约不能撤销已发出的外部调用。",
       ),
       step(
         3,
@@ -380,7 +361,7 @@ export const FAULT_SCENARIOS = {
         "execute: processing",
         "B / v2 不受影响",
         "无",
-        "A 回滚并记录 lease lost，不修改 Action、不安排自己的重试，也不能覆盖 B 的租约。",
+        "A 回滚并记 lease lost，不改状态、重试或 B 租约。",
       ),
       step(
         4,
@@ -390,14 +371,13 @@ export const FAULT_SCENARIOS = {
         "execute: succeeded；reconcile: pending",
         "后续由对账消息领取",
         "pending · unknown",
-        "外部幂等和查询接口仍然必要；本地 Fencing 不是分布式 Exactly Once 保证。",
+        "外部仍需幂等与查询，本地校验非 Exactly Once。",
       ),
     ],
   },
   manual: {
-    title: "对账耗尽，主管人工确认",
-    summary:
-      "DLQ 表示不再自动投递，不代表退款失败。员工必须查外部凭证，再确认结果。",
+    title: "对账耗尽后人工核实",
+    summary: "DLQ 不代表退款失败，须人工核实外部凭证。",
     steps: [
       step(
         4,
@@ -407,7 +387,7 @@ export const FAULT_SCENARIOS = {
         "reconcile: retry",
         "每次领取都有独立凭证",
         "pending · unknown",
-        "暂时查不到或查询超时，不等于外部明确失败。",
+        "查不到或超时不等于失败。",
       ),
       step(
         4,
@@ -417,7 +397,7 @@ export const FAULT_SCENARIOS = {
         "reconcile: dead_letter",
         "无有效租约",
         "pending · dead_letter",
-        "核实任务保留；Action 不会因为进入死信队列自动变 failed。",
+        "保留核实任务，DLQ 不将 Action 改为 failed。",
       ),
       step(
         1,
@@ -427,7 +407,7 @@ export const FAULT_SCENARIOS = {
         "reconcile: dead_letter",
         "无有效租约",
         "pending · dead_letter",
-        "队列合并回复待审批工单与业务待核实工单，但不混淆两种审批。",
+        "队列合并展示，回复审批与业务核实独立。",
       ),
       step(
         0,
@@ -437,7 +417,7 @@ export const FAULT_SCENARIOS = {
         "reconcile: dead_letter",
         "无有效租约",
         "pending · dead_letter",
-        "确认人必须具有 manager/admin 权限，且不是原操作申请人。",
+        "须 manager/admin 且非原申请人确认。",
       ),
       step(
         0,
@@ -447,7 +427,7 @@ export const FAULT_SCENARIOS = {
         "未完成消息: cancelled",
         "清除租约并增加版本",
         "resolved · 人工确认",
-        "事务内记录终态、加密证据、审计事件并取消剩余消息。若仍有有效 Worker 租约，则返回 409，不允许确认。",
+        "事务内保存终态、加密证据和审计，取消剩余消息；有有效租约返回 409。",
       ),
       step(
         1,
@@ -457,14 +437,13 @@ export const FAULT_SCENARIOS = {
         "已完成消息不变；其余 cancelled",
         "旧 Worker 无法再写回",
         "resolved · 人工确认",
-        "人工确认不再调用退款 Tool，也不会自动批准 AI 回复或恢复 LangGraph。",
+        "核实不重发退款，不会自动批准 AI 回复或恢复 LangGraph。",
       ),
     ],
   },
   compensation: {
-    title: "补偿中断，不能盲目再补偿",
-    summary:
-      "成功后的补偿是单独操作。补偿结果未知时，当前实现由人工核实收尾，不展示不存在的自动补偿对账。",
+    title: "补偿中断待核实",
+    summary: "补偿独立授权，结果未知由人工核实。",
     steps: [
       step(
         0,
@@ -474,7 +453,7 @@ export const FAULT_SCENARIOS = {
         "compensate: pending",
         "尚未领取",
         "无",
-        "不会因为退款成功就自动发起撤销；沿用已有补偿授权条件。",
+        "成功不自动撤销，补偿需独立授权。",
       ),
       step(
         3,
@@ -484,7 +463,7 @@ export const FAULT_SCENARIOS = {
         "compensate: processing",
         "A 持有有效租约",
         "无",
-        "调用前保存 compensating，并使用现有补偿幂等键。",
+        "先存 compensating，沿用补偿幂等键。",
       ),
       step(
         3,
@@ -494,7 +473,7 @@ export const FAULT_SCENARIOS = {
         "超时可处理完消息；中断则待接管",
         "写回必须校验当前租约",
         "pending · compensation_unknown",
-        "无法确认外部是否完成补偿，不再次自动调用补偿 Handler。",
+        "补偿未知不自动重调 Handler。",
       ),
       step(
         0,
@@ -504,7 +483,7 @@ export const FAULT_SCENARIOS = {
         "不盲目重发补偿",
         "确认前必须没有有效执行租约",
         "pending · compensation_unknown",
-        "凭真实外部记录选择补偿完成或补偿失败。",
+        "凭外部记录确认补偿结果。",
       ),
       step(
         0,
@@ -514,7 +493,7 @@ export const FAULT_SCENARIOS = {
         "剩余未完成消息: cancelled",
         "租约清除，旧凭证失效",
         "resolved · 人工确认",
-        "当前没有 compensation_unknown → 自动对账 的状态迁移；页面与代码保持一致。",
+        "compensation_unknown 无自动对账迁移。",
       ),
     ],
   },

@@ -245,9 +245,21 @@
   margin-top: 4px;
 }
 
-.tg-guard p {
-  margin: 0;
-  font-size: 12px;
+.tg-state-detail .tg-guard ul {
+  margin: var(--space-2) 0 0;
+  padding-left: var(--space-4);
+  list-style: disc;
+  font-size: var(--font-size-12);
+}
+
+.tg-state-detail .tg-guard li {
+  padding: 0;
+  border: 0;
+}
+
+.tg-boundaries summary {
+  font-size: var(--font-size-14);
+  font-weight: var(--font-weight-semibold);
 }
 
 .tg-transition-list {

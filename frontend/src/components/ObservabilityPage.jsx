@@ -36,22 +36,22 @@ const LANGSMITH_PROJECT_URL =
   import.meta.env.VITE_LANGSMITH_PROJECT_URL?.trim();
 const NODE_LABELS = {
   analyzer: "分析问题",
-  skill_selector: "选择处理能力",
-  context_enrichment: "查询业务和知识",
+  skill_selector: "选择能力",
+  context_enrichment: "查询依据",
   resolver: "生成回复",
-  approval_gate: "检查是否需要审批",
-  human_approval: "人工审批后继续",
+  approval_gate: "审批门控",
+  human_approval: "审批续跑",
   ticket_analyzer: "工单分析",
   tool_call: "工具调用",
   retriever: "知识检索",
   llm_generation: "回复生成",
-  qa: "检查回复质量",
-  escalation: "判断是否转人工",
+  qa: "质量检查",
+  escalation: "风险判断",
 };
 const STRATEGY_LABELS = {
-  rule: "规则处理",
-  jev: "Jev 判断",
-  llm: "LLM（大模型）判断",
+  rule: "规则",
+  jev: "Jev",
+  llm: "大模型",
   not_run: "未执行",
   unknown: "未知",
 };
@@ -145,9 +145,9 @@ function RunDetail({
         <RunSkeleton label="正在加载运行详情…" />
       ) : (
         <div className="obs-detail-content">
-          <Card className="obs-detail-section" title="查看本次调用过程">
+          <Card className="obs-detail-section" title="Trace">
             <div className="obs-trace-box">
-              <code>{run.trace_id || "本次运行未采集 Trace ID"}</code>
+              <code>{run.trace_id || "未采集 Trace ID"}</code>
               {run.trace_id && (
                 <button
                   className="obs-icon-button"
@@ -171,18 +171,16 @@ function RunDetail({
                   target="_blank"
                   rel="noreferrer"
                 >
-                  在 LangSmith 中查看 <ExternalLink size={15} />
+                  打开 LangSmith <ExternalLink size={15} />
                 </a>
-                <p className="obs-helper">
-                  复制 Trace ID，在项目中搜索本次调用。
-                </p>
+                <p className="obs-helper">复制 Trace ID 后到项目搜索。</p>
               </>
             )}
           </Card>
 
-          <Card className="obs-detail-section" title="本次执行了哪些步骤？">
+          <Card className="obs-detail-section" title="执行路径">
             <p className="obs-helper">
-              已保存的执行路径，不表示实时进度或精确耗时。
+              保存的步骤顺序，不含实时进度与精确耗时。
             </p>
             {(run.workflow_path || []).length ? (
               <ol className="obs-workflow">
@@ -203,7 +201,7 @@ function RunDetail({
             )}
           </Card>
 
-          <Card className="obs-detail-section" title="本次运行的配置与结果">
+          <Card className="obs-detail-section" title="配置与结果">
             <dl className="obs-kv-grid">
               <div>
                 <dt>模型</dt>
@@ -231,12 +229,12 @@ function RunDetail({
                 <dt>Skill 选择方式</dt>
                 <dd>
                   {run.skill_selection?.selection_strategy === "intent_rule"
-                    ? "按问题分类选择"
+                    ? "意图规则"
                     : run.skill_selection?.selection_strategy || "-"}
                 </dd>
               </div>
               <div>
-                <dt>问题分析方式</dt>
+                <dt>分析策略</dt>
                 <dd>
                   {snapshot ? (
                     <StrategyBadge value={snapshot.analyzer_strategy} />
@@ -246,7 +244,7 @@ function RunDetail({
                 </dd>
               </div>
               <div>
-                <dt>回复检查方式</dt>
+                <dt>QA 策略</dt>
                 <dd>
                   {snapshot ? (
                     <StrategyBadge value={snapshot.qa_strategy} />
@@ -272,7 +270,17 @@ function RunDetail({
                 <dd>{run.qa_score == null ? "-" : run.qa_score.toFixed(2)}</dd>
               </div>
               <div>
-                <dt>本次是否要求审批</dt>
+                <dt>依据检查</dt>
+                <dd>
+                  {run.hallucination_detected == null
+                    ? "未记录"
+                    : run.hallucination_detected
+                      ? "可能缺少依据"
+                      : "未发现编造内容"}
+                </dd>
+              </div>
+              <div>
+                <dt>审批要求</dt>
                 <dd>{run.approval_required ? "需要" : "不需要"}</dd>
               </div>
             </dl>
@@ -281,8 +289,7 @@ function RunDetail({
               <div className="obs-analyzer-snapshot">
                 <div className="obs-snapshot-heading">
                   <div>
-                    <strong>Analyzer（问题分析）结果</strong>
-                    <span>系统根据这些结果选择后续 Skill 和工具</span>
+                    <strong>Analyzer（问题分析）</strong>
                   </div>
                   <StrategyBadge value={snapshot.analyzer_strategy} />
                 </div>
@@ -321,7 +328,7 @@ function RunDetail({
               </div>
             ) : (
               <p className="obs-snapshot-unavailable">
-                这是一条旧记录，没有保存 Analyzer 和 QA 当时使用的处理方式。
+                旧记录未保存分析与 QA 策略。
               </p>
             )}
           </Card>
@@ -337,10 +344,7 @@ function RunDetail({
                   </div>
                 ))
               ) : (
-                <EmptyState
-                  className="obs-tools-empty"
-                  title="本次运行没有记录工具调用。"
-                />
+                <EmptyState className="obs-tools-empty" title="暂无工具调用" />
               )}
               {(run.citations || []).map((citation, index) => (
                 <div key={`${citation.source}-${index}`}>
@@ -354,7 +358,7 @@ function RunDetail({
 
           {(run.workflow_errors || []).length > 0 && (
             <Notice>
-              <strong>执行过程中出现的异常</strong>
+              <strong>执行异常</strong>
               {run.workflow_errors.map((error, index) => (
                 <p key={index}>{error}</p>
               ))}
@@ -505,13 +509,6 @@ export default function ObservabilityPage({ route }) {
   return (
     <section className="observability-page">
       <div className="obs-hero">
-        <div>
-          <h2>查看每次请求的处理记录</h2>
-          <p>
-            查找运行记录，用 Trace ID 到 LangSmith
-            查看步骤、模型、知识检索和工具调用。
-          </p>
-        </div>
         <div className="obs-hero-actions">
           <button
             className="btn btn-secondary"
@@ -545,7 +542,7 @@ export default function ObservabilityPage({ route }) {
               page.total
             )
           }
-          hint="符合当前查询条件的记录"
+          hint="当前查询条件"
         />
         <MetricCard
           label="本页平均耗时"
@@ -560,8 +557,8 @@ export default function ObservabilityPage({ route }) {
           }
           hint={
             loading || error
-              ? "按本页已记录耗时计算"
-              : `按本页 ${summary.latencyCount} 条已记录耗时计算`
+              ? "仅已记录耗时"
+              : `本页 ${summary.latencyCount} 条耗时`
           }
         />
         <MetricCard
@@ -575,7 +572,7 @@ export default function ObservabilityPage({ route }) {
               (summary.totalTokens?.toLocaleString() ?? "—")
             )
           }
-          hint="本页已记录的模型输入与输出合计"
+          hint="已记录输入输出"
         />
         <MetricCard
           label="本页建议人工处理"
@@ -588,7 +585,7 @@ export default function ObservabilityPage({ route }) {
               summary.reviewCount
             )
           }
-          hint="运行时的判断，不代表工单当前状态"
+          hint="当次建议，非当前状态"
         />
       </div>
 
@@ -597,9 +594,7 @@ export default function ObservabilityPage({ route }) {
           <div>
             <h3>Agent 运行记录</h3>
             <p>
-              {ticketFilter
-                ? `正在查看工单 #${ticketFilter} 的运行记录`
-                : "仅主管和管理员可查看"}
+              {ticketFilter ? `工单 #${ticketFilter}` : "仅主管和管理员可查看"}
             </p>
           </div>
           <div className="obs-table-controls">
@@ -652,7 +647,7 @@ export default function ObservabilityPage({ route }) {
             description={
               ticketFilter
                 ? `工单 #${ticketFilter} 还没有运行记录。`
-                : "还没有运行记录。请先在用户咨询页提交一个问题，或创建一张工单。"
+                : "请先提交咨询或创建工单。"
             }
           />
         ) : (
@@ -669,7 +664,7 @@ export default function ObservabilityPage({ route }) {
                   <th scope="col" className="obs-number">
                     工单
                   </th>
-                  <th scope="col">运行 / Trace 编号</th>
+                  <th scope="col">运行编号</th>
                   <th scope="col" className="obs-number">
                     执行步骤
                   </th>
@@ -724,27 +719,14 @@ export default function ObservabilityPage({ route }) {
                       </td>
                       <td className="obs-mono">
                         <code>{run.id.slice(0, 8)}</code>
-                        <small>
-                          {run.trace_id
-                            ? `Trace ${run.trace_id.slice(0, 10)}…`
-                            : "无 Trace ID"}
-                        </small>
                       </td>
                       <td className="obs-number">
                         <strong>{run.workflow_path?.length || 0} 个步骤</strong>
-                        <small>{run.model_name}</small>
                       </td>
                       <td className="obs-number">
                         <strong className="obs-mono">
                           {run.qa_score == null ? "-" : run.qa_score.toFixed(2)}
                         </strong>
-                        <small>
-                          {run.hallucination_detected == null
-                            ? "未记录质量判断"
-                            : run.hallucination_detected
-                              ? "可能缺少依据"
-                              : "未发现编造内容"}
-                        </small>
                       </td>
                       <td className="obs-number obs-mono">
                         {formatLatency(run.latency_seconds)}

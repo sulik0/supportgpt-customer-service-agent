@@ -10,7 +10,7 @@ import {
   stateLabel,
 } from "./toolGovernanceDemo.js";
 import "./tool-governance-diagram.css";
-import { Badge, Button, Chip } from "./ui";
+import { Button, Chip } from "./ui";
 
 const STATES_BY_ID = Object.fromEntries(
   ACTION_STATES.map((item) => [item.id, item]),
@@ -266,37 +266,32 @@ export default function ToolGovernanceDiagram() {
         <div className="wf-section-heading">
           <div>
             <h2>先分清四类记录</h2>
-            <p>
-              同一笔业务可以有多个执行或对账消息。消息投递成功，不代表业务操作成功。
-            </p>
           </div>
-          <Badge className="wf-demo-label">静态演示 · 不连接真实业务</Badge>
         </div>
         <div className="tg-relationship-grid">
           {[
             [
               "Action",
               "这笔业务目前是什么结果？",
-              "保存操作参数、审批、业务状态、版本和审计事件。跨工单的相同整单退款申请复用同一个 Action。",
+              "Action 保存业务状态、审批与审计。",
             ],
             [
               "Outbox",
               "接下来哪个后台任务要处理？",
-              "通过 tool_action_id 关联 Action。执行、对账和补偿使用不同消息；pending / retry / dead_letter 是投递状态。",
+              "Outbox 按 Action 分别投递执行、对账与补偿消息。",
             ],
             [
               "Worker Lease",
               "现在哪个 Worker 有资格处理？",
-              "租约保存在 Outbox 行中，不是独立表。owner + version + expires_at 决定领取资格，Heartbeat 续租，Fencing 校验写回资格。",
+              "Lease 位于 Outbox 行，校验领取者、版本与有效期。",
             ],
             [
               "Review",
               "哪笔业务还需要人工查证？",
-              "通过 tool_action_id 和 ticket_id 关联操作与工单，每个 Action 最多一条核实记录。自动对账或人工确认后关闭。",
+              "Review 关联工单与 Action，结果确认后关闭。",
             ],
           ].map(([name, question, text]) => (
             <article key={name}>
-              <code>{name}</code>
               <h3>{question}</h3>
               <p>{text}</p>
             </article>
@@ -308,17 +303,13 @@ export default function ToolGovernanceDiagram() {
           <span>1 : 0..1</span> Review <ArrowRight size={15} /> 人工处理队列
         </div>
         <p className="tg-note">
-          回复审批与操作审批、业务结果核实是不同流程。Review 不会直接批准 AI
-          回复，也不会自动恢复 LangGraph。
+          业务核实独立于回复审批，不自动恢复 LangGraph。
         </p>
       </section>
 
       <section className="tg-panel">
         <h2>完整 Action 状态机</h2>
-        <p>
-          覆盖当前后端的全部 15 个状态和 25
-          条命令迁移。点击状态查看下一步；人工命令并不表示任意员工都能直接改状态。
-        </p>
+        <p>15 个状态、25 条迁移，点击查看可用命令。</p>
         <div className="tg-machine-layout">
           <StateMachine selected={selected} onSelect={setSelected} />
           <aside className="tg-state-detail" aria-live="polite">
@@ -336,20 +327,22 @@ export default function ToolGovernanceDiagram() {
                 ))}
               </ul>
             ) : (
-              <p>当前状态没有后续命令，不能重复执行或直接覆盖终态。</p>
+              <p>无后续命令，不能重复执行或覆盖终态。</p>
             )}
             {selected === "succeeded" && (
-              <p className="tg-note">
-                成功结果不能直接覆盖；仍可通过单独的补偿流程处理。它不是整个生命周期的不可变终点。
-              </p>
+              <p className="tg-note">成功结果仅可经独立补偿流程处理。</p>
             )}
             <div className="tg-guard">
               <ShieldCheck size={17} />
-              <p>
-                人工确认需
-                manager/admin、非原申请人、存在待核实记录、版本一致且没有有效
-                Worker 租约。排队中的操作不能人工确认为成功。
-              </p>
+              <div>
+                <strong>人工确认条件</strong>
+                <ul>
+                  <li>manager/admin，且非原申请人</li>
+                  <li>存在待核实记录，版本一致</li>
+                  <li>无有效 Worker 租约</li>
+                  <li>排队中不能人工确认成功</li>
+                </ul>
+              </div>
             </div>
           </aside>
         </div>
@@ -390,14 +383,12 @@ export default function ToolGovernanceDiagram() {
           <article>
             <h3>Outbox 的状态</h3>
             <p>
-              <code>pending → processing → succeeded</code>
+              <code>
+                pending → processing → succeeded；失败 retry → dead_letter；人工
+                cancelled
+              </code>
             </p>
-            <p>
-              失败时进入 <code>retry</code>，到期后重新领取；次数耗尽进入{" "}
-              <code>dead_letter</code>。processing
-              租约到期也可重新领取，版本会更新。人工确认可取消剩余消息：
-              <code>cancelled</code>。
-            </p>
+            <p>到期消息可重新领取，人工确认取消未完成消息。</p>
           </article>
           <article>
             <h3>Review 的状态</h3>
@@ -405,9 +396,7 @@ export default function ToolGovernanceDiagram() {
               <code>无记录 → pending → resolved</code>
             </p>
             <p>
-              unknown、dead_letter 或 compensation_unknown
-              创建核实任务。自动确认结果或人工核实后关闭；已有 pending
-              任务只更新原因，不重复创建。
+              unknown、dead_letter、compensation_unknown 触发，确认结果后关闭。
             </p>
           </article>
         </div>
@@ -416,11 +405,8 @@ export default function ToolGovernanceDiagram() {
       <section className="tg-panel">
         <div className="wf-section-heading">
           <div>
-            <h2>故障发生后，四类记录怎样一起变化？</h2>
-            <p>
-              选择场景，逐步查看消息顺序和每一步保存的状态。这里的 v1 / v2
-              是示意，不是固定数据库版本。
-            </p>
+            <h2>故障恢复时序</h2>
+            <p>逐步核对四类状态，v1 / v2 为示意版本。</p>
           </div>
         </div>
         <div className="wf-tabs">
@@ -439,7 +425,6 @@ export default function ToolGovernanceDiagram() {
         </div>
         <div className="wf-example">
           <div>
-            <small>场景说明</small>
             <p>{scenario.summary}</p>
           </div>
           <div className="wf-controls">
@@ -504,35 +489,19 @@ export default function ToolGovernanceDiagram() {
         </ol>
       </section>
 
-      <section className="tg-panel tg-boundaries">
-        <h2>讲解时需要说明的实现边界</h2>
+      <details className="tg-panel tg-boundaries">
+        <summary>实现边界</summary>
         <ul>
+          <li>仅同客户、同订单整单退款去重；失败或拒绝后不自动新建申请。</li>
+          <li>PostgreSQL 16 多进程演练使用持久化 Mock，真实 OMS 仍待验收。</li>
           <li>
-            去重当前只覆盖同一客户、同一订单的整单退款申请；失败或拒绝后不会自动创建第二个申请。
+            Lease / Fencing 只保护本地；外部仍需幂等与查询，非 Exactly Once。
           </li>
-          <li>
-            PostgreSQL 16
-            多进程演练已验证并发申请、慢调用续租、外部成功后进程崩溃及旧凭证失效。外部系统使用持久化
-            Mock，不等于真实支付或 OMS 验收。
-          </li>
-          <li>
-            Lease 和 Fencing
-            保护本地状态，不能撤销已发出的外部请求。真实接口仍需支持幂等键与可靠的结果查询，不能宣称分布式
-            Exactly Once。
-          </li>
-          <li>
-            DLQ
-            不是业务失败。人工确认必须查证外部事实；当前系统保存证据和审计记录，不自动验证外部凭证真伪。
-          </li>
-          <li>
-            当前已 resolved 的 Review
-            不会自动重新打开。如果原操作曾经对账关闭核实任务，后续补偿又出现未知结果，这个重复核实场景仍需要完善。本次只展示现有实现，不修改业务行为。
-          </li>
-          <li>
-            页面为代码对应的流程说明，不读取线上任务、客户资料或真实租约，不提供审批、重试或退款按钮。
-          </li>
+          <li>DLQ 非业务失败；人工须查证外部事实，系统不自动验真凭证。</li>
+          <li>resolved Review 不自动重开；后续补偿未知的重复核实仍待完善。</li>
+          <li>本页展示代码对应状态，不读取线上任务或执行业务操作。</li>
         </ul>
-      </section>
+      </details>
     </div>
   );
 }

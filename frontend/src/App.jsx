@@ -225,7 +225,7 @@ export default function App() {
         </span>
         <div>
           <strong>SupportGPT</strong>
-          <small>智能客服员工空间</small>
+          <small>员工空间</small>
         </div>
       </NavLink>
       <nav className="sidebar-nav" aria-label="主要功能">
@@ -330,22 +330,18 @@ export default function App() {
           </div>
           <div className="login-brand-copy">
             <h2>
-              Agent 先处理，
+              Agent 处理，
               <br />
-              人工把关关键一步。
+              人工把关。
             </h2>
-            <p>
-              涉及订单、退款和账户的操作，都会在这里等待员工确认。每一次运行都有完整轨迹可查。
-            </p>
+
             <ul>
-              <li>人工处理台：审批回复与工具调用</li>
-              <li>运行监控：节点、耗时与 Token</li>
-              <li>资源管理：工具、Prompt 与知识库</li>
+              <li>审批回复与业务结果</li>
+              <li>追查每次 Agent 运行</li>
+              <li>管理工具与知识</li>
             </ul>
           </div>
-          <p className="staff-register">
-            后台账号由管理员创建，不开放公开注册。
-          </p>
+          <p className="staff-register">账号由管理员创建，不开放注册。</p>
         </section>
         <section className="login-form-panel">
           <div className="staff-login-card">
@@ -354,8 +350,7 @@ export default function App() {
               返回用户咨询
             </NavLink>
             <div className="staff-login-heading">
-              <h1>登录员工后台</h1>
-              <p>使用你的员工账号继续</p>
+              <h1>员工登录</h1>
             </div>
             {authNotice && <Notice>{authNotice}</Notice>}
             <form onSubmit={handleLogin} className="staff-login-form">
@@ -385,7 +380,7 @@ export default function App() {
                 />
               </label>
               <Button type="submit" tone="primary" size="lg" busy={loginBusy}>
-                登录客服后台
+                登录
               </Button>
             </form>
             {DEMO_ACCOUNTS.length > 0 && (
@@ -444,10 +439,10 @@ export default function App() {
               <p>
                 {
                   {
-                    workspace: "处理需要人工确认的回复和业务结果",
-                    observability: "查看运行记录并追查调用过程",
-                    resources: "管理工具、提示词和知识文档",
-                    workflow: "静态演示：了解系统怎样处理请求",
+                    workspace: "审批回复，核实业务结果",
+                    observability: "查询记录，追查调用",
+                    resources: "工具、提示词、知识库",
+                    workflow: "了解请求处理与故障恢复",
                   }[route.view]
                 }
               </p>
@@ -488,7 +483,7 @@ export default function App() {
                   aria-live="polite"
                 >
                   <section className="workspace-stat-card">
-                    <span>当前人工处理队列</span>
+                    <span>人工处理队列</span>
                     <strong>
                       {ticketsLoading ? (
                         <>
@@ -504,10 +499,9 @@ export default function App() {
                         stats.total
                       )}
                     </strong>
-                    <small>待人工处理工单</small>
                   </section>
                   <section className="workspace-stat-card">
-                    <span>高优先级</span>
+                    <span>高优先级（含紧急）</span>
                     <strong>
                       {ticketsLoading ? (
                         <>
@@ -523,7 +517,6 @@ export default function App() {
                         stats.high
                       )}
                     </strong>
-                    <small>紧急与高优先级工单</small>
                   </section>
                 </div>
                 <div className="grid-dashboard">

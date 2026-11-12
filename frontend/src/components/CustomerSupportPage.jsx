@@ -1,5 +1,5 @@
 import "../styles/pages/support.css";
-import { Button, Card } from "./ui";
+import { Badge, Button, Card } from "./ui";
 import { WORKFLOW_EXAMPLES } from "./workflowExamples";
 import { friendlyError } from "../errors";
 import React, { useEffect, useRef, useState } from "react";
@@ -21,17 +21,13 @@ import {
   submitUserFeedback,
 } from "../api/client";
 const DEMO_CUSTOMER_HINTS = {
-  cust_201:
-    "演示订单 ORD-12001：699 元，已发货，物流延迟。可以询问配送进度或取消订单。",
-  cust_202:
-    "演示订单 ORD-12002：1299 元，网关设备已签收，有模拟保修权益。可以询问维修申请。",
-  cust_203:
-    "演示订单 ORD-12003：3999 元，企业 API 套餐已付款，发票处理中。可以询问发票或 API 429 故障。",
+  cust_201: "ORD-12001 · ¥699 · 已发货，物流延迟",
+  cust_202: "ORD-12002 · ¥1299 · 已签收，保修有效",
+  cust_203: "ORD-12003 · ¥3999 · 已付款，发票处理中",
 };
 const WELCOME_MESSAGE = {
   role: "assistant",
-  content:
-    "您好，我是 SupportGPT 智能客服。请告诉我您遇到的问题，我会直接回复处理结果；需要人工确认时也会明确告知您。",
+  content: "您好，请输入问题或选择一个场景。",
 };
 function createSessionId() {
   return (
@@ -265,7 +261,7 @@ export default function CustomerSupportPage({ onStaffEntry, onWorkflowEntry }) {
       {
         id: `new-session-${nextSessionId}`,
         role: "status",
-        content: "已开始新对话。最近七天的历史记录仍保留在当前窗口中。",
+        content: "已开始新对话，历史仍保留。",
         createdAt: new Date().toISOString(),
       },
     ]);
@@ -319,13 +315,14 @@ export default function CustomerSupportPage({ onStaffEntry, onWorkflowEntry }) {
 
       <section className="customer-hero">
         <div className="customer-hero-copy">
-          <span className="customer-eyebrow">
-            <ShieldCheck size={15} /> 智能客服演示
-          </span>
+          <Badge>Demo · 模拟客户与订单</Badge>
           <h1>您好，需要什么帮助？</h1>
-          <p>
-            我可以协助查询订单、退款、账户和售后问题。需要人工确认时，页面会说明原因与处理状态。
-          </p>
+          <p>需要人工确认时，会显示原因与处理状态。</p>
+          <div className="customer-capabilities" aria-label="咨询范围">
+            <Badge>订单与物流</Badge>
+            <Badge>退款与售后</Badge>
+            <Badge>账户与技术支持</Badge>
+          </div>
         </div>
 
         <div className="support-layout">
@@ -347,7 +344,7 @@ export default function CustomerSupportPage({ onStaffEntry, onWorkflowEntry }) {
                 </div>
               </div>
               <label className="customer-selector support-customer-selector">
-                <span>Demo · 演示客户</span>
+                <span>客户</span>
                 <select
                   value={customerId}
                   onChange={(event) => switchCustomer(event.target.value)}
@@ -377,7 +374,6 @@ export default function CustomerSupportPage({ onStaffEntry, onWorkflowEntry }) {
             {DEMO_CUSTOMER_HINTS[customerId] && (
               <p className="support-privacy">
                 {DEMO_CUSTOMER_HINTS[customerId]}
-                以上客户和记录均为虚构演示数据。
               </p>
             )}
 
@@ -524,7 +520,7 @@ export default function CustomerSupportPage({ onStaffEntry, onWorkflowEntry }) {
               result.feedback_token &&
               (feedbackState === "submitted" ? (
                 <div className="feedback-success" role="status">
-                  <CheckCircle2 size={17} /> 感谢您的评价，将用于改进服务质量。
+                  <CheckCircle2 size={17} /> 感谢评价。
                 </div>
               ) : (
                 <form
@@ -556,7 +552,7 @@ export default function CustomerSupportPage({ onStaffEntry, onWorkflowEntry }) {
                     aria-label="评价补充说明（可选）"
                     value={feedbackComment}
                     onChange={(event) => setFeedbackComment(event.target.value)}
-                    placeholder="可选：告诉我们哪里做得好或需要改进"
+                    placeholder="补充评价（可选）"
                     maxLength={2000}
                     disabled={feedbackState === "submitting"}
                   />
@@ -619,9 +615,11 @@ export default function CustomerSupportPage({ onStaffEntry, onWorkflowEntry }) {
                   )}
                 </Button>
               </div>
-              <small className="support-character-count">
-                {message.length} / 5000
-              </small>
+              {message.length > 4500 && (
+                <small className="support-character-count">
+                  {message.length} / 5000
+                </small>
+              )}
 
               {error && (
                 <div className="support-error" role="alert">
@@ -631,34 +629,12 @@ export default function CustomerSupportPage({ onStaffEntry, onWorkflowEntry }) {
 
               <p className="support-privacy">
                 <ShieldCheck size={13} />{" "}
-                系统会隐藏识别出的敏感信息。请勿发送密码、验证码或密钥；需要人工处理时，页面会说明情况。
+                请勿发送密码、验证码或密钥，系统会隐藏识别出的敏感信息。
               </p>
             </form>
           </section>
-          <aside
-            className="support-sidebar"
-            aria-labelledby="support-capabilities-title"
-          >
-            <h2 id="support-capabilities-title">我们能帮您</h2>
-            <div className="customer-capabilities">
-              <span>
-                <CheckCircle2 size={15} /> 订单与物流
-              </span>
-              <span>
-                <CheckCircle2 size={15} /> 退款与售后
-              </span>
-              <span>
-                <CheckCircle2 size={15} /> 账户与技术支持
-              </span>
-            </div>
-            <p>需要人工确认时，页面会说明原因与处理状态。</p>
-          </aside>
         </div>
       </section>
-
-      <footer className="customer-footer">
-        SupportGPT 企业智能客服 · AI 回复可能需要人工复核
-      </footer>
     </main>
   );
 }

@@ -179,7 +179,7 @@ export default function ResourceManagementPage({ route }) {
       setPromptDraft(null);
       setNotice({
         type: "success",
-        text: `已保存提示词候选版本 ${created.version}。正式发布前，还需通过 EvalOps 评测和发布检查。`,
+        text: `候选 ${created.version} 已保存，发布须经 EvalOps 评测与检查。`,
       });
     } catch (error) {
       setNotice({
@@ -230,7 +230,7 @@ export default function ResourceManagementPage({ route }) {
       setDocumentOriginal(EMPTY_DOCUMENT);
       setNotice({
         type: "success",
-        text: `文档 ${payload.id} 及向量索引已更新。`,
+        text: `${payload.id} 与索引已更新。`,
       });
     } catch (error) {
       setNotice({
@@ -258,7 +258,7 @@ export default function ResourceManagementPage({ route }) {
       if (editingDocumentId === document.id) beginDocument();
       setNotice({
         type: "success",
-        text: `文档 ${document.id} 已删除。`,
+        text: `${document.id} 已删除。`,
       });
     } catch (error) {
       setNotice({
@@ -275,7 +275,7 @@ export default function ResourceManagementPage({ route }) {
       const result = await reindexAdminRagDocuments();
       setNotice({
         type: "success",
-        text: `已根据数据库中保存的原文，为 ${result.indexed_documents} 篇文档重建向量索引。`,
+        text: `已从原文重建 ${result.indexed_documents} 篇文档索引。`,
       });
     } catch (error) {
       setNotice({
@@ -299,16 +299,14 @@ export default function ResourceManagementPage({ route }) {
       {confirmation}
       <div className="resource-hero">
         <div>
-          <p>
-            管理员可启停工具、创建提示词候选版本及编辑知识文档；权限与发布规则保持不变。
-          </p>
+          <p>仅管理员可操作。</p>
         </div>
         <Button
           tone="secondary"
           onClick={() => loadResources()}
           disabled={loading || Boolean(busyKey)}
         >
-          <RefreshCw size={15} className={loading ? "spin" : ""} /> 刷新当前列表
+          <RefreshCw size={15} className={loading ? "spin" : ""} /> 刷新
         </Button>
       </div>
 
@@ -382,14 +380,12 @@ export default function ResourceManagementPage({ route }) {
       )}
       {!loading && !loadError && ["tools", "rag"].includes(activeTab) && (
         <label className="resource-search">
-          筛选当前列表
+          筛选
           <input
             value={query}
             onChange={(event) => setQuery(event.target.value)}
             placeholder={
-              activeTab === "tools"
-                ? "工具名称或说明"
-                : "文档标题、类别、版本或 ID"
+              activeTab === "tools" ? "名称或说明" : "标题、类别、版本或 ID"
             }
           />
         </label>
@@ -454,7 +450,7 @@ export default function ResourceManagementPage({ route }) {
                         <code>{tool.name}</code>
                         <p>{tool.description}</p>
                         <details>
-                          <summary>参数与意图范围</summary>
+                          <summary>参数与意图</summary>
                           <pre>
                             {JSON.stringify(
                               {
@@ -474,9 +470,7 @@ export default function ResourceManagementPage({ route }) {
                         )}
                       </td>
                       <td>
-                        {tool.operation_type === "write"
-                          ? "写操作"
-                          : "只读查询"}
+                        {tool.operation_type === "write" ? "写操作" : "只读"}
                       </td>
                       <td>
                         <Badge
@@ -520,7 +514,7 @@ export default function ResourceManagementPage({ route }) {
             ) && (
               <EmptyState
                 icon={<Wrench size={28} />}
-                title={query ? "没有符合筛选条件的工具" : "当前没有已注册工具"}
+                title={query ? "无匹配工具" : "暂无工具"}
                 description={query ? "请调整关键词。" : undefined}
               />
             )}
@@ -538,11 +532,8 @@ export default function ResourceManagementPage({ route }) {
           <div className="prompt-admin-main">
             <div className="resource-section-heading">
               <div>
-                <h3>Prompt Bundle（提示词版本包）</h3>
-                <p>
-                  每个版本包按内容
-                  Hash（摘要）保存。保存后不能覆盖原版本，需要创建新版本。
-                </p>
+                <h3>Prompt Bundle（版本包）</h3>
+                <p>按内容 Hash 固定保存，修改须建新版本。</p>
               </div>
               <Button
                 tone="primary"
@@ -575,10 +566,7 @@ export default function ResourceManagementPage({ route }) {
             </div>
             <div className="prompt-bundle-list">
               {prompts.bundles.length === 0 && (
-                <EmptyState
-                  icon={<FileCode2 size={28} />}
-                  title="暂无提示词版本包"
-                />
+                <EmptyState icon={<FileCode2 size={28} />} title="暂无版本包" />
               )}
               {prompts.bundles.map((bundle) => (
                 <details key={bundle.bundle_id}>
@@ -590,11 +578,11 @@ export default function ResourceManagementPage({ route }) {
                         </strong>
                         {bundle.bundle_id ===
                           prompts.effective.production.bundle_id && (
-                          <Badge tone="accent">生产当前版本</Badge>
+                          <Badge tone="accent">生产</Badge>
                         )}
                         {bundle.bundle_id ===
                           prompts.effective.staging.bundle_id && (
-                          <Badge tone="accent">预发布当前版本</Badge>
+                          <Badge tone="accent">预发布</Badge>
                         )}
                       </div>
                       <code title={bundle.bundle_id}>
@@ -611,22 +599,17 @@ export default function ResourceManagementPage({ route }) {
             </div>
           </div>
 
-          <Card className="prompt-governance-card" title="怎样发布新版本？">
+          <Card className="prompt-governance-card" title="版本发布">
             <ShieldCheck size={20} aria-hidden="true" />
-            <p>
-              这个页面只能保存候选版本，不能直接切换生产环境的提示词。发布前，需要通过
-              EvalOps，在同一测试集上比较当前版本和候选版本，并检查是否符合发布要求。
-            </p>
+            <p>仅保存候选；正式发布须经 EvalOps 同数据集评测与发布检查。</p>
           </Card>
 
           {promptDraft && (
             <form className="prompt-editor" onSubmit={savePrompt}>
               <div className="resource-section-heading">
                 <div>
-                  <h3>新建提示词候选版本</h3>
-                  <p>
-                    保存时，后端会检查模板中的占位符是否符合 PromptOps 要求。
-                  </p>
+                  <h3>创建候选</h3>
+                  <p>后端校验模板占位符。</p>
                 </div>
                 <Button
                   type="button"
@@ -667,18 +650,16 @@ export default function ResourceManagementPage({ route }) {
                   <legend>
                     {
                       {
-                        analyzer: "Analyzer（问题分析）",
-                        resolver: "Resolver（回复生成）",
-                        qa: "QA（回复检查）",
+                        analyzer: "问题分析",
+                        resolver: "回复生成",
+                        qa: "回复检查",
                       }[node]
                     }
                   </legend>
                   {["system", "user"].map((role) => (
                     <label key={role}>
                       <span>
-                        {role === "system"
-                          ? "System（系统提示词）"
-                          : "User（用户输入模板）"}
+                        {role === "system" ? "系统提示词" : "用户输入模板"}
                       </span>
                       <textarea
                         rows={role === "system" ? 5 : 3}
@@ -693,8 +674,7 @@ export default function ResourceManagementPage({ route }) {
                 </fieldset>
               ))}
               <p className="resource-helper">
-                将保存 {promptDraft.version} 的新候选版本，包含
-                Analyzer、Resolver 与 QA 模板；生产和预发布指针不会改变。
+                保存候选 {promptDraft.version}，生产与预发布指针不变。
               </p>
               <div className="resource-form-actions">
                 <Button
@@ -741,7 +721,7 @@ export default function ResourceManagementPage({ route }) {
             <div className="resource-section-heading">
               <div>
                 <h3>知识文档</h3>
-                <p>数据库保存文档原文，ChromaDB 保存用于检索的向量索引。</p>
+                <p>原文存数据库，向量索引存 ChromaDB。</p>
               </div>
               <Button
                 tone="secondary"
@@ -752,14 +732,14 @@ export default function ResourceManagementPage({ route }) {
                   size={14}
                   className={busyKey === "reindex" ? "spin" : ""}
                 />{" "}
-                重建全部文档索引
+                重建全部索引
               </Button>
             </div>
             {documents.length === 0 && (
               <EmptyState
                 icon={<BookOpen size={28} />}
-                title="还没有知识文档"
-                description="可以在新建表单中添加第一篇。"
+                title="暂无文档"
+                description="请在右侧添加。"
               />
             )}
             {documents.length > 0 &&
@@ -770,7 +750,7 @@ export default function ResourceManagementPage({ route }) {
               ) && (
                 <EmptyState
                   icon={<BookOpen size={28} />}
-                  title="没有符合筛选条件的文档"
+                  title="无匹配文档"
                   description="请调整关键词。"
                 />
               )}
@@ -863,7 +843,7 @@ export default function ResourceManagementPage({ route }) {
             <div className="resource-section-heading">
               <div>
                 <h3>{editingDocumentId ? "编辑文档" : "新建文档"}</h3>
-                <p>保存后，系统会将文档分成片段，并更新检索索引。</p>
+                <p>保存后分块并更新索引。</p>
               </div>
               {editingDocumentId && (
                 <Button
@@ -963,7 +943,7 @@ export default function ResourceManagementPage({ route }) {
                 />
               </label>
               <label>
-                <span>文档附加信息（JSON）</span>
+                <span>附加信息（JSON）</span>
                 <textarea
                   className="resource-mono"
                   rows="5"
