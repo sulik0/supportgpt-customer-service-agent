@@ -112,6 +112,8 @@ MCP 不读取项目 `.env`，不导入后端配置，不读取系统 HTTP 代理
 
 该测试使用内存 MCP Client 与 HTTP MockTransport，另启动一次短生命周期 stdio 子进程验证真实握手、发现和 Resource 读取。不会加载后端测试的 conftest、启动浏览器、访问真实模型或写业务数据库。覆盖工具 Schema、接口映射、JWT 转发、审批字段、输入拒绝、HTTP 错误、超时无重试、重定向拒绝和资源释放；不能替代已部署后端与实际客户端的联调。
 
+完整 pytest 会同时收集 MCP 的 unittest 用例与后端异步用例。`tests/mcp/conftest.py` 在 MCP 用例结束后恢复 pytest 管理的当前事件循环，避免 unittest 清理独立循环后使后续异步用例失败。不要删除该兼容 fixture，也不要通过排除 MCP 测试来隐藏混合运行问题。
+
 ## 前端启动
 
 ```bash

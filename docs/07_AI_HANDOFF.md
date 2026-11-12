@@ -39,6 +39,12 @@
 - 反馈：AgentRun、FeedbackEvent 和 AgentRunLink 关联 Trace、用户评价、人工修正与 Evaluation。
 - 前端：连续会话式用户咨询页 + 客服审批后台 + Agent 可观测页。用户端以浏览器已知 Session 列表加载最近 7 天安全历史，始终显示正常回复或安全的风险/异常处理状态，用户评分直接写入 Feedback Pipeline；审批明确区分原样批准、人工修改和拒绝。打开工单详情只读持久化结果，不重复调用 Agent。
 
+## 最近修改：2026-11-12 MCP 与后端测试兼容
+
+- `tests/mcp/conftest.py` 在 MCP 用例结束后恢复 pytest 的事件循环。`IsolatedAsyncioTestCase` 关闭自身循环时会清空当前循环，混合运行时会使后续 pytest-asyncio 用例报 `There is no current event loop`。
+- 保留独立 unittest 入口和全部测试；pytest 兼容修复只作用于 MCP 测试目录，不改变业务代码或全局异步 fixture。
+- 验证时将 MCP 测试与此前失败的后端异步用例连续运行，完整回归交由 GitHub CI。
+
 ## 最近修改：2026-11-04 MCP Server 封装
 
 - 新增 `src/mcp_server/` 与绝对路径启动器 `scripts/run_mcp_server.py`，通过现有员工 API 暴露 8 Tool / 1 Resource / 1 Prompt。
