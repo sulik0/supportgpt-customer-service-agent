@@ -93,6 +93,12 @@ def _configure_offline_environment(runtime: Path) -> None:
         "LLM_FAST_API_KEY": "",
         "LLM_ANALYZER_MODEL_NAME": "",
         "LLM_QA_MODEL_NAME": "",
+        # 本机 .env 可能配置了 Fallback 模型和 Jev，必须关闭，否则会发起真实调用。
+        "LLM_FALLBACK_MODEL_NAME": "",
+        "LLM_FALLBACK_BASE_URL": "",
+        "LLM_FALLBACK_API_KEY": "",
+        "DECISION_PROVIDER": "disabled",
+        "JEV_API_KEY": "",
         "QWEN3_GUARD_ENABLED": "false",
         "TOOL_SELECTION_MODE": "rules",
         "OTEL_ENABLED": "false",
