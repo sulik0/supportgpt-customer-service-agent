@@ -20,6 +20,7 @@ SupportGPT 智能客服 Agent 面向售后服务场景，能够理解用户问�
 | DecisionProvider | 可选 Jev System One；复核 Analyzer 规则候选并评判 QA 正向证据，规则/LLM 作为分层回退 |
 | RAG | ChromaDB、Hybrid Search、轻量 rerank、版本/类别过滤、citation |
 | Tool Calling | 9 个演示 Tool，覆盖客户、订单、工单、物流、保修、支付发票及服务状态；ToolRegistry、Schema、RBAC、持久化脱敏审计；可切换规则路由或受控 ReAct（LLM 只选 Skill 白名单内的只读 Tool，[对比实验](docs/evidence/tool_selection_react_vs_rules.md)） |
+| MCP Server | 独立 stdio 服务，8 个 API 封装 Tool + 1 个 Resource + 1 个 Prompt；复用员工 JWT 与后端工作流，支持 MCP 客户端调用 |
 | Tool Governance | V2.2：业务幂等键、Transactional Outbox、Worker、unknown 自动对账、Retry/DLQ、补偿与 Policy 回放 |
 | Safety | 多层 Prompt Injection 规则、Qwen3Guard Adapter、Risk Engine、PII/泄露过滤 |
 | HITL | 高风险、低置信度、低 QA、投诉与退款场景在 Graph 内暂停审批，完成后从原 Thread 恢复 |
@@ -79,6 +80,22 @@ npm run dev
 ```
 
 打开 [http://127.0.0.1:3000](http://127.0.0.1:3000)。
+
+### MCP 客户端接入
+
+保持后端运行，另建轻量环境（无需重复安装模型和向量库）：
+
+```bash
+python3.11 -m venv .venv-mcp
+.venv-mcp/bin/python -m pip install -r requirements/mcp.txt
+export SUPPORTGPT_API_URL=http://127.0.0.1:8000
+export SUPPORTGPT_API_TOKEN='<通过 /auth/token 获取的员工 JWT>'
+.venv-mcp/bin/python -m src.mcp_server
+```
+
+最后一条命令是 stdio MCP 入口，正常情况下等待客户端输入，不输出启动横幅。客户端自动启动配置见 [MCP 配置示例](deployment/mcp-client.example.json)，需替换两个绝对路径及员工 Token；客户端可通过 `scripts/run_mcp_server.py` 从任意工作目录启动。
+
+提供客服咨询、客户信息、建单、工单结果和审批/执行状态查询。咨询与建单会写入记录；待审回复仍需在员工后台人工处理。完整工具清单、认证及轻量测试见 [MCP 工程指南](docs/05_ENGINEERING_GUIDE.md#mcp-server)。
 
 公网 Demo 默认关闭员工自助注册，公开入口只保留 `/support/*` 和一次性用户评价。生产启动会校验 JWT、Tool 加密、访客签名密钥和 CORS 白名单；可先在本地安全旋转密钥：
 公开构建还应设置 `VITE_STAFF_ENTRY_ENABLED=false`，隐藏员工入口；后端 RBAC 仍是真正的安全边界。

@@ -13,12 +13,14 @@
 - **上下文有据可查**：回复同时使用 RAG citation 和结构化业务上下文，API 返回检索与工具审计信息。
 - **高风险操作受治理**：工具统一经过 ToolRegistry，工单状态统一经过状态机，高风险回复进入 Human-in-the-Loop。
 - **本地可复现、生产可替换**：Mock LLM、SQLite、可选 Redis 和本地 ChromaDB 使 Demo 可离线运行；Provider、Adapter 和部署配置保留替换空间。
-- **避免虚构能力**：当前已有 Checkpoint 和审批暂停/恢复，但没有 MCP、动态 Planner、独立 TaskState 或通用分布式任务队列。
+- **避免虚构能力**：当前已有 Checkpoint 和审批暂停/恢复，并提供独立 stdio MCP Server，但没有动态 Planner、独立 TaskState 或通用分布式任务队列。
 
 ## 2. 整体架构图
 
 ```mermaid
 flowchart TB
+    MCPClient[MCP Client] --> MCPServer[stdio MCP Server]
+    MCPServer -->|员工 JWT| Gateway
     Client[客服端 / API Client] --> Gateway[FastAPI API 层]
 
     subgraph App[应用入口]
@@ -95,7 +97,7 @@ flowchart TB
 |---|---|---|---|---|---|
 | API 层 | 接收请求并校验身份，启动工作流，保存工单和审批记录，再返回结果 | HTTP 请求、JWT、会话与工单参数 | API 响应、工单与审批记录 | FastAPI 适合异步 I/O，Pydantic 用于校验请求和响应 | Django / Flask；Django 自带的管理功能更多，Flask 则需自行补上异步处理和数据校验 |
 | Agent 层 | 执行客服理解、检索、生成和风控流程 | 当前工单与知识库版本 | 回复草稿、citation、工具审计、升级结论 | LangGraph 适合显式状态机式 Agent 编排 | 普通 Chain 难以表达条件路由与节点观测；工作流引擎会增加结构复杂度 |
-| 工具层 | 获取结构化业务上下文并进行调用治理 | 客户标识、操作角色、工单标识 | 工具结果和审计信息 | ToolRegistry 统一权限、Schema、超时和 Mock 标记 | 直接调用 Adapter 简单但不可审计；Function Calling / MCP 尚未采用 |
+| 工具层 | 获取结构化业务上下文并进行调用治理 | 客户标识、操作角色、工单标识 | 工具结果和审计信息 | ToolRegistry 统一权限、Schema、超时和 Mock 标记 | 直接调用 Adapter 简单但不可审计；MCP 仅封装员工 API，未替换内部 ToolRegistry |
 | 知识层 | 管理知识文档、版本、检索与 citation | 查询、版本、类别 | Top-K citation | Hybrid RAG 兼顾语义与精确词匹配 | 纯向量检索较简单但对规则编号、时间窗口和产品词不稳定 |
 | 数据层 | 保存用户、工单、会话、文档和审批数据 | 领域实体 | 事务性持久化记录 | SQLAlchemy Async 同时兼容 SQLite 与 PostgreSQL | 纯 NoSQL 模式更灵活但不利于工单状态和审批事务约束 |
 | 可观测层 | 统一采集全局指标和单次调用路径 | 请求、节点、工具、检索、审批事件 | OTel Trace / Metrics，经 Collector 转发 LangSmith 与 Prometheus | Metrics 看趋势、Trace 定位单次慢点 | Collector 增加一层运维成本，但消除了应用双轨采集 |
@@ -339,17 +341,18 @@ Policy 在 Action 创建时冻结版本、Tool 版本、角色、风险、允许
 
 ### 7.3 MCP
 
-当前项目**没有集成 MCP（Model Context Protocol）**，因此不存在任何运行时 MCP Client、MCP Server、MCP Tool、MCP Resource 或 MCP Prompt 调用。
+`src/mcp_server/` 使用官方 MCP Python SDK 的 FastMCP，以 stdio 对外提供 8 个 Tool、1 个 Resource 和 1 个 Prompt。MCP Client 在项目之外；后端工作流不作为 MCP Client 调用外部 Server。
 
-| 维度 | 当前结论 |
-|---|---|
-| 当前做法 | 未接入 MCP；外部企业工具目前用本地 ToolRegistry 和 Mock Adapter 模拟 |
-| 输入/输出 | 不适用 |
-| 未采用原因 | 目前主要是在本地重现客服处理流程，尚无跨工具宿主的标准化接入需求 |
-| 可替代方案 | 未来将 CRM、OMS、工单、知识库等封装为 MCP Server，再由受限 MCP Client 调用 |
-| 工程权衡 | MCP 有利于标准化集成和工具复用，但会引入连接鉴权、服务发现、资源治理、协议版本和审计边界；在真实外部服务需求明确前不提前引入 |
+```text
+MCP Host --> stdio --> MCP Server --> HTTP + 员工 JWT --> FastAPI
+                                                        --> 既有 Agent / ToolRegistry / HITL
+```
 
-如果未来接入 MCP，仍需保留权限检查、参数校验、超时限制、审计和高风险审批。MCP 工具也必须通过 ToolRegistry 检查后才能执行。
+服务是 API 适配层，独立安装 `requirements/mcp.txt`，不导入 `src.main`、模型、数据库或 ChromaDB。共享 HTTP Client 在 MCP lifespan 中创建和关闭，每个进程串行转发后端请求，使用有限超时、不自动重试、不跟随重定向、不读取系统 HTTP 代理配置。stdout 专用于协议，日志写入 stderr。
+
+角色由后端 JWT 和数据库员工身份决定，不是 MCP 参数。咨询与建单调用原工作流，保留已有引用、风险、审批、成本和工具审计字段；客户概览复用已有 `/customer-context` API，该接口直接读演示适配器，不新增逐 Tool 审计。只读状态查询不重跑 Agent。MCP 不暴露审批决定、退款写入、执行恢复、管理员配置或任意 HTTP 转发工具。
+
+仅支持本机 stdio 宿主；同一进程固定一个员工身份，继承现有员工 API 的访问范围，不提供新增租户隔离。连接远程后端必须用 HTTPS。网络超时不能证明后端已回滚，客户端应先查询工单状态。工具清单与配置见工程指南的 MCP Server 一节。
 
 ## 8. Memory 与 Checkpoint
 
@@ -609,7 +612,7 @@ CD 仅监听成功的 Release Gate，检出其 `head_sha` 并发布 `latest` 与
 | 生产检索 | 抽象 `SearchBackend`，支持 Chroma 与 OpenSearch | 支撑更大语料和真正的 BM25 | 双后端一致性、索引运维、压测 |
 | 持久化审计 | Tool Calls、Action/Outbox/Policy 回放已持久化；继续补 `ticket_status_events` | 满足合规、排障与运营分析 | 数据保留策略与 Alembic Migration |
 | Checkpoint 生命周期 | 增加 TTL/归档、旧 Graph 版本兼容与 Checkpoint 清理任务 | 控制持久化数据规模并保证跨版本恢复 | 迁移策略、兼容测试、合规保留周期 |
-| MCP | 将外部业务能力封装为 MCP Server，但保留本地治理层 | 标准化工具发现和跨宿主集成 | 鉴权、协议治理、可观测与安全隔离 |
+| MCP 后续 | 在现有 stdio API 封装上增加经独立鉴权设计的远程传输或外部 MCP Client | 标准化工具发现和跨宿主集成 | 鉴权、协议治理、可观测与安全隔离 |
 | Planner / Reflection | 在 Golden Set 和预算控制基础上增加受限计划与限次重写 | 处理更复杂的调查型工单 | 质量比较、循环控制、成本和审批边界 |
 | Prompt 治理 | V1 已有 Registry、版本记录、成对评测与门禁回滚；后续 A/B 与灰度 | 支持可重复的质量回归 | 留出集、语义校准、真实流量 |
 
@@ -621,7 +624,7 @@ CD 仅监听成功的 Release Gate，检出其 `head_sha` 并发布 `latest` 与
 | 状态 | 单一 AgentState + 持久化 Checkpoint + AgentExecution | 支持审批暂停、跨重启恢复和业务关联 | 独立 TaskState、通用工作流引擎 |
 | 路由 | 根据规则选择条件边 | 高风险业务需要可解释性 | LLM Selector |
 | 工具 | ToolRegistry + Mock Adapter + ToolAction | Schema、RBAC、持久化审计与高风险审批状态机 | Agent 直接调用外部服务 |
-| 协议 | 本地工具协议 | 本地可复现、依赖少 | MCP（当前未集成） |
+| 协议 | 内部 ToolRegistry + 对外 stdio MCP Server | 复用员工 API 与工作流，保持 MCP 进程轻量 | 远程 MCP 传输与 MCP Client 尚未实现 |
 | 检索 | ChromaDB Hybrid RAG | 兼顾语义与精确词，适合 Demo | 纯向量、生产搜索集群 |
 | 记忆 | SQL 持久化 + 可选 Redis | Redis 故障不阻断流程 | Redis 强依赖、向量长期记忆 |
 | 质量保障 | QA + Response Filter + HITL | 高风险回答优先保守处理 | 自动 Reflection 循环、全自动闭环 |

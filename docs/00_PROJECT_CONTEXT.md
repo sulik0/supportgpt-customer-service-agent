@@ -73,6 +73,7 @@ SupportGPT 智能客服 Agent 面向售后服务场景。项目基于开源客�
 ## 系统整体架构
 
 ```text
+MCP Client --> stdio MCP Server --> 员工 JWT API
 客服端 / API Client
         |
         v
@@ -217,6 +218,7 @@ resolved / closed --reopen--> in_progress
 
 | 模块 | 路径 | 模块会做什么 |
 |---|---|---|
+| MCP 入口 | `src/mcp_server/`、`scripts/run_mcp_server.py` | 标准 MCP 发现与调用，转发现有员工 API；独立依赖、错误转换和 stdio 生命周期 |
 | API 入口 | `src/main.py` | FastAPI 应用、鉴权、聊天、工单、审批、评测、Metrics 与 HTTP Trace |
 | Agent Graph | `src/agents/graph.py` | `AgentState`、节点编排、安全条件路由、token/成本/延迟汇总 |
 | Skill Framework | `src/skills/`、`src/agents/skill_selector.py` | Skill 协议、Registry、Intent 选择、Tool Allowlist 与版本快照 |
@@ -358,6 +360,8 @@ resolved / closed --reopen--> in_progress
 ## 当前完成情况
 
 ### 已完成
+
+- MCP Server V1：`src/mcp_server/` 独立 stdio 进程，以员工 JWT 调用现有 FastAPI；提供 8 个 Tool、1 个 Resource、1 个 Prompt。不导入 Agent/Chroma，不提供人工审批决定或退款执行工具；内部 9 个业务 Tool 仍由 ToolRegistry 管理。
 
 - FastAPI 后端 API、JWT 鉴权和基础 RBAC。
 - LangGraph 六个业务节点 + Skill Selector + Approval Gate 工作流和安全条件路由。

@@ -102,7 +102,7 @@ Prometheus + OpenTelemetry 覆盖 API、Agent、工具、RAG 和审批过程。
 | 可观测 | OpenTelemetry、LangSmith、Prometheus、Grafana |
 | 部署与验证 | Docker、Docker Compose、Kubernetes manifests、pytest、GitHub Actions |
 
-未使用或未实现的技术包括：MCP、pgvector、独立 TaskState、动态多步任务 Planner（Tool 选择的受控 ReAct 见第 9 节）、自动 Reflection Loop、多租户知识隔离、生产搜索后端、Prompt 版本灰度、通用分布式任务队列和旧 Graph 多版本恢复。
+未使用或未实现的技术包括：MCP Client、远程 MCP 传输、pgvector、独立 TaskState、动态多步任务 Planner（Tool 选择的受控 ReAct 见第 9 节）、自动 Reflection Loop、多租户知识隔离、生产搜索后端、Prompt 版本灰度、通用分布式任务队列和旧 Graph 多版本恢复。
 
 ## 8. Agent 数量与节点分工
 
@@ -166,9 +166,9 @@ Tool 选择有两种模式，由 `TOOL_SELECTION_MODE` 切换，默认 `rules`�
 
 ## 10. MCP
 
-当前 **MCP 数量为 0**。系统没有 MCP Client、MCP Server、MCP Tool、MCP Resource 或 MCP Prompt 集成。
+当前实现 **1 个 stdio MCP Server、8 个 MCP Tool、1 个 Resource、1 个 Prompt**，入口为 `src/mcp_server/`。它将客服咨询、客户概览、创建/列出工单、工单结果、待审批列表、执行状态及健康检查封装为 MCP 能力，通过员工 JWT 调用既有 FastAPI。
 
-当前使用本地 ToolRegistry 管理业务工具。未来如对接真实外部系统，可评估 MCP，但在实现前不得声称项目采用了 MCP。
+内部仍有 9 个 ToolRegistry 业务 Tool，两组工具属于不同层次，不能混为一谈。MCP 不自动批准回复、不执行退款、不新增租户隔离；项目未实现 MCP Client 或远程 MCP HTTP/OAuth 服务。后端演示适配器与 Mock 边界保持不变。
 
 ## 11. TaskState 与任务规划
 
@@ -403,7 +403,7 @@ React 前端已拆分为用户咨询页与客服员工后台。用户页采用�
 1. 已实现、部分实现、规划中和未知信息必须明确区分。
 2. 所有 CRM、OMS、Ticketing、退款初筛和默认 LLM 均为 Mock，除非代码与凭据明确变为真实集成。
 3. Agent 数量固定表述为 6 个逻辑业务 Agent 节点 + Skill Selector + Approval Gate；Tool 数量为 9 个注册 Tool，其中 1 个为只能经审批 Action 执行的 Mock 高风险写 Tool。
-4. MCP 数量为 0；Tool 选择默认 rules，可切换受控 ReAct（只选只读 Tool）；独立 TaskState、动态多步任务 Planner、自动 Reflection 和 pgvector 均未采用。Checkpoint 已实现，但只覆盖固定 Workflow 的审批暂停与恢复；Tool Outbox 是高风险写操作专用队列，不是通用 Agent 任务队列。
+4. 有 1 个 stdio MCP Server（8 Tool / 1 Resource / 1 Prompt），未实现 MCP Client；Tool 选择默认 rules，可切换受控 ReAct（只选只读 Tool）；独立 TaskState、动态多步任务 Planner、自动 Reflection 和 pgvector 均未采用。Checkpoint 已实现，但只覆盖固定 Workflow 的审批暂停与恢复；Tool Outbox 是高风险写操作专用队列，不是通用 Agent 任务队列。
 5. Memory V1 以 SQL 结构化消息为事实源、Redis 为 revision Cache，有界历史已注入 Agent；它不等于向量长期记忆。
 6. ChromaDB 是当前向量数据库；Hybrid RAG 是当前检索方案。
 7. 项目没有真实生产上线数据、线上 KPI 或真实客户业务数据。

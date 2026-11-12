@@ -1,0 +1,13 @@
+{
+  "mcpServers": {
+    "supportgpt": {
+      "command": "/absolute/path/to/project/.venv-mcp/bin/python",
+      "args": ["/absolute/path/to/project/scripts/run_mcp_server.py"],
+      "env": {
+        "SUPPORTGPT_API_URL": "http://127.0.0.1:8000",
+        "SUPPORTGPT_API_TOKEN": "<staff-access-token>",
+        "SUPPORTGPT_MCP_TIMEOUT_SECONDS": "120"
+      }
+    }
+  }
+}

@@ -201,7 +201,7 @@ Manager 级退款资格初筛虽然已注册，但主 Workflow 不会自动调�
 
 当前没有用于 LLM Tool Selection 的工具描述 Prompt，因为工具选择不是模型完成的。Registry 中有中文 description，用于说明工具能力和边界。
 
-如果未来采用 Function Calling 或 MCP，应让描述包含用途、禁止场景、必填参数、返回语义、风险级别和权限，但最终权限判断仍必须由代码执行。
+Function Calling 或 MCP 的工具描述应包含用途、禁止场景、必填参数、返回语义、风险级别和权限，但最终权限判断仍必须由代码执行。
 
 ### 30. 如何避免 Agent 调错工具？
 
@@ -723,7 +723,7 @@ API、SQLAlchemy Session、LangGraph 节点和 LLM Provider 采用 async。同�
 
 - 只引用 `03_INTERVIEW_CANON.md` 中可证实的事实。
 - CRM、OMS、历史工单、退款初筛和默认 LLM 必须明确为 Mock。
-- 当前是 6 个逻辑 Agent 节点、9 个注册 Tool、0 个 MCP。
+- 当前是 6 个逻辑 Agent 节点、9 个内部注册 Tool；另有 1 个 stdio MCP Server，暴露 8 个 API 封装 Tool、1 个 Resource 和 1 个 Prompt。
 - 当前没有独立 TaskState、动态 Planner、自动 Reflection、分布式 Circuit Breaker、通用 Queue/DLQ、pgvector、Milvus 或生产级搜索后端。Tool Governance 有专用数据库 Outbox Retry/DLQ；Checkpoint 已覆盖审批暂停与恢复，但尚无 TTL、旧 Graph 多版本恢复或通用后台调度。
 - 当前没有真实上线指标、P95/QPS 基准、真实客户数据或业务提升百分比。
 - 个人参与的工作和是否独立开发，必须按真实经历回答，不能仅根据仓库内容推断。

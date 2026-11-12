@@ -39,6 +39,14 @@
 - 反馈：AgentRun、FeedbackEvent 和 AgentRunLink 关联 Trace、用户评价、人工修正与 Evaluation。
 - 前端：连续会话式用户咨询页 + 客服审批后台 + Agent 可观测页。用户端以浏览器已知 Session 列表加载最近 7 天安全历史，始终显示正常回复或安全的风险/异常处理状态，用户评分直接写入 Feedback Pipeline；审批明确区分原样批准、人工修改和拒绝。打开工单详情只读持久化结果，不重复调用 Agent。
 
+## 最近修改：2026-11-04 MCP Server 封装
+
+- 新增 `src/mcp_server/` 与绝对路径启动器 `scripts/run_mcp_server.py`，通过现有员工 API 暴露 8 Tool / 1 Resource / 1 Prompt。
+- `requirements/mcp.txt` 是独立轻量依赖；运行时不导入后端、不启动后台 Worker、不重复加载模型和向量库。
+- 凭据由宿主环境注入，不能由 Tool 参数覆盖。只提供 stdio，没有远程 MCP HTTP/OAuth 或 MCP Client。
+- 咨询/建单是写操作，待审回复继续由人工处理；超时不自动重试。现有员工 API 的授权范围不等于客户级或多租户隔离。
+- 轻量协议回归位于 `tests/mcp/`，用 unittest 单独运行，不加载后端测试 conftest。客户端示例和操作步骤见工程指南。
+
 ## 最近修改：2026-10-06 线上 Trace 问题修复
 
 - `src/agents/evidence.py` 只在生成前构造精简证据，Resolver 保存 `resolution_evidence`，QA 原样复用；不要恢复 QA 独立拼装上下文的旧方式。

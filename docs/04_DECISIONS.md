@@ -232,7 +232,7 @@ V1 的 Skill 用来约束策略并记录每次选用的能力；它不是独立 
 
 当前调用审计已持久化，高风险写 Tool 已强制独立审批 Action，并在 V2.2 增加业务幂等键、Transactional Outbox、自动对账与补偿契约；但工具仍是本地 Mock Adapter，不能被表述为真实企业系统集成。
 
-## 决策 8：暂不采用 MCP
+## 决策 8：采用独立 stdio MCP Server 封装员工 API（2026-11-04 更新）
 
 ### 问题背景
 
@@ -254,15 +254,15 @@ MCP 可以用一套统一协议连接外部工具、资源和 Prompt。当前项
 
 ### 最终方案
 
-当前不集成 MCP，使用 ToolRegistry + Mock Adapter。
+在 ToolRegistry + Mock Adapter 之上增加独立 stdio MCP Server。使用官方 MCP Python SDK 的 v1 兼容线，并限制 `<2`，避免大版本升级改变 FastMCP API；MCP 只向既有员工 API 转发白名单操作。
 
 ### 为什么选择
 
-项目没有需要接入的真实外部 MCP Server；先验证工具治理模型比提前引入协议基础设施更重要。
+当前需求是让外部 MCP 宿主调用项目已有能力。API 适配可以复用 JWT、工作流和人工审批，独立进程无需再次加载模型及向量库。没有引入 MCP Client 或改写内部业务工具协议。
 
 ### 工程权衡
 
-未来可将真实 CRM、OMS 或工单服务封装成 MCP Server，但 MCP 调用仍需经过权限、参数、超时和审计治理，不能成为绕过 ToolRegistry 的通道。
+本地 stdio 由宿主注入员工 Token，不开放共享网络端口。HTTP 请求设置超时、不跟随重定向、不重试写操作；审批决定和退款执行不暴露给 MCP。远程 MCP 传输需要单独设计用户鉴权与会话隔离，不能把固定员工 Token 的 stdio 服务直接公开为共享 HTTP 服务。
 
 ## 决策 9：默认采用 Mock LLM，Provider 支持 OpenAI 与 Azure OpenAI
 
@@ -871,7 +871,7 @@ Analyzer 意图分类和 QA Review 本质上是有限选项判断。直接使用
 |---|---|---|
 | Agent 编排 | LangGraph 固定工作流 + Skill Selector + Approval Gate | 无动态 Planner / 自治协商；V1 Skill 共享 Workflow |
 | 状态 | 单一 AgentState + SQLite/PostgreSQL Checkpoint + AgentExecution | 无独立 TaskState；无 TTL/旧 Graph 兼容 |
-| 工具 | ToolRegistry + Mock Adapter + Tool Governance V2.2 | 无 MCP；写 Tool 仍为 Mock，但已有业务幂等、Outbox、自动对账、Retry/DLQ、补偿与 Policy 回放契约 |
+| 工具 | ToolRegistry + Mock Adapter + Tool Governance V2.2 | 对外增加 stdio MCP API 封装；写 Tool 仍为 Mock，但已有业务幂等、Outbox、自动对账、Retry/DLQ、补偿与 Policy 回放契约 |
 | 模型 | Mock 默认，OpenAI / Azure 可选 | 无真实生产模型效果承诺 |
 | 决策模型 | 规则 + 可选 Jev DecisionProvider + LLM Fallback | 默认关闭；未接入离线 Judge，未经真实数据校准 |
 | 安全 | 用户 / Tool / RAG 规则 + Qwen3Guard + Risk Engine，输出 Filter + QA | 语义安全默认关闭，尚无真实业务攻击集校准与生产可用性数据 |

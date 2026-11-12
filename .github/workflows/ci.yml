@@ -31,6 +31,7 @@ jobs:
           cache-dependency-path: |
             requirements/base.txt
             requirements/test.txt
+            requirements/mcp.txt
 
       - name: Install dependencies
         run: |

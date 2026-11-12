@@ -19,6 +19,7 @@ PromptOps / EvalOps V1 的注册、成对评测、晋级、回滚和权限边界
 | `requirements/test.txt` | pytest 与 CI |
 | `requirements/eval.txt` | Ragas、DeepEval 离线评测 |
 | `requirements/load.txt` | Locust 压测 |
+| `requirements/mcp.txt` | 独立 MCP 服务，仅 SDK 与 HTTP Client，不含后端模型依赖 |
 
 ## 本地启动
 
@@ -47,7 +48,71 @@ uvicorn src.main:app --reload
 
 已有部署使用 `python scripts/seed_kb.py --only-missing` 增量添加，已有同名文档不会覆盖。这个模式按 SQL 是否存在判断，不检查向量是否丢失；向量目录更换或索引损坏时，请使用后台“重建索引”。
 
-### 前端
+## MCP Server
+
+当前提供独立 **stdio MCP Server**，供本地 MCP 宿主启动。实现采用[官方 MCP Python SDK](https://github.com/modelcontextprotocol/python-sdk/tree/v1.x)的 FastMCP v1 兼容线，依赖限定 `<2`；未实现远程 MCP HTTP/OAuth 服务或 MCP Client。
+
+### 安装与启动
+
+先按前文启动 FastAPI。MCP 进程使用独立轻量环境：
+
+```bash
+python3.11 -m venv .venv-mcp
+.venv-mcp/bin/python -m pip install -r requirements/mcp.txt
+export SUPPORTGPT_API_URL=http://127.0.0.1:8000
+export SUPPORTGPT_API_TOKEN='<员工 JWT>'
+export SUPPORTGPT_MCP_TIMEOUT_SECONDS=120
+.venv-mcp/bin/python -m src.mcp_server
+```
+
+员工 JWT 来自现有 `POST /auth/token`：请求使用 JSON `{"username":"你的员工账号","password":"你的密码"}`，取响应的 `access_token`。不要把密码、Token 或含凭据的客户端配置提交 Git。关闭自助注册的环境先由管理员创建员工账号；普通 MCP 操作使用 `agent` 角色即可。Token 过期后重新登录，更新宿主环境并重启 MCP；服务不自动保存账号密码或刷新 JWT。
+
+该进程通过 stdin/stdout 收发 MCP，等待输入时不打印启动横幅。日志仅写 stderr，不使用 `uvicorn` 启动 MCP。模块入口需要项目根目录；`scripts/run_mcp_server.py` 可从任意目录以绝对路径启动。
+
+[客户端配置示例](../deployment/mcp-client.example.json)采用常见 `mcpServers` JSON 格式。复制到支持此格式的宿主配置中，替换 `command` 和 `args` 为本机绝对路径，并配置员工 Token。其他宿主使用相同 command / args / env 字段，但外层配置格式以宿主为准。示例未自动安装到任何客户端。
+
+| 环境变量 | 默认值 / 要求 |
+|---|---|
+| `SUPPORTGPT_API_URL` | `http://127.0.0.1:8000`；支持 API 路径前缀，远程地址必须 HTTPS，禁止 URL 内凭据、query、fragment |
+| `SUPPORTGPT_API_TOKEN` | 必填员工 JWT；只由宿主提供，不是工具参数 |
+| `SUPPORTGPT_MCP_TIMEOUT_SECONDS` | `120`，范围 1–300 秒；HTTP 连接超时 5 秒 |
+
+MCP 不读取项目 `.env`，不导入后端配置，不读取系统 HTTP 代理环境。每个 MCP 进程固定一个员工身份，继承现有员工接口授权范围，不新增客户归属或多租户权限隔离。不要将该进程作为多用户共享代理。
+
+### 能力清单
+
+| MCP Tool | 后端接口 | 行为 |
+|---|---|---|
+| `support_health` | `GET /health` | 仅检查应用存活，不代表依赖就绪 |
+| `support_chat` | `POST /chat` | 运行完整 Agent，写工单和会话；输入 session_id、customer_id、message、可选 kb_version |
+| `support_customer_context` | `POST /customer-context` | 查询演示客户画像、订单和历史工单数量 |
+| `support_create_ticket` | `POST /tickets` | 创建工单并处理；输入 customer_id、subject、description、可选 kb_version |
+| `support_list_tickets` | `GET /tickets` | 返回 `tickets` 列表，沿用后端未分页接口 |
+| `support_ticket_result` | `GET /tickets/{ticket_id}/agent-result` | 只读持久化结果，不重跑 Agent |
+| `support_pending_approvals` | `GET /approvals/pending` | 返回 `approvals` 列表；其中 final_response 仍是草稿 |
+| `support_execution_status` | `GET /agent-executions/{execution_id}` | 只读暂停/恢复状态，不触发恢复 |
+
+另有 `supportgpt://guide` Resource 和 `support_assistant` Prompt，提供演示数据边界、工具选择与人工审批说明。8 个 MCP Tool 是员工 API 的封装，不是内部 9 个 ToolRegistry 业务 Tool 的替代或新增版本。
+
+示例调用 `support_chat`：
+
+```json
+{"session_id":"mcp-demo-001","customer_id":"cust_201","message":"我的 ORD-12001 物流到哪里了？"}
+```
+
+同一客户续聊复用 session_id；不能换客户复用该会话。`support_chat` 已经产生工单，不要对同一请求再调用建单工具。返回 `approval_required=true` 时必须显示待审批状态，不能把草稿当作最终批准的答复。审批决定、退款执行、员工管理、任意 URL 请求均不对 MCP 开放。
+
+服务不重复初始化数据库、ChromaDB、模型或 Outbox Worker；咨询和建单仍会调用后端当前配置的模型。HTTP 请求在单个 MCP 进程内串行转发，出错不自动重试、不跟随重定向。鉴权、权限、冲突、限流等错误使用 MCP `isError=true` 返回，不透传后端错误正文或凭据。超时不能证明后端回滚，先查工单/审批状态，再决定是否重新提交。
+
+### 轻量离线验证
+
+```bash
+.venv-mcp/bin/python -m unittest discover -s tests/mcp -v
+```
+
+该测试使用内存 MCP Client 与 HTTP MockTransport，另启动一次短生命周期 stdio 子进程验证真实握手、发现和 Resource 读取。不会加载后端测试的 conftest、启动浏览器、访问真实模型或写业务数据库。覆盖工具 Schema、接口映射、JWT 转发、审批字段、输入拒绝、HTTP 错误、超时无重试、重定向拒绝和资源释放；不能替代已部署后端与实际客户端的联调。
+
+## 前端启动
 
 ```bash
 cd frontend
