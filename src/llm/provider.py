@@ -1,4 +1,5 @@
 import json
+import re
 from abc import ABC, abstractmethod
 from typing import Dict, Any, List, Tuple
 from src.config import settings
@@ -34,6 +35,10 @@ def _resolution_messages(
     )
     if RESOLUTION_OUTPUT_POLICY not in messages[0]["content"]:
         messages[0]["content"] += "\n" + RESOLUTION_OUTPUT_POLICY
+    # 工具结果和 RAG 多为中文，会带偏模型；在用户消息末尾追加确定性语言指令。
+    directive = resolution_language_directive(description)
+    if directive:
+        messages[-1]["content"] += f"\n\n{directive}"
     return messages
 
 
@@ -172,32 +177,58 @@ def _normalize_ticket_analysis(analysis: Dict[str, Any]) -> Dict[str, Any]:
     return normalized
 
 
+_ENGLISH_REQUESTS = (
+    "用英文",
+    "用英语",
+    "使用英文",
+    "英文回复",
+    "reply in english",
+    "respond in english",
+    "answer in english",
+)
+_CHINESE_REQUESTS = (
+    "用中文",
+    "用汉语",
+    "使用中文",
+    "中文回复",
+    "reply in chinese",
+    "respond in chinese",
+    "answer in chinese",
+)
+_ENGLISH_HINT_WORDS = re.compile(
+    r"\b(?:the|is|are|my|me|can|could|you|your|i|we|to|of|what|where|how|please|"
+    r"order|status|account|refund|help|tell|need|not|with|for|and)\b",
+    re.IGNORECASE,
+)
+
+
 def _mock_uses_chinese(text: str) -> bool:
     """让 Mock 在中英文演示中遵循当前输入和显式切换要求。"""
     lowered = text.lower()
-    english_requests = (
-        "用英文",
-        "用英语",
-        "使用英文",
-        "英文回复",
-        "reply in english",
-        "respond in english",
-        "answer in english",
-    )
-    chinese_requests = (
-        "用中文",
-        "用汉语",
-        "使用中文",
-        "中文回复",
-        "reply in chinese",
-        "respond in chinese",
-        "answer in chinese",
-    )
-    if any(item in lowered for item in english_requests):
+    if any(item in lowered for item in _ENGLISH_REQUESTS):
         return False
-    if any(item in lowered for item in chinese_requests):
+    if any(item in lowered for item in _CHINESE_REQUESTS):
         return True
     return any("\u4e00" <= char <= "\u9fff" for char in text)
+
+
+def resolution_language_directive(description: str) -> str:
+    """按当前 Description 的主要语言生成确定性回复语言指令。
+
+    用户显式指定回复语言、或无法可靠判断（如其他语种）时返回空串，交给 Prompt 规则处理。
+    """
+    lowered = description.lower()
+    if any(item in lowered for item in (*_ENGLISH_REQUESTS, *_CHINESE_REQUESTS)):
+        return ""
+    cjk = sum("\u4e00" <= char <= "\u9fff" for char in description)
+    latin = sum(char.isascii() and char.isalpha() for char in description)
+    if cjk and cjk / (cjk + latin) >= 0.3:
+        return "Respond in Chinese."
+    if not cjk and latin >= 3 and _ENGLISH_HINT_WORDS.search(description):
+        # 含带重音等非 ASCII 字母时更可能是其他语种，不强制英文。
+        if all(char.isascii() or not char.isalpha() for char in description):
+            return "Respond in English."
+    return ""
 
 
 class BaseLLMProvider(ABC):

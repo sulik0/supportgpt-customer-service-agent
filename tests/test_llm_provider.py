@@ -3,7 +3,12 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import pytest
 
 from src.config import settings
-from src.llm.provider import MockLLMProvider, OpenAILLMProvider
+from src.llm.provider import (
+    MockLLMProvider,
+    OpenAILLMProvider,
+    _resolution_messages,
+    resolution_language_directive,
+)
 from src.models.intents import IntentType
 from src.rag.embedding import MockEmbeddingProvider, get_embedding_provider
 
@@ -326,3 +331,24 @@ async def test_thinking_flag_is_not_sent_to_fallback_model(monkeypatch):
         "thinking": {"type": "disabled"}
     }
     assert "extra_body" not in backup.chat.completions.create.await_args.kwargs
+
+
+def test_language_directive_follows_current_description():
+    assert (
+        resolution_language_directive("Hi, can you tell me the status of my order ORD-7001?")
+        == "Respond in English."
+    )
+    assert resolution_language_directive("订单 ORD-7001 到哪里了？") == "Respond in Chinese."
+    # 用户明确指定语言、或无法可靠判断时不追加指令
+    assert resolution_language_directive("请用英文回复退款流程") == ""
+    assert resolution_language_directive("Please reply in English 你好") == ""
+    assert resolution_language_directive("Où est ma commande?") == ""
+
+
+def test_resolution_messages_append_language_directive_to_user_message():
+    english = _resolution_messages("订单", "Where is my order, please help?", "中文上下文")
+    chinese = _resolution_messages("order", "我的订单到哪里了", "English context")
+
+    assert english[-1]["role"] == "user"
+    assert english[-1]["content"].endswith("Respond in English.")
+    assert chinese[-1]["content"].endswith("Respond in Chinese.")
