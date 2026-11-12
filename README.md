@@ -1,13 +1,41 @@
+[在线演示](https://support-gpt-enterprise-resume.vercel.app/) · [处理流程](https://support-gpt-enterprise-resume.vercel.app/#workflow)
+
 # SupportGPT 智能客服 Agent
 
-[![CI](https://github.com/sulik0/support-gpt-enterprise-resume/actions/workflows/ci.yml/badge.svg)](https://github.com/sulik0/support-gpt-enterprise-resume/actions/workflows/ci.yml)
-[![Release Gate](https://github.com/sulik0/support-gpt-enterprise-resume/actions/workflows/release-quality-gate.yml/badge.svg)](https://github.com/sulik0/support-gpt-enterprise-resume/actions/workflows/release-quality-gate.yml)
-[![CD](https://github.com/sulik0/support-gpt-enterprise-resume/actions/workflows/cd.yml/badge.svg)](https://github.com/sulik0/support-gpt-enterprise-resume/actions/workflows/cd.yml)
+[![CI](https://github.com/sulik0/supportgpt-customer-service-agent/actions/workflows/ci.yml/badge.svg)](https://github.com/sulik0/supportgpt-customer-service-agent/actions/workflows/ci.yml)
+[![Release Gate](https://github.com/sulik0/supportgpt-customer-service-agent/actions/workflows/release-quality-gate.yml/badge.svg)](https://github.com/sulik0/supportgpt-customer-service-agent/actions/workflows/release-quality-gate.yml)
+[![CD](https://github.com/sulik0/supportgpt-customer-service-agent/actions/workflows/cd.yml/badge.svg)](https://github.com/sulik0/supportgpt-customer-service-agent/actions/workflows/cd.yml)
 [![Python](https://img.shields.io/badge/Python-3.11-blue)](https://www.python.org/)
 [![FastAPI](https://img.shields.io/badge/FastAPI-0.110%2B-green)](https://fastapi.tiangolo.com/)
 [![LangGraph](https://img.shields.io/badge/LangGraph-workflow-orange)](https://github.com/langchain-ai/langgraph)
 
-SupportGPT 智能客服 Agent 面向售后服务场景，能够理解用户问题、查询业务信息和知识库、生成并检查回复，并在需要时转交人工处理。项目基于 LangGraph Workflow，包含 Tool 调用、Hybrid RAG、安全治理、审批、OpenTelemetry 可观测和离线评测能力。
+## 30 秒看懂
+
+一个基于 LangGraph 的售后客服 Agent：查询业务与知识、检查回复和风险，高风险请求交由人工审批并从原检查点继续。
+
+1. **选场景提问**：在用户页选择“订单与物流联合查询”查看工具查询，或选“退款转人工确认”体验待审路径，确认后发送。
+2. **展开处理过程**：在该条回复下点击“查看处理过程”，核对意图、Skill、工具、引用、QA 与风险结论。
+3. **进入后台审批**：点击“员工入口”，选择演示账号并登录，在人工处理台选择待审批工单，批准原回复、修改或拒绝。
+
+演示账号按钮需配置 `VITE_DEMO_ACCOUNTS`，不自动创建账号；本地假接口预置了审批工单，账号与启动方式见[本地演示说明](#本地展示不调用模型)。
+
+**用户咨询：展开 Agent 处理过程**
+
+![用户咨询页展开处理过程，展示意图、Skill、工具查询与知识引用](docs/images/support-agent-insight.png)
+
+**人工处理台：审核回复并核实业务结果**
+
+![人工处理台显示工单详情、回复草稿、风险提示和审批操作](docs/images/staff-ticket-review.png)
+
+**运行监控：追查保存的运行快照**
+
+![Agent 运行详情展示 Trace 和保存的执行路径](docs/images/agent-run-detail.png)
+
+**流程说明：高风险 Action 状态机**
+
+![高风险 Action 状态机展示审批、异步执行与结果未知时的合法迁移](docs/images/workflow-action-state-machine.png)
+
+以上为本地假接口在 1280×720 视口下的界面截图，业务资料为演示数据；截图没有调用模型或执行真实退款。
 
 ## 核心能力
 
@@ -30,9 +58,9 @@ SupportGPT 智能客服 Agent 面向售后服务场景，能够理解用户问�
 | Feedback | AgentRun + FeedbackEvent + Trace 关联，脱敏 SFT/DPO 候选导出 |
 | Resilience | LLM/RAG/Tool 统一超时、有界 Retry、Circuit Breaker、Fallback 与风险降级 |
 | Memory | SQL 结构化会话为事实源、Redis revision Cache、有界上下文、实体续接与 HITL 结算 |
-| Frontend | 用户咨询与评价页、客服审批后台、Agent 可观测页 |
+| Frontend | 用户咨询与评价、凭令牌查看处理过程、客服审批后台、Agent 运行监控与流程演示 |
 
-用户页顶部“项目架构”和后台“Agent 处理流程”可打开完整流程说明。也可以直接访问前端地址的 `/#workflow`，无需登录。页面支持节点详情和四种场景的逐步演示，展示同时进行的业务查询与知识检索，以及发现安全风险或需要人工审批时怎样处理。不调用后端或模型，不展示真实客户数据，也不代替实际请求的 Trace。
+用户页顶部“了解它如何工作”和后台“Agent 处理流程”可打开完整流程说明。也可以直接访问前端地址的 `/#workflow`，无需登录。页面支持节点详情和四种场景的逐步演示，展示同时进行的业务查询与知识检索，以及发现安全风险或需要人工审批时怎样处理。不调用后端或模型，不展示真实客户数据，也不代替实际请求的 Trace。
 
 ## 快速启动
 
@@ -81,6 +109,26 @@ npm run dev
 
 打开 [http://127.0.0.1:3000](http://127.0.0.1:3000)。
 
+### 本地展示（不调用模型）
+
+已安装前端依赖后，在两个终端分别运行：
+
+```bash
+# 终端一：本地假接口
+cd frontend
+npm run demo:api
+```
+
+```bash
+# 终端二：前端通过同源代理连接假接口
+cd frontend
+npm run dev:demo
+```
+
+打开 [http://127.0.0.1:5180](http://127.0.0.1:5180)。演示账号格式见 [frontend/.env.example](frontend/.env.example)，本地测试账号及限制见[本地验收说明](docs/DESIGN.md#124-本地界面验收启动方式)。在启动前端的终端设置 `VITE_DEMO_ACCOUNTS` 后可显示填入按钮；也可手动填写本地测试账号。
+
+按上面的三步路径体验，第三步选择预置的待审批工单。本地假接口不需要后端、数据库、模型 Key 或 Docker；展示结束后停止两个终端进程。
+
 ### MCP 客户端接入
 
 保持后端运行，另建轻量环境（无需重复安装模型和向量库）：
@@ -97,8 +145,11 @@ export SUPPORTGPT_API_TOKEN='<通过 /auth/token 获取的员工 JWT>'
 
 提供客服咨询、客户信息、建单、工单结果和审批/执行状态查询。咨询与建单会写入记录；待审回复仍需在员工后台人工处理。完整工具清单、认证及轻量测试见 [MCP 工程指南](docs/05_ENGINEERING_GUIDE.md#mcp-server)。
 
-公网 Demo 默认关闭员工自助注册，公开入口只保留 `/support/*` 和一次性用户评价。生产启动会校验 JWT、Tool 加密、访客签名密钥和 CORS 白名单；可先在本地安全旋转密钥：
-公开构建还应设置 `VITE_STAFF_ENTRY_ENABLED=false`，隐藏员工入口；后端 RBAC 仍是真正的安全边界。
+公网 Demo 默认关闭员工自助注册，公开入口只保留 `/support/*` 和一次性用户评价。生产启动会校验 JWT、Tool 加密、访客签名密钥和 CORS 白名单。
+
+仅展示用户咨询的公开构建可设置 `VITE_STAFF_ENTRY_ENABLED=false`；需要展示员工后台时保留入口，并通过 `VITE_DEMO_ACCOUNTS` 配置可公开的演示账号，后端 RBAC 仍是实际安全边界。
+
+可先在本地安全旋转密钥：
 
 ```bash
 python scripts/generate_production_secrets.py --env-file .env --confirm

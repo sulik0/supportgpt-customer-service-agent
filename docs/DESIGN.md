@@ -35,12 +35,14 @@ SupportGPT 是智能客服 Agent 平台，不是通用 Agent 构建器。用户�
 
 | 当前页面 | 主要 API / 数据来源 | 已有操作 | 不应假装已有的能力 |
 |---|---|---|---|
-| 用户咨询 | `/support/requests`、`/support/history`、`/support/runs/{id}/insight`、`/feedback/user`、前端场景定义 | 场景填入、七天历史、新对话、评价；正常/待人工回复可凭本次令牌展开路径与安全摘要，显示跳过状态、耗时和 Token，跳转流程图；超过 4500 字显示计数 | 实时节点推送、真实客户登录、历史会话重命名或删除、历史凭据补发 |
+| [用户咨询](images/support-agent-insight.png) | `/support/requests`、`/support/history`、`/support/runs/{id}/insight`、`/feedback/user`、前端场景定义 | 场景填入、七天历史、新对话、评价；正常/待人工回复可凭本次令牌展开路径与安全摘要，显示跳过状态、耗时和 Token，跳转流程图；超过 4500 字显示计数 | 实时节点推送、真实客户登录、历史会话重命名或删除、历史凭据补发 |
 | 员工登录 | `/auth/token`、`VITE_DEMO_ACCOUNTS` | 登录、退出、过期处理；有效演示账号只填入；左栏为标题与 3 个要点，保留账号创建说明 | 公开员工注册、自动创建演示账号 |
-| 人工处理台 | `/staff/review-queue`、`/tickets/{id}/agent-result`、`/customer-context`、审批与 Tool Review API | 筛选、读取结果、修改/通过/拒绝、按权限核实；来源用 Badge，订单按币种显示，事件使用北京时间；保留风险与退款防重复提示 | 打开详情自动重跑 Agent、完整高风险 Action 管理控制台 |
-| Agent 运行监控 | `/observability/runs`、`/feedback/runs/{id}` | 工单查询、分页；列表只留主值，模型、质量判断与 Trace 移入详情；可复制 Trace ID，项目 URL 配置后显示外链 | 在本地完整复刻 LangSmith Span 树、实时节点耗时瀑布图 |
+| [人工处理台](images/staff-ticket-review.png) | `/staff/review-queue`、`/tickets/{id}/agent-result`、`/customer-context`、审批与 Tool Review API | 筛选、读取结果、修改/通过/拒绝、按权限核实；来源用 Badge，订单按币种显示，事件使用北京时间；保留风险与退款防重复提示 | 打开详情自动重跑 Agent、完整高风险 Action 管理控制台 |
+| [Agent 运行监控](images/agent-run-detail.png) | `/observability/runs`、`/feedback/runs/{id}` | 工单查询、分页；列表只留主值，模型、质量判断与 Trace 移入详情；可复制 Trace ID，项目 URL 配置后显示外链 | 在本地完整复刻 LangSmith Span 树、实时节点耗时瀑布图 |
 | 资源管理 | `/admin/resources/tools`、`prompts`、`rag-documents` | 工具启停、Prompt 候选、知识文档增改删与索引重建；精简说明，保留发布限制、确认与错误提示 | 注册任意新 Tool Handler、前端直接晋级/回滚 Prompt、知识检索调试台 |
-| Agent 处理流程 | 前端流程与故障场景定义 | 节点输入/输出与最多 3 条设计要点、场景步进、Action 状态机、故障时序；配置用键值对，实现边界默认折叠 | 真实执行、实时故障演练、真实 Trace 或耗时 |
+| [Agent 处理流程](images/workflow-action-state-machine.png) | 前端流程与故障场景定义 | 节点输入/输出与最多 3 条设计要点、场景步进、Action 状态机、故障时序；配置用键值对，实现边界默认折叠 | 真实执行、实时故障演练、真实 Trace 或耗时 |
+
+表中四张展示图对应 README 的“30 秒看懂”，数据来自本地 `frontend/tests/fixtures/server.mjs`；截图不调用后端或模型，不代表线上真实业务记录。
 
 API 权限仍由后端决定：人工队列允许 `agent / manager / admin`；运行监控允许 `manager / admin`；资源管理只允许 `admin`；业务结果人工确认遵循现有主管权限。
 
@@ -477,3 +479,11 @@ npm run dev:demo
 - 本地验证：定向 pytest 11 项通过（Python 3.12，包含既有反馈幂等与 CORS 回归）、前端 30 项测试通过、`npm run build` 与 `compileall` 通过；未在本机运行全量 pytest 或质量门禁。
 - 最后一次 1280×720 无界面验收使用假接口，确认普通/退款/安全三种结果、逐条绑定、令牌只走请求头与内存、展开前不请求、已缓存面板重开不重复请求、查看及跳转不新增咨询。控制台只有已有 favicon 404，服务和浏览器均已关闭。
 - 完整后端、固定 100 条 Mock 门禁、数据库演练和容器构建由推送后的 GitHub CI 验证，部署状态按同一提交核对；不触发付费 Release Quality Gate。
+
+## 15. 展示任务 6：README 素材（2026-11-12）
+
+README 顶部提供已核实可访问的在线地址、一句话定位、三步演示路径与四张 1280×720 截图。截图来源为当前 `75263e5` 页面与本地假接口，未改动生产界面或业务代码；图片覆盖咨询处理过程、人工审批、运行详情和 Action 状态机，较长内容通过页面自身滚动查看重点。
+
+演示账号仅由启动前端时的环境变量注入，使用现有假接口的本地测试身份，不新增仓库凭据。三步路径在同一浏览器会话内演示，后台操作仅作用于假接口的预置工单。截图结束即关闭浏览器和两个服务；不调用真实模型。
+
+本地验证：前端 `npm test` 30 项通过，`npm run build` 通过；图片均为 1280×720，README 与页面功能表的图片链接存在。已走通场景填入、展开处理过程、演示账号登录及预置工单审批；控制台仅有既有 favicon 404，未修改后端或运行本地全量 pytest / 质量门禁。
