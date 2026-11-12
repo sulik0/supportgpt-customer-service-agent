@@ -134,3 +134,28 @@ def test_judge_key_is_only_required_for_external_judges(monkeypatch):
         agent_engine="deepeval",
     )
     assert __import__("os").environ["OPENAI_API_KEY"] == "judge-test-key"
+
+
+def test_smoke_suite_includes_online_regression_cases_from_extra_dataset(tmp_path):
+    from src.evaluation.real_llm_regression import (
+        ONLINE_REGRESSION_CASE_IDS,
+        merge_dataset_files,
+    )
+
+    extra = PROJECT_ROOT / "evaluation" / "online_regression" / (
+        "supportgpt_online_regression.json"
+    )
+    merged = merge_dataset_files([BASELINE_PATH, extra], tmp_path / "merged.json")
+    cases = load_evaluation_dataset(merged)
+
+    plan = build_real_llm_run_plan(
+        settings=_settings(),
+        cases=cases,
+        suite="smoke",
+        explicit_case_ids=None,
+        max_workflow_calls=40,
+    )
+
+    assert plan.case_ids == (*SMOKE_CASE_IDS, *ONLINE_REGRESSION_CASE_IDS)
+    # 10 个非攻击用例中新增 4 个，C08 安全短路不计调用
+    assert plan.estimated_workflow_llm_calls == 27 + 4 * 3

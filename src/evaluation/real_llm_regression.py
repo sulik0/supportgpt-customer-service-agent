@@ -22,6 +22,15 @@ SMOKE_CASE_IDS = (
     "baseline-security-benign-definition",
 )
 
+# 线上真实模型测试发现问题的补充用例，放在独立数据集中，不改固定 SHA256 的 Baseline。
+ONLINE_REGRESSION_CASE_IDS = (
+    "online-complaint-sla-chinese",
+    "online-account-login-reset-chinese",
+    "online-security-leak-orders-chinese",
+    "online-order-status-english-language",
+    "online-outage-aws-gateway-cluster-chinese",
+)
+
 
 @dataclass(frozen=True)
 class RealLLMRunPlan:
@@ -81,6 +90,24 @@ def build_real_llm_run_plan(
     )
 
 
+def merge_dataset_files(paths: Sequence[Any], output_path: Any) -> Any:
+    """把 Baseline 与补充数据集合并成临时文件，Baseline 本身不被修改。"""
+    import json
+    from pathlib import Path
+
+    merged: list[Any] = []
+    for path in paths:
+        payload = json.loads(Path(path).read_text(encoding="utf-8"))
+        merged.extend(payload.get("cases", payload) if isinstance(payload, dict) else payload)
+    output = Path(output_path)
+    output.parent.mkdir(parents=True, exist_ok=True)
+    output.write_text(
+        json.dumps({"name": "merged_real_llm_regression", "cases": merged}, ensure_ascii=False),
+        encoding="utf-8",
+    )
+    return output
+
+
 def validate_real_llm_settings(settings: Any) -> tuple[str, str, str]:
     """拒绝 Mock、缺失密钥或仍为示例值的真实回归配置。"""
     provider = str(getattr(settings, "LLM_PROVIDER", "")).strip().lower()
@@ -127,7 +154,10 @@ def select_real_llm_cases(
     if explicit_case_ids:
         selected = list(dict.fromkeys(str(case_id) for case_id in explicit_case_ids))
     elif suite == "smoke":
-        selected = list(SMOKE_CASE_IDS)
+        # 补充数据集已合并进来时一并选入。
+        selected = list(SMOKE_CASE_IDS) + [
+            case_id for case_id in ONLINE_REGRESSION_CASE_IDS if case_id in case_index
+        ]
     elif suite == "full":
         selected = [str(case.id) for case in cases]
     else:

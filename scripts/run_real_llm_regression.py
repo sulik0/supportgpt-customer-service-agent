@@ -18,6 +18,7 @@ from src.evaluation.offline_rag import (
 )
 from src.evaluation.real_llm_regression import (
     build_real_llm_run_plan,
+    merge_dataset_files,
     prepare_judge_environment,
     require_live_confirmation,
 )
@@ -40,6 +41,17 @@ def parse_args() -> argparse.Namespace:
         "--output-dir",
         type=Path,
         default=PROJECT_ROOT / "evaluation" / "reports" / "real_llm",
+    )
+    parser.add_argument(
+        "--extra-dataset",
+        type=Path,
+        default=(
+            PROJECT_ROOT
+            / "evaluation"
+            / "online_regression"
+            / "supportgpt_online_regression.json"
+        ),
+        help="Supplementary cases merged into the run; pass a missing path to skip.",
     )
     parser.add_argument("--suite", choices=("smoke", "full"), default="smoke")
     parser.add_argument(
@@ -74,6 +86,11 @@ def parse_args() -> argparse.Namespace:
 async def main() -> None:
     """先输出无密钥计划，再在显式确认后执行真实回归。"""
     args = parse_args()
+    if args.extra_dataset.exists():
+        args.dataset = merge_dataset_files(
+            [args.dataset, args.extra_dataset],
+            args.output_dir / "_merged_dataset.json",
+        )
     cases = load_evaluation_dataset(args.dataset)
     plan = build_real_llm_run_plan(
         settings=settings,
