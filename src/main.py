@@ -1705,6 +1705,13 @@ async def retry_tool_outbox_event(
 def _public_review_feedback(agent_output: dict) -> tuple[str, str, str]:
     """将内部风险原因转换为可安全展示给用户的处理说明。"""
     degradation = str(agent_output.get("degradation_level", "none")).lower()
+    # 安全拦截会往 errors 写入记录，必须先于处理异常判断，否则被误显示为服务不可用。
+    if agent_output.get("security_threat_detected"):
+        return (
+            "risk_review",
+            "我已经收到您的请求。由于该问题涉及敏感或高风险操作，自动处理已暂停并转交人工客服进行安全核验。",
+            "为保护您的账户和业务权益，客服人员确认后会继续处理。",
+        )
     if agent_output.get("errors") or degradation in {"human_required", "failed"}:
         return (
             "processing_exception",
