@@ -203,6 +203,8 @@ JEV_NOUL_THRESHOLD=0.7
 
 Jev 只用于线上封闭决策；当前不作为 Baseline、Ragas 或 DeepEval 的离线 Judge。`Skill Selector`、Tool Allowlist / RBAC / Risk Policy 和 Approval Gate 仍为确定性代码。
 
+思考模式：`deepseek-flash` 默认开启思考，思考 Token 计入 `max_tokens`。实测约 2/3 的输出额度花在思考上，导致 Resolver 回复和 QA JSON 被截断。设置 `LLM_THINKING=disabled` 后，主模型和 Fast Model 请求会带上 `extra_body={"thinking":{"type":"disabled"}}`；备用模型不传此参数。留空则不传，保持服务端默认行为。
+
 可选备用模型与 Resilience 配置：
 
 ```dotenv

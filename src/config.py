@@ -85,6 +85,8 @@ class Settings(BaseSettings):
     LLM_RESOLVER_MAX_RAG_CHARS: int = Field(default=5000, ge=500, le=20000)
     LLM_RESOLVER_MAX_TOOL_CHARS: int = Field(default=2500, ge=500, le=10000)
     LLM_QA_MAX_CONTEXT_CHARS: int = Field(default=4000, ge=500, le=20000)
+    # DeepSeek 等兼容服务的思考模式；留空不传。思考 Token 会占用 max_tokens 输出额度。
+    LLM_THINKING: Optional[str] = Field(default=None, pattern="^(enabled|disabled)$")
     # DecisionProvider 默认关闭，Jev 只处理封闭选项的语义决策。
     DECISION_PROVIDER: str = Field(default="disabled", pattern="^(disabled|jev)$")
     JEV_API_KEY: Optional[str] = Field(default=None)

@@ -259,3 +259,70 @@ async def test_openai_provider_uses_compatible_fallback_model(monkeypatch):
     assert backup_client.chat.completions.create.await_args.kwargs["model"] == (
         "backup-model"
     )
+
+
+def _completion(content="ok"):
+    completion = MagicMock()
+    completion.choices = [MagicMock(message=MagicMock(content=content), finish_reason="stop")]
+    completion.usage = MagicMock(prompt_tokens=10, completion_tokens=2)
+    return completion
+
+
+def _patch_openai_settings(monkeypatch, thinking):
+    monkeypatch.setattr("src.llm.provider.settings.LLM_API_KEY", "test-key")
+    monkeypatch.setattr("src.llm.provider.settings.LLM_MODEL_NAME", "deepseek-flash")
+    monkeypatch.setattr("src.llm.provider.settings.LLM_BASE_URL", None)
+    monkeypatch.setattr("src.llm.provider.settings.LLM_THINKING", thinking)
+
+
+@pytest.mark.asyncio
+async def test_thinking_disabled_is_sent_to_primary_model(monkeypatch):
+    # 思考 Token 会占用 max_tokens，关闭后 DeepSeek 不再截断回复。
+    _patch_openai_settings(monkeypatch, "disabled")
+    monkeypatch.setattr("src.llm.provider.settings.LLM_FALLBACK_MODEL_NAME", None)
+    client = MagicMock()
+    client.chat.completions.create = AsyncMock(return_value=_completion())
+    with patch("openai.AsyncOpenAI", return_value=client):
+        provider = OpenAILLMProvider()
+
+    await provider.generate_resolution("subject", "我要查询物流", "context")
+
+    kwargs = client.chat.completions.create.await_args.kwargs
+    assert kwargs["extra_body"] == {"thinking": {"type": "disabled"}}
+
+
+@pytest.mark.asyncio
+async def test_thinking_unset_sends_no_extra_body(monkeypatch):
+    _patch_openai_settings(monkeypatch, None)
+    monkeypatch.setattr("src.llm.provider.settings.LLM_FALLBACK_MODEL_NAME", None)
+    client = MagicMock()
+    client.chat.completions.create = AsyncMock(return_value=_completion())
+    with patch("openai.AsyncOpenAI", return_value=client):
+        provider = OpenAILLMProvider()
+
+    await provider.generate_resolution("subject", "我要查询物流", "context")
+
+    assert "extra_body" not in client.chat.completions.create.await_args.kwargs
+
+
+@pytest.mark.asyncio
+async def test_thinking_flag_is_not_sent_to_fallback_model(monkeypatch):
+    # 备用模型可能不是 DeepSeek，不能传它不认识的参数。
+    _patch_openai_settings(monkeypatch, "disabled")
+    monkeypatch.setattr("src.llm.provider.settings.LLM_FALLBACK_MODEL_NAME", "backup")
+    monkeypatch.setattr("src.llm.provider.settings.LLM_FALLBACK_BASE_URL", "http://backup")
+    monkeypatch.setattr("src.llm.provider.settings.LLM_FALLBACK_API_KEY", "backup-key")
+    primary = MagicMock()
+    primary.chat.completions.create = AsyncMock(side_effect=RuntimeError("down"))
+    backup = MagicMock()
+    backup.chat.completions.create = AsyncMock(return_value=_completion())
+    with patch("openai.AsyncOpenAI", side_effect=[primary, backup]):
+        provider = OpenAILLMProvider()
+    assert provider.fallback_client is backup
+
+    await provider.generate_resolution("subject", "我要查询物流", "context")
+
+    assert primary.chat.completions.create.await_args.kwargs["extra_body"] == {
+        "thinking": {"type": "disabled"}
+    }
+    assert "extra_body" not in backup.chat.completions.create.await_args.kwargs

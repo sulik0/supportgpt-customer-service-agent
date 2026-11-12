@@ -37,6 +37,13 @@ def _resolution_messages(
     return messages
 
 
+def _thinking_kwargs() -> Dict[str, Any]:
+    """按配置给主模型和 Fast Model 传思考模式开关，备用模型不传。"""
+    if not settings.LLM_THINKING:
+        return {}
+    return {"extra_body": {"thinking": {"type": settings.LLM_THINKING}}}
+
+
 async def _complete_chat(
     client: Any,
     model: str,
@@ -482,11 +489,16 @@ class OpenAILLMProvider(BaseLLMProvider):
 
         async def invoke(target_client: Any, target_model: str) -> Tuple[str, int, int]:
             """单次 SDK 调用禁用内建重试，由 Resilience 统一管理。"""
+            call_kwargs = (
+                kwargs
+                if target_client is self.fallback_client
+                else {**kwargs, **_thinking_kwargs()}
+            )
             return await _complete_chat(
                 target_client,
                 target_model,
                 messages,
-                kwargs,
+                call_kwargs,
                 operation=operation,
                 json_mode=json_mode,
             )
