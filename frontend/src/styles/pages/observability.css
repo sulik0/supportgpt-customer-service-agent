@@ -1,5 +1,6 @@
 /* Monitor-only layouts, including the portalled run-detail drawer. */
-.observability-page, .obs-detail-drawer {
+.observability-page,
+.obs-detail-drawer {
   min-width: 0;
   overflow-wrap: anywhere;
 }
@@ -225,7 +226,6 @@
   gap: var(--space-3);
 }
 
-
 .obs-detail-drawer {
   width: min(680px, 100vw);
   max-width: 100vw;
@@ -299,7 +299,8 @@
   flex-shrink: 0;
 }
 
-.obs-helper, .obs-snapshot-unavailable {
+.obs-helper,
+.obs-snapshot-unavailable {
   color: var(--color-text-secondary);
   font-size: var(--font-size-12);
   margin: var(--space-3) 0;
@@ -353,12 +354,14 @@
   color: var(--color-text-secondary);
 }
 
-.obs-kv-grid, .obs-analyzer-grid {
+.obs-kv-grid,
+.obs-analyzer-grid {
   display: grid;
   gap: 0;
 }
 
-.obs-kv-grid > div, .obs-analyzer-grid > div {
+.obs-kv-grid > div,
+.obs-analyzer-grid > div {
   display: grid;
   grid-template-columns: minmax(100px, 1fr) minmax(0, 2fr);
   gap: var(--space-4);
@@ -366,15 +369,18 @@
   border-bottom: 1px solid var(--color-border-subtle);
 }
 
-.obs-kv-grid > div:last-child, .obs-analyzer-grid > div:last-child {
+.obs-kv-grid > div:last-child,
+.obs-analyzer-grid > div:last-child {
   border-bottom: 0;
 }
 
-.obs-kv-grid dt, .obs-analyzer-grid dt {
+.obs-kv-grid dt,
+.obs-analyzer-grid dt {
   font-size: var(--font-size-13);
 }
 
-.obs-kv-grid dd, .obs-analyzer-grid dd {
+.obs-kv-grid dd,
+.obs-analyzer-grid dd {
   text-align: right;
   min-width: 0;
   overflow-wrap: anywhere;
@@ -432,7 +438,8 @@
   border-bottom: 0;
 }
 
-.obs-compact-list span, .obs-compact-list code {
+.obs-compact-list span,
+.obs-compact-list code {
   flex: 1;
   min-width: 0;
   overflow-wrap: anywhere;
@@ -481,12 +488,10 @@
   overflow-wrap: anywhere;
 }
 
-
 @media (max-width: 1023px) {
   .obs-summary-grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
-
 }
 
 @media (max-width: 767px) {
@@ -510,13 +515,14 @@
     padding: 0 var(--space-4) var(--space-4);
   }
 
-  .obs-kv-grid > div, .obs-analyzer-grid > div {
+  .obs-kv-grid > div,
+  .obs-analyzer-grid > div {
     grid-template-columns: minmax(0, 1fr);
     gap: var(--space-1);
   }
 
-  .obs-kv-grid dd, .obs-analyzer-grid dd {
+  .obs-kv-grid dd,
+  .obs-analyzer-grid dd {
     text-align: left;
   }
-
 }

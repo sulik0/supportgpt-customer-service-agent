@@ -19,7 +19,9 @@
   color: var(--color-nav-text);
 }
 
-.sidebar-brand, .customer-brand, .login-brand {
+.sidebar-brand,
+.customer-brand,
+.login-brand {
   display: flex;
   align-items: center;
   gap: 10px;
@@ -34,20 +36,24 @@
   text-decoration: none;
 }
 
-.sidebar-brand div, .customer-brand div {
+.sidebar-brand div,
+.customer-brand div {
   display: grid;
   min-width: 0;
 }
 
-.sidebar-brand strong, .customer-brand strong {
+.sidebar-brand strong,
+.customer-brand strong {
   font-size: 15px;
 }
 
-.sidebar-brand small, .sidebar-account small {
+.sidebar-brand small,
+.sidebar-account small {
   color: var(--color-nav-text-muted);
 }
 
-.brand-mark, .customer-brand > span {
+.brand-mark,
+.customer-brand > span {
   display: grid;
   place-items: center;
   flex-shrink: 0;
@@ -65,12 +71,13 @@
 
 .sidebar-group-label {
   font-size: 11px;
-  letter-spacing: .06em;
+  letter-spacing: 0.06em;
   color: var(--color-nav-text-muted);
   padding: 0 10px 6px;
 }
 
-.sidebar-nav a, .sidebar-support {
+.sidebar-nav a,
+.sidebar-support {
   display: flex;
   align-items: center;
   gap: 10px;
@@ -83,7 +90,8 @@
   flex: 1;
 }
 
-.sidebar-nav a:hover, .sidebar-support:hover {
+.sidebar-nav a:hover,
+.sidebar-support:hover {
   background: var(--color-nav-panel);
   text-decoration: none;
 }
@@ -350,7 +358,7 @@
 }
 
 .login-brand-copy li::before {
-  content: '';
+  content: "";
   width: 6px;
   height: 6px;
   flex-shrink: 0;
@@ -475,7 +483,6 @@
   overflow: visible;
 }
 @media (max-width: 1023px) {
-
   .app-shell {
     display: block;
   }
@@ -497,7 +504,6 @@
   }
 }
 @media (max-width: 767px) {
-
   .app-topbar {
     padding: 16px;
     gap: 12px;

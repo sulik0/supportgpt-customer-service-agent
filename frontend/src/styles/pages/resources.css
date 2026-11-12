@@ -478,13 +478,11 @@
   white-space: normal;
 }
 @media (max-width: 1279px) {
-
   .resource-page .prompt-admin-layout {
     grid-template-columns: minmax(0, 1fr);
   }
 }
 @media (max-width: 767px) {
-
   .resource-page .resource-section {
     padding: 16px;
   }
@@ -501,11 +499,14 @@
     gap: 4px;
   }
 
-  .resource-page .resource-tabs button > svg, .resource-page .resource-tabs button > span {
+  .resource-page .resource-tabs button > svg,
+  .resource-page .resource-tabs button > span {
     display: none;
   }
 
-  .resource-page .prompt-environments, .resource-page .prompt-editor fieldset, .resource-page .rag-form-grid {
+  .resource-page .prompt-environments,
+  .resource-page .prompt-editor fieldset,
+  .resource-page .rag-form-grid {
     grid-template-columns: minmax(0, 1fr);
   }
 
@@ -513,7 +514,8 @@
     white-space: normal;
   }
 
-  .resource-page :is(input, textarea, select), .resource-page .prompt-editor textarea {
+  .resource-page :is(input, textarea, select),
+  .resource-page .prompt-editor textarea {
     font-size: 16px;
   }
 

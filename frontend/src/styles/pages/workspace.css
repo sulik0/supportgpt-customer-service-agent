@@ -42,11 +42,14 @@
   gap: 16px;
 }
 
-.workspace-detail, .workspace-detail-main, .workspace-review-column {
+.workspace-detail,
+.workspace-detail-main,
+.workspace-review-column {
   min-width: 0;
 }
 
-.workspace-detail-main, .workspace-review-column {
+.workspace-detail-main,
+.workspace-review-column {
   display: grid;
   gap: 16px;
   align-content: start;
@@ -117,7 +120,8 @@
   padding-left: 36px;
 }
 
-.workspace-page .queue-filters input, .workspace-page .queue-filters select {
+.workspace-page .queue-filters input,
+.workspace-page .queue-filters select {
   min-height: var(--control-md);
   width: 100%;
   border-color: var(--color-border-strong);
@@ -193,7 +197,8 @@
   min-width: 0;
 }
 
-.workspace-page .ticket-row-meta, .workspace-page .ticket-row-footer {
+.workspace-page .ticket-row-meta,
+.workspace-page .ticket-row-footer {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
@@ -374,14 +379,16 @@
   font-size: 12px;
 }
 
-.workspace-page .orders-disclosure, .workspace-page .reference-disclosure {
+.workspace-page .orders-disclosure,
+.workspace-page .reference-disclosure {
   min-width: 0;
   background: var(--color-surface);
   border-color: var(--color-border);
   border-radius: var(--radius-card);
 }
 
-.workspace-page .orders-disclosure summary, .workspace-page .reference-disclosure summary {
+.workspace-page .orders-disclosure summary,
+.workspace-page .reference-disclosure summary {
   display: flex;
   flex-wrap: wrap;
   justify-content: space-between;
@@ -416,7 +423,8 @@
   gap: 8px;
 }
 
-.workspace-page .order-item strong, .workspace-page .order-item b {
+.workspace-page .order-item strong,
+.workspace-page .order-item b {
   font-family: var(--font-mono);
 }
 
@@ -784,7 +792,7 @@
 }
 
 .workspace-tool-trace li:not(:last-child)::before {
-  content: '';
+  content: "";
   position: absolute;
   left: 4px;
   top: 12px;
@@ -813,7 +821,8 @@
   font-size: 13px;
 }
 
-.workspace-tool-trace span, .workspace-tool-trace time {
+.workspace-tool-trace span,
+.workspace-tool-trace time {
   color: var(--color-text-secondary);
   font-size: 12px;
 }
@@ -849,12 +858,12 @@
   }
 }
 @media (max-width: 1023px) {
-
   .grid-dashboard {
     grid-template-columns: minmax(0, 1fr);
   }
 
-  .workspace-page.has-selection .ticket-queue, .workspace-page:not(.has-selection) .workspace-detail {
+  .workspace-page.has-selection .ticket-queue,
+  .workspace-page:not(.has-selection) .workspace-detail {
     display: none;
   }
 
@@ -868,8 +877,8 @@
   }
 }
 @media (max-width: 767px) {
-
-  .workspace-page .ticket-overview > .ui-card-body, .workspace-page .assistant-panel > .ui-card-body {
+  .workspace-page .ticket-overview > .ui-card-body,
+  .workspace-page .assistant-panel > .ui-card-body {
     padding: 16px;
   }
 
@@ -877,7 +886,9 @@
     grid-template-columns: minmax(0, 1fr);
   }
 
-  .workspace-page .queue-filters input, .workspace-page .queue-filters select, .workspace-page .tool-review-form :is(input, select, textarea) {
+  .workspace-page .queue-filters input,
+  .workspace-page .queue-filters select,
+  .workspace-page .tool-review-form :is(input, select, textarea) {
     font-size: 16px;
   }
 

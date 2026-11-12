@@ -10,7 +10,9 @@
   background: var(--color-surface);
   color: var(--color-text);
   font-weight: 500;
-  transition: background-color var(--duration-fast), border-color var(--duration-fast);
+  transition:
+    background-color var(--duration-fast),
+    border-color var(--duration-fast);
   white-space: nowrap;
 }
 
@@ -30,24 +32,28 @@
   border-color: var(--color-accent-hover);
 }
 
-.btn-danger, .btn-danger-outline {
+.btn-danger,
+.btn-danger-outline {
   color: var(--color-danger);
   border-color: var(--color-danger-border);
   background: var(--color-surface);
 }
 
-.btn-danger:hover:not(:disabled), .btn-danger-outline:hover:not(:disabled) {
+.btn-danger:hover:not(:disabled),
+.btn-danger-outline:hover:not(:disabled) {
   background: var(--color-danger-soft);
   border-color: var(--color-danger-border);
 }
 
-.btn-quiet, .btn-ghost {
+.btn-quiet,
+.btn-ghost {
   background: transparent;
   border-color: transparent;
   color: var(--color-text-secondary);
 }
 
-.icon-button, .obs-icon-button {
+.icon-button,
+.obs-icon-button {
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -60,7 +66,16 @@
   border-radius: var(--radius-control);
 }
 
-.status-badge, .obs-status, .status-chip, .priority-chip, .resource-status, .obs-strategy, .evidence-badge, .risk-badge, .review-badge, .passed-badge {
+.status-badge,
+.obs-status,
+.status-chip,
+.priority-chip,
+.resource-status,
+.obs-strategy,
+.evidence-badge,
+.risk-badge,
+.review-badge,
+.passed-badge {
   display: inline-flex;
   align-items: center;
   gap: 4px;
@@ -75,25 +90,40 @@
   color: var(--color-text-secondary);
 }
 
-.badge-success, .status-success, .status-resolved, .enabled, .passed-badge {
+.badge-success,
+.status-success,
+.status-resolved,
+.enabled,
+.passed-badge {
   color: var(--color-success);
   background: var(--color-success-soft);
   border-color: var(--color-success-soft);
 }
 
-.badge-warning, .status-review, .status-pending_approval, .priority-high, .priority-urgent, .review-badge {
+.badge-warning,
+.status-review,
+.status-pending_approval,
+.priority-high,
+.priority-urgent,
+.review-badge {
   color: var(--color-warning);
   background: var(--color-warning-soft);
   border-color: var(--color-warning-border);
 }
 
-.badge-error, .status-error, .risk-badge {
+.badge-error,
+.status-error,
+.risk-badge {
   color: var(--color-danger);
   background: var(--color-danger-soft);
   border-color: var(--color-danger-border);
 }
 
-.ui-notice, .resource-notice, .action-notice, .obs-error-banner, .obs-config-notice {
+.ui-notice,
+.resource-notice,
+.action-notice,
+.obs-error-banner,
+.obs-config-notice {
   display: flex;
   align-items: flex-start;
   gap: 12px;
@@ -104,19 +134,28 @@
   overflow-wrap: anywhere;
 }
 
-.notice-error, .resource-notice.error, .action-notice.error, .obs-error-banner {
+.notice-error,
+.resource-notice.error,
+.action-notice.error,
+.obs-error-banner {
   color: var(--color-danger);
   background: var(--color-danger-soft);
   border-color: var(--color-danger-border);
 }
 
-.notice-success, .resource-notice.success, .action-notice.success {
+.notice-success,
+.resource-notice.success,
+.action-notice.success {
   color: var(--color-success);
   background: var(--color-success-soft);
   border-color: var(--color-success-soft);
 }
 
-.ui-loading, .obs-empty, .resource-loading, .resource-empty, .queue-empty {
+.ui-loading,
+.obs-empty,
+.resource-loading,
+.resource-empty,
+.queue-empty {
   display: flex;
   justify-content: center;
   align-items: center;
@@ -137,7 +176,7 @@
 }
 
 .ui-dialog::backdrop {
-  background: rgb(15 23 42 / .28);
+  background: rgb(15 23 42 / 0.28);
 }
 
 .ui-dialog-header {
@@ -187,7 +226,6 @@
   border-right: 0;
 }
 
-
 /* Phase 0 primitives; legacy tones and class names remain supported. */
 
 .btn {
@@ -209,12 +247,14 @@
   color: var(--color-surface);
 }
 
-.btn-danger, .btn-danger-outline {
+.btn-danger,
+.btn-danger-outline {
   color: var(--color-danger);
   border-color: var(--color-danger-border);
 }
 
-.btn-quiet, .btn-ghost {
+.btn-quiet,
+.btn-ghost {
   background: transparent;
   border-color: transparent;
   color: var(--color-text-secondary);
@@ -239,7 +279,8 @@
   white-space: nowrap;
 }
 
-.ui-badge, .badge-neutral {
+.ui-badge,
+.badge-neutral {
   background: var(--color-surface-sunken);
   color: var(--color-text-secondary);
 }
@@ -262,7 +303,8 @@
   border-color: transparent;
 }
 
-.badge-danger, .badge-error {
+.badge-danger,
+.badge-error {
   background: var(--color-danger-soft);
   color: var(--color-danger);
   border-color: transparent;
@@ -276,7 +318,8 @@
   background: var(--color-surface-muted);
 }
 
-.notice-error, .notice-danger {
+.notice-error,
+.notice-danger {
   color: var(--color-danger);
   background: var(--color-danger-soft);
   border-color: var(--color-danger-border);
@@ -332,7 +375,8 @@
   padding: 14px 16px;
 }
 
-.ui-metric-label, .ui-metric-hint {
+.ui-metric-label,
+.ui-metric-hint {
   font-size: 13px;
   color: var(--color-text-secondary);
 }
@@ -356,7 +400,8 @@
   font-size: 13px;
 }
 
-.ui-chip.is-selected, .ui-chip.is-selected:hover:not(:disabled) {
+.ui-chip.is-selected,
+.ui-chip.is-selected:hover:not(:disabled) {
   background: var(--color-accent-soft);
   border-color: var(--color-accent);
   color: var(--color-accent);
@@ -395,7 +440,6 @@
   border-radius: var(--radius-badge);
 }
 @media (max-width: 767px) {
-
   .ui-drawer {
     width: 100vw;
   }

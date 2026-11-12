@@ -1,61 +1,127 @@
-import { friendlyError } from './errors';
-import React, { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { AUTH_EXPIRED_EVENT, fetchHealth, fetchReviewQueue, login, logout } from './api/client';
-import { LoadingState, NavLink, Button, Notice, Overlay } from './components/ui';
-import { consumeNavigationApproval, navigate, parseRoute, requestNavigationPermission, updateRouteParams } from './navigation';
-import { translateRole } from './i18n';
-import { parseDemoAccounts } from './demoAccounts';
-import { Activity, ArrowLeft, GitBranch, LibraryBig, Inbox, LogOut, Menu, RefreshCw, MessagesSquare } from 'lucide-react';
-const CustomerSupportPage = lazy(() => import('./components/CustomerSupportPage'));
-const TicketList = lazy(() => import('./components/TicketList'));
-const TicketDetails = lazy(() => import('./components/TicketDetails'));
-const ObservabilityPage = lazy(() => import('./components/ObservabilityPage'));
-const ResourceManagementPage = lazy(() => import('./components/ResourceManagementPage'));
-const WorkflowPage = lazy(() => import('./components/WorkflowPage'));
+import { friendlyError } from "./errors";
+import React, {
+  lazy,
+  Suspense,
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
+import {
+  AUTH_EXPIRED_EVENT,
+  fetchHealth,
+  fetchReviewQueue,
+  login,
+  logout,
+} from "./api/client";
+import {
+  LoadingState,
+  NavLink,
+  Button,
+  Notice,
+  Overlay,
+} from "./components/ui";
+import {
+  consumeNavigationApproval,
+  navigate,
+  parseRoute,
+  requestNavigationPermission,
+  updateRouteParams,
+} from "./navigation";
+import { translateRole } from "./i18n";
+import { parseDemoAccounts } from "./demoAccounts";
+import {
+  Activity,
+  ArrowLeft,
+  GitBranch,
+  LibraryBig,
+  Inbox,
+  LogOut,
+  Menu,
+  RefreshCw,
+  MessagesSquare,
+} from "lucide-react";
+const CustomerSupportPage = lazy(
+  () => import("./components/CustomerSupportPage"),
+);
+const TicketList = lazy(() => import("./components/TicketList"));
+const TicketDetails = lazy(() => import("./components/TicketDetails"));
+const ObservabilityPage = lazy(() => import("./components/ObservabilityPage"));
+const ResourceManagementPage = lazy(
+  () => import("./components/ResourceManagementPage"),
+);
+const WorkflowPage = lazy(() => import("./components/WorkflowPage"));
 const VIEW_TITLES = {
-  workspace: '人工处理台',
-  observability: 'Agent 运行监控',
-  resources: '资源管理',
-  workflow: 'Agent 处理流程'
+  workspace: "人工处理台",
+  observability: "Agent 运行监控",
+  resources: "资源管理",
+  workflow: "Agent 处理流程",
 };
 const DEMO_ACCOUNTS = parseDemoAccounts(import.meta.env.VITE_DEMO_ACCOUNTS);
 export default function App() {
-  const staffEntryEnabled = import.meta.env.VITE_STAFF_ENTRY_ENABLED !== 'false';
-  const [authenticated, setAuthenticated] = useState(() => Boolean(localStorage.getItem('token')));
-  const [route, setRoute] = useState(() => parseRoute(window.location.hash, Boolean(localStorage.getItem('token'))));
-  const [role, setRole] = useState(() => localStorage.getItem('role') || '');
-  const [username, setUsername] = useState(() => localStorage.getItem('username') || '');
-  const [loginUser, setLoginUser] = useState('');
-  const [loginPass, setLoginPass] = useState('');
+  const staffEntryEnabled =
+    import.meta.env.VITE_STAFF_ENTRY_ENABLED !== "false";
+  const [authenticated, setAuthenticated] = useState(() =>
+    Boolean(localStorage.getItem("token")),
+  );
+  const [route, setRoute] = useState(() =>
+    parseRoute(window.location.hash, Boolean(localStorage.getItem("token"))),
+  );
+  const [role, setRole] = useState(() => localStorage.getItem("role") || "");
+  const [username, setUsername] = useState(
+    () => localStorage.getItem("username") || "",
+  );
+  const [loginUser, setLoginUser] = useState("");
+  const [loginPass, setLoginPass] = useState("");
   const [loginBusy, setLoginBusy] = useState(false);
-  const [authNotice, setAuthNotice] = useState('');
+  const [authNotice, setAuthNotice] = useState("");
   const [tickets, setTickets] = useState([]);
   const [ticketsLoading, setTicketsLoading] = useState(true);
-  const [ticketsError, setTicketsError] = useState('');
-  const [serviceStatus, setServiceStatus] = useState('checking');
+  const [ticketsError, setTicketsError] = useState("");
+  const [serviceStatus, setServiceStatus] = useState("checking");
   const [mobileNav, setMobileNav] = useState(false);
   useEffect(() => {
-    const desktop = window.matchMedia('(min-width: 1024px)');
-    const closeOnDesktop = () => { if (desktop.matches) setMobileNav(false); };
-    desktop.addEventListener('change', closeOnDesktop);
-    return () => desktop.removeEventListener('change', closeOnDesktop);
+    const desktop = window.matchMedia("(min-width: 1024px)");
+    const closeOnDesktop = () => {
+      if (desktop.matches) setMobileNav(false);
+    };
+    desktop.addEventListener("change", closeOnDesktop);
+    return () => desktop.removeEventListener("change", closeOnDesktop);
   }, []);
   const queueController = useRef(null);
   const routeRef = useRef(route);
   routeRef.current = route;
-  const lastHash = useRef(window.location.hash || (authenticated ? '#staff/review' : '#support'));
+  const lastHash = useRef(
+    window.location.hash || (authenticated ? "#staff/review" : "#support"),
+  );
   const navigationSequence = useRef(0);
-  const selectedTicket = tickets.find(ticket => ticket.id === route.ticket) || null;
-  const allowed = route.view === 'observability' ? ['manager', 'admin'].includes(role) : route.view === 'resources' ? role === 'admin' : true;
+  const selectedTicket =
+    tickets.find((ticket) => ticket.id === route.ticket) || null;
+  const allowed =
+    route.view === "observability"
+      ? ["manager", "admin"].includes(role)
+      : route.view === "resources"
+        ? role === "admin"
+        : true;
   useEffect(() => {
     const changed = async () => {
       const sequence = ++navigationSequence.current;
       const hash = window.location.hash;
       const next = parseRoute(hash, authenticated);
       const current = routeRef.current;
-      const leavesEditor = next.entry !== current.entry || next.view !== current.view || next.view === 'workspace' && next.ticket !== current.ticket || next.view === 'resources' && next.tab !== current.tab;
-      if (!consumeNavigationApproval(hash) && leavesEditor && !(await requestNavigationPermission())) {
-        if (sequence === navigationSequence.current) window.history.replaceState(null, '', lastHash.current);
+      const leavesEditor =
+        next.entry !== current.entry ||
+        next.view !== current.view ||
+        (next.view === "workspace" && next.ticket !== current.ticket) ||
+        (next.view === "resources" && next.tab !== current.tab);
+      if (
+        !consumeNavigationApproval(hash) &&
+        leavesEditor &&
+        !(await requestNavigationPermission())
+      ) {
+        if (sequence === navigationSequence.current)
+          window.history.replaceState(null, "", lastHash.current);
         return;
       }
       if (sequence !== navigationSequence.current) return;
@@ -63,48 +129,55 @@ export default function App() {
       setRoute(next);
       setMobileNav(false);
     };
-    window.addEventListener('hashchange', changed);
-    return () => window.removeEventListener('hashchange', changed);
+    window.addEventListener("hashchange", changed);
+    return () => window.removeEventListener("hashchange", changed);
   }, [authenticated]);
   const loadTickets = useCallback(async () => {
     queueController.current?.abort();
     const controller = new AbortController();
     queueController.current = controller;
     setTicketsLoading(true);
-    setTicketsError('');
+    setTicketsError("");
     try {
       const list = await fetchReviewQueue(controller.signal);
       if (!controller.signal.aborted) setTickets(list);
     } catch (error) {
-      if (!controller.signal.aborted) setTicketsError(friendlyError(error) || '工单加载失败，请重试。');
+      if (!controller.signal.aborted)
+        setTicketsError(friendlyError(error) || "工单加载失败，请重试。");
     } finally {
       if (!controller.signal.aborted) setTicketsLoading(false);
     }
   }, []);
   useEffect(() => {
-    if (!authenticated || route.entry !== 'staff' || route.view !== 'workspace') return undefined;
+    if (!authenticated || route.entry !== "staff" || route.view !== "workspace")
+      return undefined;
     loadTickets();
     return () => queueController.current?.abort();
   }, [authenticated, route.entry, route.view, loadTickets]);
   useEffect(() => {
-    if (!authenticated || route.entry !== 'staff') return undefined;
+    if (!authenticated || route.entry !== "staff") return undefined;
     const controller = new AbortController();
-    setServiceStatus('checking');
-    fetchHealth(controller.signal).then(health => {
-      if (!controller.signal.aborted) setServiceStatus(health.status === 'healthy' ? 'healthy' : 'degraded');
-    }).catch(() => {
-      if (!controller.signal.aborted) setServiceStatus('offline');
-    });
+    setServiceStatus("checking");
+    fetchHealth(controller.signal)
+      .then((health) => {
+        if (!controller.signal.aborted)
+          setServiceStatus(
+            health.status === "healthy" ? "healthy" : "degraded",
+          );
+      })
+      .catch(() => {
+        if (!controller.signal.aborted) setServiceStatus("offline");
+      });
     return () => controller.abort();
   }, [authenticated, route.entry]);
   useEffect(() => {
     function expired() {
       setAuthenticated(false);
-      setRole('');
-      setUsername('');
+      setRole("");
+      setUsername("");
       setTickets([]);
-      setAuthNotice('登录已过期，请重新登录。');
-      window.location.hash = 'staff';
+      setAuthNotice("登录已过期，请重新登录。");
+      window.location.hash = "staff";
     }
     window.addEventListener(AUTH_EXPIRED_EVENT, expired);
     return () => window.removeEventListener(AUTH_EXPIRED_EVENT, expired);
@@ -112,94 +185,412 @@ export default function App() {
   async function handleLogin(event) {
     event.preventDefault();
     setLoginBusy(true);
-    setAuthNotice('');
+    setAuthNotice("");
     try {
       const data = await login(loginUser, loginPass);
       setRole(data.role);
       setUsername(loginUser);
       setAuthenticated(true);
-      setLoginPass('');
+      setLoginPass("");
     } catch {
-      setAuthNotice('登录失败，请检查账号、密码和服务连接。');
+      setAuthNotice("登录失败，请检查账号、密码和服务连接。");
     } finally {
       setLoginBusy(false);
     }
   }
   async function handleLogout() {
-    await navigate('#support');
-    if (window.location.hash !== '#support') return;
+    await navigate("#support");
+    if (window.location.hash !== "#support") return;
     logout();
     setAuthenticated(false);
-    setRole('');
-    setUsername('');
+    setRole("");
+    setUsername("");
     setTickets([]);
   }
-  const stats = useMemo(() => ({
-    total: tickets.length,
-    high: tickets.filter(ticket => ['urgent', 'high'].includes(ticket.priority)).length
-  }), [tickets]);
-  const staffNavigation = <> <NavLink href="#staff/review" className="sidebar-brand"><span className="brand-mark"><MessagesSquare size={20} /></span><div><strong>SupportGPT</strong><small>智能客服员工空间</small></div></NavLink>
-            <nav className="sidebar-nav" aria-label="主要功能"><span className="sidebar-group-label">工作台</span>
-              {[['workspace', '#staff/review', '人工处理台', Inbox, true], ['observability', '#staff/runs', 'Agent 运行监控', Activity, ['manager', 'admin'].includes(role)], ['resources', '#staff/resources', '资源管理', LibraryBig, role === 'admin'], ['workflow', '#staff/workflow', 'Agent 处理流程', GitBranch, true]].filter(item => item[4]).map(([view, href, label, Icon]) => <NavLink key={view} href={href} className={route.view === view ? 'active' : ''} aria-current={route.view === view ? 'page' : undefined}><Icon size={18} /><span>{label}</span>{view === 'workspace' && route.view === 'workspace' && !ticketsLoading && !ticketsError && <span className="sidebar-count" aria-label={`${stats.total} 张工单`}>{stats.total}</span>}</NavLink>)}
-            </nav>
-            <NavLink href="#support" className="sidebar-support"><MessagesSquare size={16} />用户咨询</NavLink>
-            <div className="sidebar-footer"><div className={`sidebar-runtime runtime-${serviceStatus}`}><span className="service-dot" aria-hidden="true" /><span>{{
-            healthy: '服务连接正常',
-            checking: '正在检查服务',
-            degraded: '部分服务不可用',
-            offline: '无法连接服务'
-          }[serviceStatus]}</span></div>
-            <div className="sidebar-account"><span className="account-avatar">{(username || '客').slice(0, 1)}</span><div><strong>{username || '当前员工'}</strong><small>{translateRole(role)}</small></div><Button className="icon-button" onClick={handleLogout} aria-label="退出登录"><LogOut size={17} /></Button></div>
-          </div> </>;
-  const content = route.entry === 'workflow' ? <main className="wf-public" id="main-content" tabIndex={-1}><WorkflowPage onBack={() => navigate('#support')} /></main> : route.entry === 'customer' ? <CustomerSupportPage onWorkflowEntry={() => navigate('#workflow')} onStaffEntry={staffEntryEnabled ? () => navigate('#staff') : null} /> : !authenticated ? <main className="staff-login-page" id="main-content" tabIndex={-1}>
-      <section className="login-brand-panel" aria-label="SupportGPT 员工空间">
-        <div className="login-brand"><span className="brand-mark"><MessagesSquare size={20} /></span><strong>SupportGPT</strong></div>
-        <div className="login-brand-copy"><h2>Agent 先处理，<br />人工把关关键一步。</h2><p>涉及订单、退款和账户的操作，都会在这里等待员工确认。每一次运行都有完整轨迹可查。</p><ul><li>人工处理台：审批回复与工具调用</li><li>运行监控：节点、耗时与 Token</li><li>资源管理：工具、Prompt 与知识库</li></ul></div>
-        <p className="staff-register">后台账号由管理员创建，不开放公开注册。</p>
-      </section>
-      <section className="login-form-panel"><div className="staff-login-card">
-        <NavLink href="#support" className="back-to-customer"><ArrowLeft size={16} />返回用户咨询</NavLink>
-        <div className="staff-login-heading"><h1>登录员工后台</h1><p>使用你的员工账号继续</p></div>
-        {authNotice && <Notice>{authNotice}</Notice>}
-        <form onSubmit={handleLogin} className="staff-login-form"><label htmlFor="username">用户名<input id="username" name="username" autoComplete="username" value={loginUser} onChange={event => setLoginUser(event.target.value)} required disabled={loginBusy} /></label><label htmlFor="password">密码<input id="password" name="password" type="password" autoComplete="current-password" value={loginPass} onChange={event => setLoginPass(event.target.value)} required disabled={loginBusy} /></label><Button type="submit" tone="primary" size="lg" busy={loginBusy}>登录客服后台</Button></form>
-        {DEMO_ACCOUNTS.length > 0 && <section className="demo-accounts" aria-label="演示账号">
-          <h2>演示账号</h2>
-          <p>选择账号填入，确认后再登录。</p>
-          <div>{DEMO_ACCOUNTS.map((account, index) => <Button key={index} disabled={loginBusy} onClick={() => {
-            setLoginUser(account.username);
-            setLoginPass(account.password);
-            setAuthNotice('');
-          }}>演示账号：{account.label}</Button>)}</div>
-        </section>}
-      </div></section></main> : <div className={`app-shell ${mobileNav ? 'nav-open' : ''}`}>
-          <aside className="app-sidebar" id="staff-navigation">{staffNavigation}</aside>
-          {mobileNav && <Overlay drawer title="工作台导航" id="staff-navigation-mobile" className="navigation-drawer" onClose={() => setMobileNav(false)}><div className="app-sidebar">{staffNavigation}</div></Overlay>}
-          <div className="app-main"><header className="app-topbar"><Button className="icon-button mobile-menu" aria-label="切换导航" aria-expanded={mobileNav} aria-controls="staff-navigation-mobile" onClick={() => setMobileNav(!mobileNav)}><Menu size={20} /></Button><div><h1>{VIEW_TITLES[route.view]}</h1><p>{{
-              workspace: '处理需要人工确认的回复和业务结果',
-              observability: '查看运行记录并追查调用过程',
-              resources: '管理工具、提示词和知识文档',
-              workflow: '静态演示：了解系统怎样处理请求'
-            }[route.view]}</p></div><NavLink href="#support" className="topbar-support">用户咨询</NavLink>{route.view === 'workspace' && <Button onClick={loadTickets} busy={ticketsLoading} aria-label="刷新工单"><RefreshCw size={16} /><span>刷新</span></Button>}</header>
-            <main className="app-content" id="main-content" tabIndex={-1}>{!allowed ? <Notice>您的角色无权查看此页面。<NavLink href="#staff/review">返回人工处理台</NavLink></Notice> : route.view === 'workflow' ? <WorkflowPage embedded /> : route.view === 'resources' ? <ResourceManagementPage route={route} /> : route.view === 'observability' ? <ObservabilityPage route={route} /> : <section className={`workspace-page ${selectedTicket ? 'has-selection' : ''}`}>
-              <div className="workspace-summary" aria-label="当前人工处理队列统计" aria-live="polite">
-                <section className="workspace-stat-card"><span>当前人工处理队列</span><strong>{ticketsLoading ? <><span className="ui-skeleton workspace-stat-skeleton" aria-hidden="true" /><span className="sr-only">加载中…</span></> : ticketsError ? '暂不可用' : stats.total}</strong><small>待人工处理工单</small></section>
-                <section className="workspace-stat-card"><span>高优先级</span><strong>{ticketsLoading ? <><span className="ui-skeleton workspace-stat-skeleton" aria-hidden="true" /><span className="sr-only">加载中…</span></> : ticketsError ? '暂不可用' : stats.high}</strong><small>紧急与高优先级工单</small></section>
-              </div>
-              <div className="grid-dashboard"><TicketList tickets={tickets} selectedId={selectedTicket?.id} onSelect={ticket => updateRouteParams({
-              ticket: ticket.id
-            }, false)} loading={ticketsLoading} error={ticketsError} onRetry={loadTickets} route={route} /><div className="workspace-detail"><Button className="mobile-detail-back" onClick={() => updateRouteParams({
-                ticket: null
-              }, false)}><ArrowLeft size={16} />返回工单列表</Button><TicketDetails ticket={selectedTicket} userRole={role} onActionComplete={() => {
-                updateRouteParams({
-                  ticket: null
-                });
-                loadTickets();
-              }} /></div></div>
-            </section>}</main>
+  const stats = useMemo(
+    () => ({
+      total: tickets.length,
+      high: tickets.filter((ticket) =>
+        ["urgent", "high"].includes(ticket.priority),
+      ).length,
+    }),
+    [tickets],
+  );
+  const staffNavigation = (
+    <>
+      {" "}
+      <NavLink href="#staff/review" className="sidebar-brand">
+        <span className="brand-mark">
+          <MessagesSquare size={20} />
+        </span>
+        <div>
+          <strong>SupportGPT</strong>
+          <small>智能客服员工空间</small>
+        </div>
+      </NavLink>
+      <nav className="sidebar-nav" aria-label="主要功能">
+        <span className="sidebar-group-label">工作台</span>
+        {[
+          ["workspace", "#staff/review", "人工处理台", Inbox, true],
+          [
+            "observability",
+            "#staff/runs",
+            "Agent 运行监控",
+            Activity,
+            ["manager", "admin"].includes(role),
+          ],
+          [
+            "resources",
+            "#staff/resources",
+            "资源管理",
+            LibraryBig,
+            role === "admin",
+          ],
+          ["workflow", "#staff/workflow", "Agent 处理流程", GitBranch, true],
+        ]
+          .filter((item) => item[4])
+          .map(([view, href, label, Icon]) => (
+            <NavLink
+              key={view}
+              href={href}
+              className={route.view === view ? "active" : ""}
+              aria-current={route.view === view ? "page" : undefined}
+            >
+              <Icon size={18} />
+              <span>{label}</span>
+              {view === "workspace" &&
+                route.view === "workspace" &&
+                !ticketsLoading &&
+                !ticketsError && (
+                  <span
+                    className="sidebar-count"
+                    aria-label={`${stats.total} 张工单`}
+                  >
+                    {stats.total}
+                  </span>
+                )}
+            </NavLink>
+          ))}
+      </nav>
+      <NavLink href="#support" className="sidebar-support">
+        <MessagesSquare size={16} />
+        用户咨询
+      </NavLink>
+      <div className="sidebar-footer">
+        <div className={`sidebar-runtime runtime-${serviceStatus}`}>
+          <span className="service-dot" aria-hidden="true" />
+          <span>
+            {
+              {
+                healthy: "服务连接正常",
+                checking: "正在检查服务",
+                degraded: "部分服务不可用",
+                offline: "无法连接服务",
+              }[serviceStatus]
+            }
+          </span>
+        </div>
+        <div className="sidebar-account">
+          <span className="account-avatar">
+            {(username || "客").slice(0, 1)}
+          </span>
+          <div>
+            <strong>{username || "当前员工"}</strong>
+            <small>{translateRole(role)}</small>
           </div>
-        </div>;
-  return <><a className="skip-link" href="#main-content" onClick={event => {
-      event.preventDefault();
-      document.getElementById('main-content')?.focus();
-    }}>跳到主要内容</a><Suspense fallback={<LoadingState>正在加载页面…</LoadingState>}>{content}</Suspense></>;
+          <Button
+            className="icon-button"
+            onClick={handleLogout}
+            aria-label="退出登录"
+          >
+            <LogOut size={17} />
+          </Button>
+        </div>
+      </div>{" "}
+    </>
+  );
+  const content =
+    route.entry === "workflow" ? (
+      <main className="wf-public" id="main-content" tabIndex={-1}>
+        <WorkflowPage onBack={() => navigate("#support")} />
+      </main>
+    ) : route.entry === "customer" ? (
+      <CustomerSupportPage
+        onWorkflowEntry={() => navigate("#workflow")}
+        onStaffEntry={staffEntryEnabled ? () => navigate("#staff") : null}
+      />
+    ) : !authenticated ? (
+      <main className="staff-login-page" id="main-content" tabIndex={-1}>
+        <section className="login-brand-panel" aria-label="SupportGPT 员工空间">
+          <div className="login-brand">
+            <span className="brand-mark">
+              <MessagesSquare size={20} />
+            </span>
+            <strong>SupportGPT</strong>
+          </div>
+          <div className="login-brand-copy">
+            <h2>
+              Agent 先处理，
+              <br />
+              人工把关关键一步。
+            </h2>
+            <p>
+              涉及订单、退款和账户的操作，都会在这里等待员工确认。每一次运行都有完整轨迹可查。
+            </p>
+            <ul>
+              <li>人工处理台：审批回复与工具调用</li>
+              <li>运行监控：节点、耗时与 Token</li>
+              <li>资源管理：工具、Prompt 与知识库</li>
+            </ul>
+          </div>
+          <p className="staff-register">
+            后台账号由管理员创建，不开放公开注册。
+          </p>
+        </section>
+        <section className="login-form-panel">
+          <div className="staff-login-card">
+            <NavLink href="#support" className="back-to-customer">
+              <ArrowLeft size={16} />
+              返回用户咨询
+            </NavLink>
+            <div className="staff-login-heading">
+              <h1>登录员工后台</h1>
+              <p>使用你的员工账号继续</p>
+            </div>
+            {authNotice && <Notice>{authNotice}</Notice>}
+            <form onSubmit={handleLogin} className="staff-login-form">
+              <label htmlFor="username">
+                用户名
+                <input
+                  id="username"
+                  name="username"
+                  autoComplete="username"
+                  value={loginUser}
+                  onChange={(event) => setLoginUser(event.target.value)}
+                  required
+                  disabled={loginBusy}
+                />
+              </label>
+              <label htmlFor="password">
+                密码
+                <input
+                  id="password"
+                  name="password"
+                  type="password"
+                  autoComplete="current-password"
+                  value={loginPass}
+                  onChange={(event) => setLoginPass(event.target.value)}
+                  required
+                  disabled={loginBusy}
+                />
+              </label>
+              <Button type="submit" tone="primary" size="lg" busy={loginBusy}>
+                登录客服后台
+              </Button>
+            </form>
+            {DEMO_ACCOUNTS.length > 0 && (
+              <section className="demo-accounts" aria-label="演示账号">
+                <h2>演示账号</h2>
+                <p>选择账号填入，确认后再登录。</p>
+                <div>
+                  {DEMO_ACCOUNTS.map((account, index) => (
+                    <Button
+                      key={index}
+                      disabled={loginBusy}
+                      onClick={() => {
+                        setLoginUser(account.username);
+                        setLoginPass(account.password);
+                        setAuthNotice("");
+                      }}
+                    >
+                      演示账号：{account.label}
+                    </Button>
+                  ))}
+                </div>
+              </section>
+            )}
+          </div>
+        </section>
+      </main>
+    ) : (
+      <div className={`app-shell ${mobileNav ? "nav-open" : ""}`}>
+        <aside className="app-sidebar" id="staff-navigation">
+          {staffNavigation}
+        </aside>
+        {mobileNav && (
+          <Overlay
+            drawer
+            title="工作台导航"
+            id="staff-navigation-mobile"
+            className="navigation-drawer"
+            onClose={() => setMobileNav(false)}
+          >
+            <div className="app-sidebar">{staffNavigation}</div>
+          </Overlay>
+        )}
+        <div className="app-main">
+          <header className="app-topbar">
+            <Button
+              className="icon-button mobile-menu"
+              aria-label="切换导航"
+              aria-expanded={mobileNav}
+              aria-controls="staff-navigation-mobile"
+              onClick={() => setMobileNav(!mobileNav)}
+            >
+              <Menu size={20} />
+            </Button>
+            <div>
+              <h1>{VIEW_TITLES[route.view]}</h1>
+              <p>
+                {
+                  {
+                    workspace: "处理需要人工确认的回复和业务结果",
+                    observability: "查看运行记录并追查调用过程",
+                    resources: "管理工具、提示词和知识文档",
+                    workflow: "静态演示：了解系统怎样处理请求",
+                  }[route.view]
+                }
+              </p>
+            </div>
+            <NavLink href="#support" className="topbar-support">
+              用户咨询
+            </NavLink>
+            {route.view === "workspace" && (
+              <Button
+                onClick={loadTickets}
+                busy={ticketsLoading}
+                aria-label="刷新工单"
+              >
+                <RefreshCw size={16} />
+                <span>刷新</span>
+              </Button>
+            )}
+          </header>
+          <main className="app-content" id="main-content" tabIndex={-1}>
+            {!allowed ? (
+              <Notice>
+                您的角色无权查看此页面。
+                <NavLink href="#staff/review">返回人工处理台</NavLink>
+              </Notice>
+            ) : route.view === "workflow" ? (
+              <WorkflowPage embedded />
+            ) : route.view === "resources" ? (
+              <ResourceManagementPage route={route} />
+            ) : route.view === "observability" ? (
+              <ObservabilityPage route={route} />
+            ) : (
+              <section
+                className={`workspace-page ${selectedTicket ? "has-selection" : ""}`}
+              >
+                <div
+                  className="workspace-summary"
+                  aria-label="当前人工处理队列统计"
+                  aria-live="polite"
+                >
+                  <section className="workspace-stat-card">
+                    <span>当前人工处理队列</span>
+                    <strong>
+                      {ticketsLoading ? (
+                        <>
+                          <span
+                            className="ui-skeleton workspace-stat-skeleton"
+                            aria-hidden="true"
+                          />
+                          <span className="sr-only">加载中…</span>
+                        </>
+                      ) : ticketsError ? (
+                        "暂不可用"
+                      ) : (
+                        stats.total
+                      )}
+                    </strong>
+                    <small>待人工处理工单</small>
+                  </section>
+                  <section className="workspace-stat-card">
+                    <span>高优先级</span>
+                    <strong>
+                      {ticketsLoading ? (
+                        <>
+                          <span
+                            className="ui-skeleton workspace-stat-skeleton"
+                            aria-hidden="true"
+                          />
+                          <span className="sr-only">加载中…</span>
+                        </>
+                      ) : ticketsError ? (
+                        "暂不可用"
+                      ) : (
+                        stats.high
+                      )}
+                    </strong>
+                    <small>紧急与高优先级工单</small>
+                  </section>
+                </div>
+                <div className="grid-dashboard">
+                  <TicketList
+                    tickets={tickets}
+                    selectedId={selectedTicket?.id}
+                    onSelect={(ticket) =>
+                      updateRouteParams(
+                        {
+                          ticket: ticket.id,
+                        },
+                        false,
+                      )
+                    }
+                    loading={ticketsLoading}
+                    error={ticketsError}
+                    onRetry={loadTickets}
+                    route={route}
+                  />
+                  <div className="workspace-detail">
+                    <Button
+                      className="mobile-detail-back"
+                      onClick={() =>
+                        updateRouteParams(
+                          {
+                            ticket: null,
+                          },
+                          false,
+                        )
+                      }
+                    >
+                      <ArrowLeft size={16} />
+                      返回工单列表
+                    </Button>
+                    <TicketDetails
+                      ticket={selectedTicket}
+                      userRole={role}
+                      onActionComplete={() => {
+                        updateRouteParams({
+                          ticket: null,
+                        });
+                        loadTickets();
+                      }}
+                    />
+                  </div>
+                </div>
+              </section>
+            )}
+          </main>
+        </div>
+      </div>
+    );
+  return (
+    <>
+      <a
+        className="skip-link"
+        href="#main-content"
+        onClick={(event) => {
+          event.preventDefault();
+          document.getElementById("main-content")?.focus();
+        }}
+      >
+        跳到主要内容
+      </a>
+      <Suspense fallback={<LoadingState>正在加载页面…</LoadingState>}>
+        {content}
+      </Suspense>
+    </>
+  );
 }
