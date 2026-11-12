@@ -287,6 +287,8 @@ QWEN3_GUARD_MODEL_NAME=Qwen/Qwen3Guard-Gen-0.6B
 
 ## 主要 API
 
+`POST /customer-context` 的 `recent_orders` 增加可空的 `currency`（ISO 币种代码）。当前 Mock 英文客户订单为 USD、中文客户订单为 CNY；未记录币种的旧订单返回 `null`，前端不猜测货币符号。该接口保持员工鉴权，只读业务上下文，不执行 Workflow。
+
 | 路径 | 用途 | 权限 |
 |---|---|---|
 | `POST /auth/register` | 仅测试/显式开启时自助注册 | 生产关闭 |
@@ -297,6 +299,7 @@ QWEN3_GUARD_MODEL_NAME=Qwen/Qwen3Guard-Gen-0.6B
 | `GET /support/history?customer_id=...&session_id=...` | 按一个或多个已知 Session 查询最近 7 天安全历史 | 公开演示入口 |
 | `POST /support/requests` | 用户提交客服问题 | 公开演示入口 |
 | `POST /chat` | 执行内部对话 Workflow | `agent+` |
+| `POST /customer-context` | 只读客户资料与近期订单（含币种） | `agent+` |
 | `POST /tickets` | 创建工单并持久化 AgentRun | 登录 |
 | `GET /tickets` | 查询工单 | 登录 |
 | `GET /staff/review-queue` | 待审批工单 | 客服员工 |

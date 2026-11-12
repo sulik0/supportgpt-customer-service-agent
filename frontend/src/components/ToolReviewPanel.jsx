@@ -1,5 +1,6 @@
 import '../styles/pages/workspace.css';
 import { friendlyError } from '../errors';
+import { formatDate } from '../formatters';
 import React, { useEffect, useState } from 'react';
 import { fetchToolReviews, resolveToolAction } from '../api/client';
 import { Badge, Button, Card, Skeleton } from './ui';
@@ -80,7 +81,7 @@ function ReviewItem({
       <Button type="submit" tone="primary" size="lg" disabled={busy || reference.trim().length < 3 || note.trim().length < 5}>{busy ? '正在保存…' : '保存已核实结果'}</Button>
       {error && <p role="alert" className="tool-review-error">{error}</p>}
     </form> : <p>请主管或管理员核实并确认。普通客服不能修改业务操作结果。</p>}
-    {review.action.events?.length > 0 && <div className="workspace-tool-trace"><h4>业务操作处理轨迹</h4><ol>{review.action.events.map(event => <li key={event.id}><span className="workspace-trace-dot" aria-hidden="true" /><div><strong>{STATES[event.to_status] || event.to_status}</strong>{event.from_status && <span>从{STATES[event.from_status] || event.from_status}转入</span>}<time dateTime={event.created_at}>{event.created_at}</time></div></li>)}</ol></div>}
+    {review.action.events?.length > 0 && <div className="workspace-tool-trace"><h4>业务操作处理轨迹</h4><ol>{review.action.events.map(event => <li key={event.id}><span className="workspace-trace-dot" aria-hidden="true" /><div><strong>{STATES[event.to_status] || event.to_status}</strong>{event.from_status && <span>从{STATES[event.from_status] || event.from_status}转入</span>}<time dateTime={event.created_at}>{formatDate(event.created_at)}</time></div></li>)}</ol></div>}
   </div>;
 }
 export default function ToolReviewPanel({

@@ -2,7 +2,7 @@
 
 > 状态：方案已确认，前端实现与本地验收已完成。本文前半部分保留设计依据，实际完成情况和未验证范围见第 12 节。
 >
-> 更新日期：2026-10-11。改造前代码参考：`df56423`。本轮只修改前端和本文档，不修改后端业务逻辑，不公开部署。
+> 更新日期：2026-11-12。改造前代码参考：`df56423`。本次演示入口优化同时补充 `/customer-context` 的订单币种字段，不修改后端审批逻辑，不公开部署。
 
 ## 1. 产品定位与本轮范围
 
@@ -35,10 +35,10 @@ SupportGPT 是智能客服 Agent 平台，不是通用 Agent 构建器。用户�
 
 | 当前页面 | 主要 API / 数据来源 | 已有操作 | 不应假装已有的能力 |
 |---|---|---|---|
-| 用户咨询 | `/support/requests`、`/support/history`、`/feedback/user` | 提问、查看最近七天对话、开始新对话、评价本次结果 | 实时节点推送、真实客户登录、历史会话重命名或删除 |
-| 员工登录 | `/auth/token` | 员工登录、退出、会话过期处理 | 公开员工注册 |
-| 人工处理台 | `/staff/review-queue`、`/tickets/{id}/agent-result`、`/customer-context`、审批与 Tool Review API | 筛选工单、加载保存的回复、修改/通过/拒绝回复、按权限核实业务结果 | 打开详情自动重跑 Agent、完整高风险 Action 管理控制台 |
-| Agent 运行监控 | `/observability/runs`、`/feedback/runs/{id}` | 按工单编号查询、分页、运行快照、Analyzer/QA 策略、Trace ID 与 LangSmith 链接 | 在本地完整复刻 LangSmith Span 树、实时节点耗时瀑布图 |
+| 用户咨询 | `/support/requests`、`/support/history`、`/feedback/user`、前端场景定义 | 空对话显示 4 张场景卡，覆盖工具查询、退款审批、安全拦截；点击选择客户并填入问题，不自动发送；提问、最近七天对话、新对话、评价 | 实时节点推送、真实客户登录、历史会话重命名或删除 |
+| 员工登录 | `/auth/token`、`VITE_DEMO_ACCOUNTS` | 员工登录、退出、会话过期处理；仅配置有效演示账号时显示填入按钮，不自动登录 | 公开员工注册、自动创建演示账号 |
+| 人工处理台 | `/staff/review-queue`、`/tickets/{id}/agent-result`、`/customer-context`、审批与 Tool Review API | 筛选、读取保存的回复、修改/通过/拒绝、按权限核实业务结果；按接口币种显示订单金额；事件时间统一显示北京时间 | 打开详情自动重跑 Agent、完整高风险 Action 管理控制台 |
+| Agent 运行监控 | `/observability/runs`、`/feedback/runs/{id}` | 工单查询、分页、快照、Analyzer/QA 策略、中文工具状态、Trace ID 与复制；仅配置项目 URL 时显示 LangSmith 跳转，无配置不显示警告 | 在本地完整复刻 LangSmith Span 树、实时节点耗时瀑布图 |
 | 资源管理 | `/admin/resources/tools`、`prompts`、`rag-documents` | 工具启停、查看 Prompt Bundle、创建候选版本、知识文档增改删、重建索引 | 注册任意新 Tool Handler、前端直接晋级/回滚 Prompt、知识检索调试台 |
 | Agent 处理流程 | 前端流程与故障场景定义 | 节点说明、场景逐步演示、Action 状态机、故障时序 | 真实执行、实时故障演练、真实 Trace 或耗时 |
 

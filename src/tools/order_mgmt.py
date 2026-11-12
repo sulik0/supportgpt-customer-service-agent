@@ -17,6 +17,7 @@ class OrderManagementTool:
                     "status": "delivered",
                     "items": ["Enterprise SaaS User Pack (10)"],
                     "total_amount": 150.00,
+                    "currency": "USD",
                     "order_date": datetime.datetime.utcnow() - datetime.timedelta(days=20)
                 }
             ],
@@ -26,6 +27,7 @@ class OrderManagementTool:
                     "status": "shipped",
                     "items": ["Developer API Key Pack"],
                     "total_amount": 25.00,
+                    "currency": "USD",
                     "order_date": datetime.datetime.utcnow() - datetime.timedelta(days=1)
                 }
             ],
@@ -35,6 +37,7 @@ class OrderManagementTool:
                     "status": "delivered",
                     "items": ["Dedicated AWS Gateway Cluster", "Enterprise Premium support SLA addon"],
                     "total_amount": 5400.00,
+                    "currency": "USD",
                     "order_date": datetime.datetime.utcnow() - datetime.timedelta(days=5)
                 }
             ]

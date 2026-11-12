@@ -18,9 +18,9 @@ export default function ToolLoopGuide() {
       <p>循环只查询数据，不执行退款或取消订单，也不会绕过独立的操作审批。以下例子使用仓库现有的虚构客户和模拟业务记录，真实执行工作流不等于访问真实订单系统。</p>
     </details>
     <div className="wf-loop-test-heading"><h3>通过客户咨询页实际发送测试</h3><NavLink className="btn btn-secondary" href="#support">去客户咨询页选择例子</NavLink></div>
-    <p>展开输入框上方的“真实工作流测试例子”，点击“填入”会选择客户并填写问题。确认后点击发送，调用现有咨询接口；不会播放预设回复。独立验证时可先在对应客户下开始新对话，避免之前的上下文影响结果。</p>
+    <p>在空对话中选择查询场景，再确认发送。</p>
     <div className="wf-loop-examples">
-      {WORKFLOW_EXAMPLES.map(example => <article key={example.id}>
+      {WORKFLOW_EXAMPLES.filter(example => example.tools.length > 0).map(example => <article key={example.id}>
         <h3>{example.title}</h3><Badge>{example.customerName} · {example.customerId}</Badge>
         <pre>{example.question}</pre>
         <p>重点检查的工具（实际选择由运行结果决定）：</p>

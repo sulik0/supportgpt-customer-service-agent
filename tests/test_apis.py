@@ -5,6 +5,40 @@ from httpx import AsyncClient
 
 
 @pytest.mark.asyncio
+async def test_customer_context_order_currencies(
+    client: AsyncClient, agent_headers: dict[str, str], monkeypatch
+):
+    from src.tools.order_mgmt import order_mgmt_tool
+
+    # 核对全部演示订单的真实币种，不根据客户名称推测。
+    for customer_id, currency in [
+        ("cust_101", "USD"), ("cust_102", "USD"), ("cust_103", "USD"),
+        ("cust_201", "CNY"), ("cust_202", "CNY"), ("cust_203", "CNY"),
+    ]:
+        response = await client.post(
+            "/customer-context", json={"customer_id": customer_id}, headers=agent_headers
+        )
+        assert response.status_code == 200
+        orders = response.json()["recent_orders"]
+        assert orders and all(order["currency"] == currency for order in orders)
+
+    legacy_order = dict(order_mgmt_tool.orders["cust_101"][0])
+    legacy_order.pop("currency")
+    monkeypatch.setitem(order_mgmt_tool.orders, "cust_101", [legacy_order])
+    response = await client.post(
+        "/customer-context", json={"customer_id": "cust_101"}, headers=agent_headers
+    )
+    assert response.status_code == 200
+    assert response.json()["recent_orders"][0]["currency"] is None
+
+    response = await client.post(
+        "/customer-context", json={"customer_id": "unknown"}, headers=agent_headers
+    )
+    assert response.status_code == 200
+    assert response.json()["recent_orders"] == []
+
+
+@pytest.mark.asyncio
 async def test_general_endpoints(client: AsyncClient):
     # Health check
     h_res = await client.get("/health")

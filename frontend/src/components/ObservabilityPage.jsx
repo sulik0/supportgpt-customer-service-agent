@@ -1,5 +1,6 @@
 import '../styles/pages/observability.css';
 import { friendlyError } from '../errors';
+import { formatDate, formatToolStatus } from '../formatters';
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Bot, Check, Copy, ExternalLink, RefreshCw, Search, Sparkles } from 'lucide-react';
 import { fetchAgentRun, fetchAgentRuns } from '../api/client';
@@ -8,8 +9,7 @@ import { Badge, Button, Card, EmptyState, MetricCard, Notice, Overlay, Skeleton 
 import { updateRouteParams } from '../navigation';
 import { formatLatency, summarizeRuns, totalTokens } from './runMetrics';
 const PAGE_SIZE = 20;
-const LANGSMITH_PROJECT_URL = import.meta.env.VITE_LANGSMITH_PROJECT_URL || 'https://smith.langchain.com/';
-const HAS_PROJECT_URL = Boolean(import.meta.env.VITE_LANGSMITH_PROJECT_URL);
+const LANGSMITH_PROJECT_URL = import.meta.env.VITE_LANGSMITH_PROJECT_URL?.trim();
 const NODE_LABELS = {
   analyzer: '分析问题',
   skill_selector: '选择处理能力',
@@ -52,21 +52,6 @@ function StrategyBadge({
 }) {
   const normalized = value || 'not_run';
   return <Badge className="obs-strategy">{STRATEGY_LABELS[normalized] || normalized}</Badge>;
-}
-function formatDate(value) {
-  if (!value) return '-';
-  // 数据库存储 UTC 裸时间；无时区后缀时按 UTC 解析，再统一显示北京时间。
-  const normalized = /(?:Z|[+-]\d{2}:\d{2})$/i.test(value) ? value : `${value}Z`;
-  return new Intl.DateTimeFormat('zh-CN', {
-    timeZone: 'Asia/Shanghai',
-    year: 'numeric',
-    month: '2-digit',
-    day: '2-digit',
-    hour: '2-digit',
-    minute: '2-digit',
-    second: '2-digit',
-    hourCycle: 'h23'
-  }).format(new Date(normalized));
 }
 function runStatus(run) {
   if (run.workflow_errors?.length) return {
@@ -120,14 +105,14 @@ function RunDetail({
                     {copiedTrace === run.trace_id ? <Check size={16} /> : <Copy size={16} />}
                   </button>}
               </div>
-              <a className="btn btn-secondary obs-link-button" href={LANGSMITH_PROJECT_URL} target="_blank" rel="noreferrer">
+              {LANGSMITH_PROJECT_URL && <><a className="btn btn-secondary obs-link-button" href={LANGSMITH_PROJECT_URL} target="_blank" rel="noreferrer">
                 在 LangSmith 中查看 <ExternalLink size={15} />
               </a>
-              <p className="obs-helper">打开 LangSmith 项目后，用上方 Trace ID 搜索本次请求，查看各节点和服务调用的详情。</p>
+              <p className="obs-helper">复制 Trace ID，在项目中搜索本次调用。</p></>}
             </Card>
 
             <Card className="obs-detail-section" title="本次执行了哪些步骤？">
-              <p className="obs-helper">这是保存的执行路径，不表示实时进度或精确节点耗时。完整调用过程请查看 LangSmith。</p>
+              <p className="obs-helper">已保存的执行路径，不表示实时进度或精确耗时。</p>
               {(run.workflow_path || []).length ? <ol className="obs-workflow">
                 {run.workflow_path.map((node, index) => <li className="obs-node" key={`${node}-${index}`}>
                   <span className="obs-node-index" aria-hidden="true">{index + 1}</span>
@@ -172,7 +157,7 @@ function RunDetail({
                 {(run.tool_calls || []).length ? run.tool_calls.map((tool, index) => <div key={`${tool.tool_name}-${index}`}>
                     <Bot size={15} />
                     <code>{tool.tool_name || '未命名工具'}</code>
-                    <em>{tool.status || '未知'}</em>
+                    <em>{formatToolStatus(tool.status)}</em>
                   </div>) : <EmptyState className="obs-tools-empty" title="本次运行没有记录工具调用。" />}
                 {(run.citations || []).map((citation, index) => <div key={`${citation.source}-${index}`}>
                     <Sparkles size={15} />
@@ -309,15 +294,11 @@ export default function ObservabilityPage({
           <button className="btn btn-secondary" onClick={loadRuns} disabled={loading}>
             <RefreshCw size={15} className={loading ? 'spin' : ''} /> 刷新
           </button>
-          <a className="btn btn-secondary" href={LANGSMITH_PROJECT_URL} target="_blank" rel="noreferrer">
+          {LANGSMITH_PROJECT_URL && <a className="btn btn-secondary" href={LANGSMITH_PROJECT_URL} target="_blank" rel="noreferrer">
             打开 LangSmith <ExternalLink size={15} />
-          </a>
+          </a>}
         </div>
       </div>
-
-      {!HAS_PROJECT_URL && <Notice tone="warning">
-          尚未配置 LangSmith 项目快捷入口，当前按钮会打开 LangSmith 首页。若本次 Trace 已上报，可复制 Trace ID 并在 LangSmith 中搜索。
-        </Notice>}
 
       <div className="obs-summary-grid">
         <MetricCard label="运行记录数" value={loading ? <Skeleton height={35} width="70%" /> : error ? '—' : page.total} hint="符合当前查询条件的记录" />

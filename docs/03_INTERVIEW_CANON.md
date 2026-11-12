@@ -341,6 +341,8 @@ OpenTelemetry Span 覆盖 HTTP 请求、Agent Workflow、各 Agent 节点、工�
 
 React 前端已拆分为用户咨询页与客服员工后台。用户页采用连续会话交互，并以当前浏览器保存的 Session ID 列表为能力凭据，从 SQL 查询最近 7 天历史；仅返回最终用户/Assistant 消息，待审或拒绝的草稿被替换为安全状态文案。员工后台仅加载待审批异常工单。`manager/admin` 还可分页或按工单编号查询 Agent Run，查看北京时间、Workflow Path、Trace ID、延迟、Token、QA、Tool 和 citation 摘要，并跳转配置的 LangSmith Project。前端不保存 LangSmith API Key，当前也不从 LangSmith API 回读 Span。
 
+用户页空对话提供 4 张场景卡，可填入工具查询、退款审批和安全拦截问题；点击不会自动发送。员工登录页支持通过 `VITE_DEMO_ACCOUNTS` 配置可公开的演示账号按钮，只填入、不自动登录或创建账号。订单金额依据 `/customer-context` 返回的币种显示；人工核实事件和运行列表统一使用北京时间，工具状态统一中文。LangSmith URL 未配置时隐藏跳转与警告，仍可查看和复制 Trace ID。
+
 公开的 `#workflow` 流程演示页新增“高风险操作与故障恢复”视图，展示 Action、Outbox、Outbox 行内的 Worker Lease 和 Review 的数据关联。完整状态图包含当前 15 个 Action 状态与 25 条命令迁移；六套可逐步点选的时序图覆盖退款超时对账、外部成功后进程崩溃、慢调用续租、旧 Worker 凭证失效、DLQ 人工确认及补偿结果未知。每一步同时展示四类记录的示例状态。页面不读取真实任务、不执行审批或业务 Tool；前端测试核对迁移清单与后端状态机的一致性。
 
 ### 当前没有的性能数据

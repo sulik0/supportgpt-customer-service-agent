@@ -410,6 +410,26 @@
   gap: 20px;
 }
 
+.demo-accounts {
+  margin-top: var(--space-5);
+  padding-top: var(--space-5);
+  border-top: 1px solid var(--color-border-subtle);
+}
+.demo-accounts h2 {
+  font-size: var(--font-size-14);
+  margin: 0;
+}
+.demo-accounts p {
+  color: var(--color-text-secondary);
+  font-size: var(--font-size-13);
+  margin: var(--space-2) 0 var(--space-3);
+}
+.demo-accounts > div {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+}
+
 .staff-login-form label {
   gap: 6px;
   color: var(--color-text-control);

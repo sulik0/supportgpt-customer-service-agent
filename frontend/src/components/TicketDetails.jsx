@@ -1,5 +1,6 @@
 import '../styles/pages/workspace.css';
 import { friendlyError } from '../errors';
+import { formatOrderAmount, formatToolStatus } from '../formatters';
 import React, { useEffect, useRef, useState } from 'react';
 import { createLatestRequest } from '../latestRequest';
 import { useConfirm, useUnsavedChanges } from './uiHooks';
@@ -250,7 +251,7 @@ export default function TicketDetails({
             {recentOrders.map(order => <div className="order-item" key={order.order_id}>
                 <div><strong>{order.order_id}</strong><span>{translateStatus(order.status)}</span></div>
                 <p>{order.items.map(translateOrderItem).join('、')}</p>
-                <b>${order.total_amount}</b>
+                <b>{formatOrderAmount(order.total_amount, order.currency)}</b>
               </div>)}
           </div>
         </details>}
@@ -260,7 +261,7 @@ export default function TicketDetails({
         <ToolReviewPanel ticketId={ticket.id} userRole={userRole} onActionComplete={onActionComplete} />
         {!loading && chatOutput?.tool_calls?.length > 0 && <Card title="工具调用轨迹" className="workspace-run-trace">
           <div className="workspace-tool-trace"><ol>{chatOutput.tool_calls.map((call, index) => <li key={`${call.tool_name}-${index}`}>
-            <span className="workspace-trace-dot" aria-hidden="true" /><div><code>{call.tool_name}</code><span>{{ success: '调用成功', error: '调用失败', failed: '调用失败', denied: '调用被拒绝', blocked: '调用被阻止' }[call.status] || call.status || '未记录状态'}</span>{call.latency_ms != null && <span className="workspace-mono">{call.latency_ms} ms</span>}{call.error && <span>{call.error}</span>}</div>
+            <span className="workspace-trace-dot" aria-hidden="true" /><div><code>{call.tool_name}</code><span>{formatToolStatus(call.status)}</span>{call.latency_ms != null && <span className="workspace-mono">{call.latency_ms} ms</span>}{call.error && <span>{call.error}</span>}</div>
           </li>)}</ol></div>
         </Card>}
       </aside>

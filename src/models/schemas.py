@@ -293,6 +293,7 @@ class OrderInfo(BaseModel):
     status: str
     items: List[str]
     total_amount: float
+    currency: Optional[str] = None
     order_date: datetime
 
 

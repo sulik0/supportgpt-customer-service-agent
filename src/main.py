@@ -1224,6 +1224,7 @@ async def get_customer_context(
             status=o["status"],
             items=o["items"],
             total_amount=o["total_amount"],
+            currency=o.get("currency"),
             order_date=o["order_date"],
         )
         for o in orders

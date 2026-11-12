@@ -4,6 +4,7 @@ import { AUTH_EXPIRED_EVENT, fetchHealth, fetchReviewQueue, login, logout } from
 import { LoadingState, NavLink, Button, Notice, Overlay } from './components/ui';
 import { consumeNavigationApproval, navigate, parseRoute, requestNavigationPermission, updateRouteParams } from './navigation';
 import { translateRole } from './i18n';
+import { parseDemoAccounts } from './demoAccounts';
 import { Activity, ArrowLeft, GitBranch, LibraryBig, Inbox, LogOut, Menu, RefreshCw, MessagesSquare } from 'lucide-react';
 const CustomerSupportPage = lazy(() => import('./components/CustomerSupportPage'));
 const TicketList = lazy(() => import('./components/TicketList'));
@@ -17,6 +18,7 @@ const VIEW_TITLES = {
   resources: '资源管理',
   workflow: 'Agent 处理流程'
 };
+const DEMO_ACCOUNTS = parseDemoAccounts(import.meta.env.VITE_DEMO_ACCOUNTS);
 export default function App() {
   const staffEntryEnabled = import.meta.env.VITE_STAFF_ENTRY_ENABLED !== 'false';
   const [authenticated, setAuthenticated] = useState(() => Boolean(localStorage.getItem('token')));
@@ -160,6 +162,15 @@ export default function App() {
         <div className="staff-login-heading"><h1>登录员工后台</h1><p>使用你的员工账号继续</p></div>
         {authNotice && <Notice>{authNotice}</Notice>}
         <form onSubmit={handleLogin} className="staff-login-form"><label htmlFor="username">用户名<input id="username" name="username" autoComplete="username" value={loginUser} onChange={event => setLoginUser(event.target.value)} required disabled={loginBusy} /></label><label htmlFor="password">密码<input id="password" name="password" type="password" autoComplete="current-password" value={loginPass} onChange={event => setLoginPass(event.target.value)} required disabled={loginBusy} /></label><Button type="submit" tone="primary" size="lg" busy={loginBusy}>登录客服后台</Button></form>
+        {DEMO_ACCOUNTS.length > 0 && <section className="demo-accounts" aria-label="演示账号">
+          <h2>演示账号</h2>
+          <p>选择账号填入，确认后再登录。</p>
+          <div>{DEMO_ACCOUNTS.map((account, index) => <Button key={index} disabled={loginBusy} onClick={() => {
+            setLoginUser(account.username);
+            setLoginPass(account.password);
+            setAuthNotice('');
+          }}>演示账号：{account.label}</Button>)}</div>
+        </section>}
       </div></section></main> : <div className={`app-shell ${mobileNav ? 'nav-open' : ''}`}>
           <aside className="app-sidebar" id="staff-navigation">{staffNavigation}</aside>
           {mobileNav && <Overlay drawer title="工作台导航" id="staff-navigation-mobile" className="navigation-drawer" onClose={() => setMobileNav(false)}><div className="app-sidebar">{staffNavigation}</div></Overlay>}

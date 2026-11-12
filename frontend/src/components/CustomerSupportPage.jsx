@@ -1,11 +1,10 @@
 import '../styles/pages/support.css';
-import { Button, Chip } from './ui';
+import { Button, Card } from './ui';
 import { WORKFLOW_EXAMPLES } from './workflowExamples';
 import { friendlyError } from '../errors';
 import React, { useEffect, useRef, useState } from 'react';
 import { AlertTriangle, Bot, CheckCircle2, Clock3, MessagesSquare, GitBranch, RefreshCw, Send, ShieldCheck, Star } from 'lucide-react';
 import { fetchSupportHistory, submitSupportRequest, submitUserFeedback } from '../api/client';
-const EXAMPLE_QUESTIONS = ['我的订单还没有收到，能帮我查一下吗？', '我想了解退款需要满足什么条件？', 'API 一直超时，应该如何排查？'];
 const DEMO_CUSTOMER_HINTS = {
   cust_201: '演示订单 ORD-12001：699 元，已发货，物流延迟。可以询问配送进度或取消订单。',
   cust_202: '演示订单 ORD-12002：1299 元，网关设备已签收，有模拟保修权益。可以询问维修申请。',
@@ -94,6 +93,7 @@ export default function CustomerSupportPage({
   const [feedbackError, setFeedbackError] = useState('');
   const conversationRef = useRef(null);
   const historyRequest = useRef(0);
+  const isEmptyConversation = conversation.length === 1 && conversation[0] === WELCOME_MESSAGE;
 
   // 新消息出现时滚到末尾，不改变会话和历史数据。
   useEffect(() => {
@@ -259,7 +259,15 @@ export default function CustomerSupportPage({
 
             {DEMO_CUSTOMER_HINTS[customerId] && <p className="support-privacy">{DEMO_CUSTOMER_HINTS[customerId]}以上客户和记录均为虚构演示数据。</p>}
 
-            <div className="support-conversation" ref={conversationRef} role="log" aria-label="当前对话记录" aria-live="polite" aria-relevant="additions" aria-busy={historyLoading}>
+            {!historyLoading && isEmptyConversation && <Card className="support-scenarios" title="选择一个场景开始">
+              <p>选择后填入问题，确认后发送。</p>
+              <div className="support-scenario-grid">{WORKFLOW_EXAMPLES.map(example => <Button className="support-scenario" key={example.id} disabled={submitting} onClick={() => {
+                if (customerId !== example.customerId) switchCustomer(example.customerId);
+                setMessage(example.question);
+              }}><strong>{example.title}</strong><span>{example.description}</span></Button>)}</div>
+            </Card>}
+
+            <div className={`support-conversation ${isEmptyConversation ? 'is-empty' : ''}`} ref={conversationRef} role="log" aria-label="当前对话记录" aria-live="polite" aria-relevant="additions" aria-busy={historyLoading}>
               {historyLoading ? <div className="support-history-loading"><RefreshCw className="spin" size={16} /> 正在加载最近 7 天的对话记录……</div> : conversation.map((item, index) => {
               const day = historyDay(item.createdAt);
               const previousDay = index > 0 ? historyDay(conversation[index - 1].createdAt) : '';
@@ -309,23 +317,6 @@ export default function CustomerSupportPage({
                 </form>)}
 
             <form onSubmit={handleSubmit} className="support-form support-composer">
-              <details className="support-workflow-examples">
-                <summary>真实工作流测试例子（仅填入，确认后发送）</summary>
-                <p>选择例子会切换到对应演示客户并替换输入框内容，不会自动发送。点击发送后运行后端工作流；业务记录为模拟数据。工具循环需要后端启用 react 模式，默认规则模式也可验证工具查询。</p>
-                {WORKFLOW_EXAMPLES.map(example => <article key={example.id}>
-                  <strong>{example.title} · {example.customerName}</strong>
-                  <p>{example.question}</p>
-                  <Button disabled={submitting || historyLoading} onClick={() => {
-                    if (customerId !== example.customerId) switchCustomer(example.customerId);
-                    setMessage(example.question);
-                  }}>填入：{example.title}</Button>
-                </article>)}
-              </details>
-              {conversation.length === 1 && <div className="question-examples">
-                  <span>您可以这样问</span>
-                  <div>{EXAMPLE_QUESTIONS.map(question => <Chip key={question} onClick={() => setMessage(question)} disabled={submitting || historyLoading}>{question}</Chip>)}</div>
-                </div>}
-
               <div className="support-input-container">
                 <label className="support-message-field">
                   <span className="sr-only">输入您的问题</span>
