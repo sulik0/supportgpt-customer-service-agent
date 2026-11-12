@@ -1,5 +1,8 @@
 // 仅用于本地界面验收：内存中的 Demo 数据，不调用模型或真实业务系统。
 import http from 'node:http';
+import { randomBytes } from 'node:crypto';
+const publicInsights = new Map();
+let publicTicketId = 102;
 const requests = [];
 const templates = Object.fromEntries(['analyzer', 'resolver', 'qa'].map(node => [node, {
   system: `${node} 的演示系统模板，不用于真实请求。`,
@@ -130,7 +133,7 @@ http.createServer(async (req, res) => {
   const origin = req.headers.origin;
   if (origin && /^http:\/\/(?:127\.0\.0\.1|localhost):(?:5174|5180)$/.test(origin)) res.setHeader('Access-Control-Allow-Origin', origin);
   res.setHeader('Access-Control-Allow-Credentials', 'true');
-  res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
+  res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-Feedback-Token');
   res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
   res.setHeader('Content-Type', 'application/json');
   const send = (value, status = 200) => {
@@ -173,28 +176,47 @@ http.createServer(async (req, res) => {
     messages
   });
   if (url.pathname === '/support/requests') {
-    messages.push({
-      id: `demo-${messages.length}`,
-      role: 'user',
-      content: data.message,
-      created_at: new Date().toISOString(),
-      ticket_id: 103
+    const ticketId = ++publicTicketId;
+    const runId = `demo-run-${ticketId}`;
+    const feedbackToken = randomBytes(24).toString('base64url');
+    const safety = /忽略|系统提示词/.test(data.message);
+    const refund = /退款/.test(data.message);
+    const pending = safety || refund;
+    const response = pending ? '该请求已转交人工确认。' : '订单运输延迟，承运方正在核查。';
+    publicInsights.set(runId, {
+      token: feedbackToken,
+      insight: {
+        workflow_path: safety ? ['ticket_analyzer', 'escalation'] : ['ticket_analyzer', 'skill_selector', 'tool_call', 'retriever', 'llm_generation', 'qa', 'escalation'],
+        intent: safety ? 'information_request' : refund ? 'billing_dispute' : 'order_status',
+        department: refund ? 'billing' : safety ? 'general' : 'shipping',
+        priority: safety ? 'urgent' : refund ? 'high' : 'medium',
+        analyzer_confidence: .99,
+        skill_selection: safety ? null : { skill_name: refund ? 'refund_support' : 'order_support', skill_version: 'v1.1' },
+        tool_calls: safety ? [] : [{ tool_name: 'shipping.get_shipments', status: 'success', latency_ms: 12 }],
+        citations: safety ? [] : [{ source: '配送服务政策' }],
+        qa_score: safety ? null : .92,
+        risk_level: safety ? 'critical' : refund ? 'high' : 'low',
+        review_reasons: safety ? ['security_threat_detected'] : refund ? ['high_risk_business_intent'] : [],
+        approval_required: pending,
+        latency_seconds: .36,
+        tokens_total: safety ? 20 : 190
+      }
     });
-    const response = '这是本地 Demo 回复。界面已提交问题；没有调用真实模型、查询真实订单或执行退款。';
-    messages.push({
-      id: `demo-${messages.length}`,
-      role: 'assistant',
-      content: response,
-      created_at: new Date().toISOString(),
-      ticket_id: 103
-    });
+    messages.push({ id: `demo-${messages.length}`, role: 'user', content: data.message, created_at: new Date().toISOString(), ticket_id: ticketId });
+    messages.push({ id: `demo-${messages.length}`, role: pending ? 'status' : 'assistant', content: response, created_at: new Date().toISOString(), ticket_id: ticketId });
     return send({
-      status: 'answered',
-      response,
-      ticket_id: 103,
-      agent_run_id: 'demo-run-103',
-      feedback_token: 'demo-feedback'
+      status: pending ? 'pending_human' : 'answered', response,
+      message: pending ? '等待人工核实后回复。' : '处理完成。',
+      handling_reason: safety ? 'risk_review' : refund ? 'manual_review' : null,
+      ticket_id: ticketId, agent_run_id: runId, feedback_token: feedbackToken
     });
+  }
+  const insightMatch = url.pathname.match(/^\/support\/runs\/([^/]+)\/insight$/);
+  if (req.method === 'GET' && insightMatch) {
+    const saved = publicInsights.get(decodeURIComponent(insightMatch[1]));
+    if (!saved) return send({ detail: '记录不存在' }, 404);
+    if (req.headers['x-feedback-token'] !== saved.token) return send({ detail: '无权查看' }, 403);
+    return send(saved.insight);
   }
   if (url.pathname === '/feedback/user') return send({
     status: 'recorded',

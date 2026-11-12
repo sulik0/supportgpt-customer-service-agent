@@ -221,14 +221,7 @@ class FeedbackService:
         idempotency_key: str,
     ) -> FeedbackEvent:
         """采集用户评分，并通过幂等键避免客户端重试产生重复事件。"""
-        run = await self.get_agent_run(db, agent_run_id)
-        if not secrets.compare_digest(
-            run.feedback_token_hash, self._token_hash(feedback_token)
-        ):
-            raise HTTPException(
-                status_code=status.HTTP_403_FORBIDDEN,
-                detail="Invalid feedback token for this Agent run.",
-            )
+        run = await self.get_token_authorized_run(db, agent_run_id, feedback_token)
         # 一个 Run 只接收一条不可变用户反馈，服务端不信任客户端换键重放。
         external_ref = self._external_ref("user", agent_run_id)
         existing = await self._find_event(db, "user", external_ref)
@@ -365,6 +358,20 @@ class FeedbackService:
             sequence=1,
         )
 
+    async def get_token_authorized_run(
+        self, db: AsyncSession, run_id: str, feedback_token: str
+    ) -> AgentRun:
+        """评分与公开摘要复用同一令牌校验。"""
+        run = await self.get_agent_run(db, run_id)
+        if not secrets.compare_digest(
+            run.feedback_token_hash, self._token_hash(feedback_token)
+        ):
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Invalid feedback token for this Agent run.",
+            )
+        return run
+
     async def get_agent_run(self, db: AsyncSession, run_id: str) -> AgentRun:
         """查询 Agent Run 及全部 Feedback Event。"""
         result = await db.execute(
@@ -373,6 +380,7 @@ class FeedbackService:
                 selectinload(AgentRun.feedback_events),
                 selectinload(AgentRun.skill_selection),
                 selectinload(AgentRun.execution_snapshot),
+                selectinload(AgentRun.review_context),
             )
             .where(AgentRun.id == run_id)
         )

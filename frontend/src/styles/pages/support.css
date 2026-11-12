@@ -505,3 +505,109 @@
     grid-template-columns: minmax(0, 1fr);
   }
 }
+
+.support-run-insight {
+  margin-top: var(--space-3);
+}
+
+.support-insight-panel.ui-card {
+  margin-top: var(--space-2);
+  box-shadow: none;
+}
+
+.support-insight-panel .ui-card-body {
+  padding: var(--space-4);
+}
+
+.support-message .support-insight-helper {
+  color: var(--color-text-secondary);
+  font-size: var(--font-size-12);
+}
+
+.support-insight-steps {
+  list-style: none;
+  margin: var(--space-4) 0;
+  padding: 0 0 0 var(--space-3);
+  border-left: 1px solid var(--color-accent-border);
+}
+
+.support-insight-steps > li {
+  position: relative;
+  padding: 0 0 var(--space-4) var(--space-3);
+  font-size: var(--font-size-13);
+  color: var(--color-text-secondary);
+  overflow-wrap: anywhere;
+}
+
+.support-insight-steps > li::before {
+  content: "";
+  position: absolute;
+  left: calc(-1 * var(--space-1));
+  top: var(--space-2);
+  width: var(--space-2);
+  height: var(--space-2);
+  border-radius: var(--radius-pill);
+  background: var(--color-accent);
+}
+
+.support-insight-steps > li.insight-branch {
+  margin-left: var(--space-4);
+}
+
+.support-insight-steps > li.insight-skipped,
+.support-insight-steps > li.insight-unrecorded {
+  color: var(--color-text-tertiary);
+}
+
+.support-insight-steps > li:not(.insight-recorded)::before {
+  background: var(--color-border-strong);
+}
+
+.support-insight-step-heading {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2);
+  margin-bottom: var(--space-2);
+}
+
+.support-insight-step-heading .ui-badge {
+  font-size: var(--font-size-12);
+}
+
+.support-insight-steps ul {
+  padding-left: var(--space-4);
+  margin: var(--space-2) 0 0;
+}
+
+.support-insight-facts,
+.support-insight-footer {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2) var(--space-4);
+  margin: 0;
+}
+
+.support-insight-facts > div {
+  display: flex;
+  gap: var(--space-2);
+}
+
+.support-insight-facts dd {
+  margin: 0;
+}
+
+.support-insight-tools li > span {
+  display: inline-block;
+  margin-left: var(--space-2);
+}
+
+.support-insight-footer {
+  padding-top: var(--space-3);
+  border-top: 1px solid var(--color-border-subtle);
+  font-size: var(--font-size-12);
+}
+
+.support-insight-footer a {
+  color: var(--color-accent);
+}

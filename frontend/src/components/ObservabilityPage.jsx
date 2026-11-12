@@ -1,6 +1,7 @@
 import "../styles/pages/observability.css";
 import { friendlyError } from "../errors";
 import { formatDate, formatToolStatus } from "../formatters";
+import { NODE_LABELS, INTENT_LABELS } from "../workflowMetadata";
 import React, {
   useCallback,
   useEffect,
@@ -34,36 +35,12 @@ import { formatLatency, summarizeRuns, totalTokens } from "./runMetrics";
 const PAGE_SIZE = 20;
 const LANGSMITH_PROJECT_URL =
   import.meta.env.VITE_LANGSMITH_PROJECT_URL?.trim();
-const NODE_LABELS = {
-  analyzer: "分析问题",
-  skill_selector: "选择能力",
-  context_enrichment: "查询依据",
-  resolver: "生成回复",
-  approval_gate: "审批门控",
-  human_approval: "审批续跑",
-  ticket_analyzer: "工单分析",
-  tool_call: "工具调用",
-  retriever: "知识检索",
-  llm_generation: "回复生成",
-  qa: "质量检查",
-  escalation: "风险判断",
-};
 const STRATEGY_LABELS = {
   rule: "规则",
   jev: "Jev",
   llm: "大模型",
   not_run: "未执行",
   unknown: "未知",
-};
-const INTENT_LABELS = {
-  billing_dispute: "账务 / 退款争议",
-  outage_report: "API / 服务故障",
-  order_cancellation: "订单取消",
-  order_status: "订单状态",
-  account_support: "账户异常",
-  warranty_claim: "保修申请",
-  feedback: "用户反馈",
-  information_request: "信息咨询",
 };
 const DEPARTMENT_LABELS = {
   billing: "账务",

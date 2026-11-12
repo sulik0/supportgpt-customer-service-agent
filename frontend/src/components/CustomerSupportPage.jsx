@@ -1,6 +1,7 @@
 import "../styles/pages/support.css";
 import { Badge, Button, Card } from "./ui";
 import { WORKFLOW_EXAMPLES } from "./workflowExamples";
+import SupportRunInsight from "./SupportRunInsight";
 import { friendlyError } from "../errors";
 import React, { useEffect, useRef, useState } from "react";
 import {
@@ -201,6 +202,8 @@ export default function CustomerSupportPage({ onStaffEntry, onWorkflowEntry }) {
             "您的问题已收到，我们正在继续处理。",
           ticketId: nextResult.ticket_id,
           createdAt: new Date().toISOString(),
+          agentRunId: nextResult.agent_run_id,
+          feedbackToken: nextResult.feedback_token,
         },
       ]);
     } catch (requestError) {
@@ -451,6 +454,13 @@ export default function CustomerSupportPage({ onStaffEntry, onWorkflowEntry }) {
                               {item.ticketId && item.createdAt ? " · " : ""}
                               {historyTime(item.createdAt)}
                             </small>
+                          )}
+                          {item.agentRunId && item.feedbackToken && (
+                            <SupportRunInsight
+                              key={item.agentRunId}
+                              agentRunId={item.agentRunId}
+                              feedbackToken={item.feedbackToken}
+                            />
                           )}
                         </div>
                       </div>

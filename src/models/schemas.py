@@ -153,6 +153,46 @@ class PublicSupportResponse(BaseModel):
     feedback_token: Optional[str] = None
 
 
+class PublicInsightToolCall(BaseModel):
+    """仅公开工具名称、状态与耗时。"""
+
+    tool_name: str
+    status: str
+    latency_ms: Optional[float] = None
+
+
+class PublicInsightCitation(BaseModel):
+    """仅公开引用来源，不含正文。"""
+
+    source: str
+
+
+class PublicInsightSkill(BaseModel):
+    """仅公开选中能力的名称与版本。"""
+
+    skill_name: str
+    skill_version: str
+
+
+class PublicRunInsightResponse(BaseModel):
+    """公开演示的运行摘要白名单，不包含输入、草稿或异常正文。"""
+
+    workflow_path: List[str]
+    intent: Optional[str] = None
+    department: Optional[str] = None
+    priority: Optional[str] = None
+    analyzer_confidence: Optional[float] = None
+    skill_selection: Optional[PublicInsightSkill] = None
+    tool_calls: List[PublicInsightToolCall] = Field(default_factory=list)
+    citations: List[PublicInsightCitation] = Field(default_factory=list)
+    qa_score: Optional[float] = None
+    risk_level: Optional[str] = None
+    review_reasons: List[str] = Field(default_factory=list)
+    approval_required: bool
+    latency_seconds: Optional[float] = None
+    tokens_total: Optional[int] = None
+
+
 class PublicConversationMessageResponse(BaseModel):
     """用户端可见的历史消息，不包含待审草稿正文。"""
 

@@ -13,6 +13,7 @@ import "./workflow.css";
 import { Badge, Button, Chip, MetricCard } from "./ui";
 import ToolGovernanceDiagram from "./ToolGovernanceDiagram";
 import ToolLoopGuide from "./ToolLoopGuide";
+import { WORKFLOW_STAGES as STAGES } from "../workflowMetadata";
 
 // 演示配置对应当前 graph.py；不执行 Agent，也不读取真实客户数据。
 const NODES = {
@@ -193,17 +194,6 @@ const SCENARIOS = {
     result: "查询内容命中注入，隔离上下文并跳过生成与 QA，转人工。",
   },
 };
-const STAGES = [
-  "input",
-  "analyzer",
-  "skill_selector",
-  "context_enrichment",
-  "resolver",
-  "qa",
-  "escalation",
-  "approval_gate",
-  "end",
-];
 export default function WorkflowPage({ onBack, embedded = false }) {
   const [view, setView] = useState("workflow");
   const [scenarioKey, setScenarioKey] = useState("normal");

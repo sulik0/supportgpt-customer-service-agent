@@ -17,6 +17,8 @@ SupportGPT 智能客服 Agent 面向售后服务场景。项目基于开源客�
 
 空对话直接显示 4 张场景卡，覆盖工具查询、退款人工审批与输入安全拦截；点击只选择客户并填入问题。员工登录页仅在配置 `VITE_DEMO_ACCOUNTS` JSON 后提供演示账号填入按钮，不自动登录、不创建账号；配置只能使用可公开的演示凭据。订单上下文返回币种，原有英文订单为 USD，中文订单为 CNY。未配置 LangSmith 项目 URL 时保留 Trace ID 与复制，不显示外链或警告。
 
+隔离 Demo 的咨询回复支持“查看处理过程”：正常与待人工回复均使用本次 `feedback_token`，经请求头校验后只读已保存 AgentRun 的白名单摘要。步骤共享节点标签，跳过与未单独记录分开显示；凭据只留页面内存，刷新后的历史不补发令牌。
+
 前端展示已完成文案与层级精简：流程节点使用短摘要和设计要点，咨询范围并入页首，运行列表仅保留主值、详情保留模型与 Trace。风险、权限、确认和错误提示保留；未改变接口或业务流程。逐文件文案统计见 `DESIGN.md` 第 13 节。
 
 ## 项目目标
@@ -251,7 +253,7 @@ resolved / closed --reopen--> in_progress
 
 1. 终端用户通过用户咨询页提交问题，前端调用 `POST /support/requests`。
 2. API 创建唯一业务工单并执行 LangGraph Workflow，随后持久化 `AgentRun`，包含回复、citation、Tool Call、QA、版本、Token、延迟和 Trace ID。
-3. 普通且通过质量门的请求只向用户返回安全的最终回复，不暴露 Tool、QA、风险或 Trace 内部字段。
+3. 普通请求返回安全回复。仅在隔离 Demo 中，访客可凭本次反馈令牌展开已保存的路径、工具/引用摘要、QA 与风险结论；不返回输入原文、草稿、异常正文、参数或 Trace。
 4. 高风险、低置信度、低 QA、幻觉或异常请求创建 `ResponseApproval`；用户页持续显示安全的处理回复，并以 `risk_review`、`quality_review`、`processing_exception` 或 `manual_review` 告知人工介入类别，但不暴露内部规则和未经审批的草稿。
 5. 客服员工后台通过受 RBAC 保护的 `GET /staff/review-queue` 仅加载 `pending_approval` 工单，不展示普通自动处理工单。
 6. 员工打开详情时调用 `GET /tickets/{ticket_id}/agent-result`，只读取最新持久化结果，不重新执行 Workflow；审批完成后工单自动移出人工队列。

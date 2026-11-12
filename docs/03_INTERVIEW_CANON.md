@@ -311,7 +311,7 @@ CI/CD 采用两级门禁：PR/Push 强制使用 Mock Provider 回放固定 100 �
 
 第一阶段已可以收集用户反馈和人工修改，并导出经脱敏处理的训练候选数据：
 
-- 用户咨询页通过 `POST /support/requests` 创建唯一工单并立即执行 Workflow；普通请求返回安全回复，需要审批时返回安全的占位回复和人工介入类别，不向用户暴露 Tool、QA、内部风险规则、Trace 或未经审批的草稿。
+- 用户咨询页通过 `POST /support/requests` 创建唯一工单并立即执行 Workflow；普通请求返回安全回复，需要审批时返回安全的占位回复和人工介入类别，主响应不含内部诊断字段；隔离 Demo 另有凭本次反馈令牌读取的白名单运行摘要，不公开工具参数、输入原文、待审草稿、异常正文或 Trace。
 - 客服员工后台通过受 RBAC 保护的 `GET /staff/review-queue` 仅加载待审批工单；打开详情调用 `GET /tickets/{ticket_id}/agent-result` 读取最新持久化结果，不会重新执行 Agent，也不会新增 Ticket、AgentRun 或审批记录。
 - 用户通过 `agent_run_id + feedback_token` 提交评分；数据库只保存 Token 的 SHA-256 摘要，每个 Run 只接受一条不可变用户反馈。
 - 人工审批的通过、修改和拒绝结果自动写入 `FeedbackEvent`；人工修改可形成 SFT 与 DPO 候选。
@@ -342,6 +342,8 @@ OpenTelemetry Span 覆盖 HTTP 请求、Agent Workflow、各 Agent 节点、工�
 React 前端已拆分为用户咨询页与客服员工后台。用户页采用连续会话交互，并以当前浏览器保存的 Session ID 列表为能力凭据，从 SQL 查询最近 7 天历史；仅返回最终用户/Assistant 消息，待审或拒绝的草稿被替换为安全状态文案。员工后台仅加载待审批异常工单。`manager/admin` 还可分页或按工单编号查询 Agent Run，查看北京时间、Workflow Path、Trace ID、延迟、Token、QA、Tool 和 citation 摘要，并跳转配置的 LangSmith Project。前端不保存 LangSmith API Key，当前也不从 LangSmith API 回读 Span。
 
 用户页空对话提供 4 张场景卡，可填入工具查询、退款审批和安全拦截问题；点击不会自动发送。员工登录页支持通过 `VITE_DEMO_ACCOUNTS` 配置可公开的演示账号按钮，只填入、不自动登录或创建账号。订单金额依据 `/customer-context` 返回的币种显示；人工核实事件和运行列表统一使用北京时间，工具状态统一中文。LangSmith URL 未配置时隐藏跳转与警告，仍可查看和复制 Trace ID。
+
+隔离 Demo 新增 `GET /support/runs/{agent_run_id}/insight`，复用评分的令牌哈希与恒定时间校验，并按 IP / 匿名访客限流。正常和待人工回复都可展开处理路径、意图、Skill、工具状态/耗时、引用来源、QA、风险与审批结论。读取不会执行或恢复 Workflow，也不消耗评分资格；Token 仅留当前页面内存，历史查询不补发。
 
 展示层已精简重复说明：流程节点采用设计要点，故障恢复权限采用清单，运行列表主值与详情分层。该轮仅调整前端呈现，保留风险、权限、确认与错误提示，不新增接口或改变业务流程。
 

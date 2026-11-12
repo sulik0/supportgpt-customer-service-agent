@@ -315,9 +315,16 @@ QWEN3_GUARD_MODEL_NAME=Qwen/Qwen3Guard-Gen-0.6B
 | `GET /tool-outbox` | 查看 Outbox、Retry Queue 与 DLQ | `manager/admin` |
 | `POST /tool-outbox/{event_id}/retry` | 显式重放 DLQ 事件 | `manager/admin` |
 | `POST /feedback/user` | 提交一次性用户评价 | `agent_run_id + feedback_token` |
+| `GET /support/runs/{agent_run_id}/insight` | 只读保存的运行摘要，不执行或恢复 Workflow | 隔离 Demo 开关开启且 `X-Feedback-Token` 匹配 |
 | `GET /feedback/runs/{agent_run_id}` | 查看 Run 与反馈关联 | `manager/admin` |
 | `GET /observability/runs` | 分页查询 Agent Run 摘要；可传 `ticket_id` 精确筛选 | `manager/admin` |
 | `POST /evaluate-response` | 运行单次评估 | `agent+`；关联 Run 时需 `manager/admin` |
+
+运行摘要仅在 `PUBLIC_DEMO_ISOLATION_ENABLED=true` 时开放，否则返回 404。前端用 `X-Feedback-Token` 请求头发送本次 `/support/requests` 响应的令牌（正常与 `pending_human` 均返回），不放入 URL；CORS 允许该请求头。校验复用 `/feedback/user` 的 SHA-256 与恒定时间比较，缺失或不匹配返回 403，记录不存在返回 404；同一 `public_rate_limiter` 按 IP / 访客执行 `PUBLIC_READ_RATE_LIMIT_PER_MINUTE` 限额，超额返回 429。响应为 `Cache-Control: no-store`。
+
+白名单字段为 `workflow_path`、`intent`、`department`、`priority`、`analyzer_confidence`、`skill_selection`（名称/版本）、`tool_calls`（名称/状态/耗时）、`citations`（仅来源）、`qa_score`、`risk_level`、固定原因码 `review_reasons`、`approval_required`、`latency_seconds` 和 `tokens_total`。不返回输入、输出、草稿、异常正文、工具参数、文档正文或 Trace。旧记录缺失的观测值返回 `null`；未执行 QA 不显示为零分。
+
+面板在展开时请求，关闭或卸载取消请求；正常与待人工回复分别绑定自己的运行和令牌。令牌不落浏览器持久存储，刷新加载历史后不补发；评分提交后仍可读取摘要。`ticket_analyzer` / `tool_call` / `llm_generation` 映射到共享节点，Tool / RAG 是并行分支；审批门控没有独立路径记录时显示“结论摘要”，不伪装成已执行或已跳过。只显示已保存状态，不提供实时进度。
 
 Swagger 是最新 Schema 的最终参考；修改 API 时必须同步 Pydantic Model、测试和本文档。
 

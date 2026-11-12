@@ -5,7 +5,16 @@ import uuid
 from contextlib import asynccontextmanager
 from pathlib import Path
 
-from fastapi import Depends, FastAPI, HTTPException, Query, Request, Response, status
+from fastapi import (
+    Depends,
+    FastAPI,
+    Header,
+    HTTPException,
+    Query,
+    Request,
+    Response,
+    status,
+)
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
@@ -38,6 +47,7 @@ from src.auth.rbac import (
 from src.database import AsyncSessionLocal, engine, get_db, init_db
 from src.decision import close_decision_provider
 from src.evaluation.framework import run_deeval_evaluation
+from src.feedback.public_insight import build_public_run_insight
 from src.feedback.service import feedback_service
 from src.memory import MemoryContext, MemoryOwnershipError, memory_service
 from src.models.db_models import (
@@ -76,6 +86,7 @@ from src.models.schemas import (
     PublicConversationHistoryResponse,
     PublicSupportRequest,
     PublicSupportResponse,
+    PublicRunInsightResponse,
     ResponseApprovalRequest,
     ResponseApprovalResponse,
     SuggestResponseRequest,
@@ -537,7 +548,7 @@ app.add_middleware(
     allow_origins=settings.cors_allowed_origins,
     allow_credentials=True,
     allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"],
-    allow_headers=["Authorization", "Content-Type", "X-Request-ID"],
+    allow_headers=["Authorization", "Content-Type", "X-Request-ID", "X-Feedback-Token"],
 )
 
 
@@ -1722,6 +1733,30 @@ def _public_review_feedback(agent_output: dict) -> tuple[str, str, str]:
         "我已经收到您的问题。该请求需要人工客服进一步确认，工单已进入处理队列。",
         "客服人员会核对 AI 草稿和相关业务信息后继续处理。",
     )
+
+
+@app.get("/support/runs/{agent_run_id}/insight", response_model=PublicRunInsightResponse)
+async def get_public_run_insight(
+    agent_run_id: str,
+    request: Request,
+    response: Response,
+    feedback_token: str = Header(default="", alias="X-Feedback-Token"),
+    db: AsyncSession = Depends(get_db),
+):
+    """仅在隔离演示中凭反馈令牌读取保存的摘要。"""
+    if not settings.PUBLIC_DEMO_ISOLATION_ENABLED:
+        raise HTTPException(status_code=404, detail="Not found.")
+    visitor_id = public_access_service.visitor_id(request, response)
+    await public_rate_limiter.enforce(
+        scope="public-insight",
+        identities=public_access_service.rate_limit_identities(request, visitor_id),
+        limit=settings.PUBLIC_READ_RATE_LIMIT_PER_MINUTE,
+        window_seconds=60,
+    )
+    run = await feedback_service.get_token_authorized_run(
+        db, agent_run_id, feedback_token
+    )
+    return build_public_run_insight(run)
 
 
 @app.get("/support/history", response_model=PublicConversationHistoryResponse)
