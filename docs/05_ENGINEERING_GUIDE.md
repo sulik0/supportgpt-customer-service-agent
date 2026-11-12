@@ -203,6 +203,16 @@ JEV_NOUL_THRESHOLD=0.7
 
 Jev 只用于线上封闭决策；当前不作为 Baseline、Ragas 或 DeepEval 的离线 Judge。`Skill Selector`、Tool Allowlist / RBAC / Risk Policy 和 Approval Gate 仍为确定性代码。
 
+Jev 采纳规则：意图是否采纳只看 `intent` 自身置信度（`JEV_INTENT_CONFIDENCE_THRESHOLD`）；`operation_mode` 是辅助问题，只约束依赖它的判断。`operation_mode` 置信度不足时：① 范围外（`outside_support`）判定不成立，按保守方向处理；② 写入 analysis 的 `confidence_score` 被限制在 0.79 以内，Risk Engine 记为 `medium_analyzer_confidence`（不单独触发人工）。置信度足够时仍取两者最小值，风险判断不比原先宽松。线上曾因 `min(intent, operation_mode)` 把 `outage_report`（1.00）、`account_support`（0.92）整体丢弃，退回规则后落到 `information_request`。
+
+投诉路径：项目没有独立的投诉 Intent。明确的投诉诉求（“我要投诉 / file a complaint”，不含“怎么投诉”这类流程咨询）在 Analyzer 中确定性处理：意图为 `feedback` 或 `information_request` 时，统一提为 `priority=high`、`sentiment=negative`，由 Risk Engine 的 `negative_high_priority` 转人工审批。该逻辑不依赖模型输出，Jev 判成 `feedback` 时同样生效。规则兜底另补充了“集群 / 网关 / 生产环境 + 无法访问 / 挂了”（`outage_report`）和“登录不了 / 登不上 / 密码错误”（`account_support`）。
+
+回复语言兜底：Prompt 虽已要求跟随当前 Description 的语言，`deepseek-flash` 在工具结果和 RAG 多为中文时仍可能用中文回答。`src/llm/provider.py` 的 `resolution_language_directive` 按 CJK 字符占比（≥30% 判中文）或英文常用词（且无非 ASCII 字母）判断主要语言，在发给 Resolver 的用户消息末尾追加 `Respond in English.` / `Respond in Chinese.`。用户明确指定回复语言、或无法可靠判断（如法语）时不追加，交给 Prompt 规则。QA 和范围外固定回复本来就按 Description 的 CJK 判断语言，未改动。
+
+用户侧处理说明：安全拦截（`security_threat_detected`）优先返回 `risk_review`，因为安全短路会往 `errors` 写入记录；真实处理异常仍为 `processing_exception`。
+
+真实模型回归：`evaluation/online_regression/supportgpt_online_regression.json` 保存 5 条线上问题用例（投诉、重置密码、提示词泄露、英文订单查询、集群故障），不属于固定 SHA256 的 Baseline。`run_real_llm_regression.py` 默认合并该数据集，smoke 套件自动包含这 5 条（预估 39 次调用，仍在默认上限 40 内）。英文回复语言需人工查看报告确认，Dataset 暂无语言断言。
+
 思考模式：`deepseek-flash` 默认开启思考，思考 Token 计入 `max_tokens`。实测约 2/3 的输出额度花在思考上，导致 Resolver 回复和 QA JSON 被截断。设置 `LLM_THINKING=disabled` 后，主模型和 Fast Model 请求会带上 `extra_body={"thinking":{"type":"disabled"}}`；备用模型不传此参数。留空则不传，保持服务端默认行为。
 
 可选备用模型与 Resilience 配置：

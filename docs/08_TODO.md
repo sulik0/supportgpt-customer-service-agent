@@ -102,6 +102,8 @@
 
 - [x] 2026-09-08 完成 231 条全量测试，并通过固定 100 条 Baseline 的 PR Agent Quality Gate；CI / Docker 使用 Python 3.11。
 - [x] 2026-11-12 修复 LangSmith 直连链路 4 个次要问题（应用内 Agent Span 过滤、Workflow 根 Span 的 HTTP Span Link、DeepSeek 计价与未知模型 WARN、用户回复去引用标记），仅 Mock 测试验证。
+- [x] 2026-11-12 修复线上真实模型测试的 3 个问题：Jev 高置信度意图不再被 `operation_mode` 低置信度连带丢弃；明确投诉确定性提为 high 优先级转人工，并补强集群故障、登录失败的规则兜底；安全拦截优先显示 `risk_review`；Resolver 追加确定性回复语言指令。仅 Mock 测试验证。
+- [ ] 上述 3 个修复涉及意图识别和 Prompt，需用真实模型复测 C05（投诉）、C06（重置密码）、C08（提示词泄露）、C10（英文订单查询）、C12（集群故障）：`python scripts/run_real_llm_regression.py --suite smoke --dry-run` 看预估后再 `--confirm-live`。投诉没有独立 Intent，目前归 `feedback` + high 优先级；若要在统计上单独区分，需另行评估新增 Intent。
 - [ ] 上述 Span 过滤与 Span Link 的线上效果、`deepseek-flash` 实际模型名是否命中计价表，需部署后在 LangSmith 用真实请求核对；真实模型下 `[S1]` 是否仍有变体（如“【S1】”之外的写法）尚未验证。
 - [ ] DeepSeek 价格按高峰价、cache miss 估算，未区分错峰与缓存命中，官方调价后需手动更新 `MODEL_PRICING`。
 - [ ] 旧的 Python 3.13 `.venv` 仍是混装环境，不再作为项目验收环境。
