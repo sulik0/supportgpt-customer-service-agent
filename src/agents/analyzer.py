@@ -54,7 +54,7 @@ _EXPLICIT_NEGATIVE_SENTIMENT = re.compile(
     r"多扣|重复扣款|不能退|无法退|退款失败|退款被拒|未收到|没收到|迟迟"
 )
 _API_INCIDENT = re.compile(
-    r"(?:\bapi\b|接口|服务|集群|网关|生产环境|系统|\bcluster\b|\bgateway\b|\bproduction\b).{0,50}"
+    r"(?:\bapi\b|接口|服务|集群|生产环境|\bcluster\b|\bproduction\b).{0,50}"
     r"(?:\b504\b|\b503\b|error|timeout|timing out|down|offline|crash|broken|"
     r"connectivity|slow|报错|超时|宕机|离线|无法访问|访问不了|挂了|全挂|故障|缓慢)|"
     r"(?:\b504\b|\b503\b|报错|超时|宕机|故障).{0,30}(?:\bapi\b|接口|服务)"
