@@ -495,7 +495,8 @@ export default function CustomerSupportPage({ onStaffEntry, onWorkflowEntry }) {
               </div>
             )}
 
-            {result?.status === "pending_human" && (
+            {(result?.status === "pending_human" ||
+              result?.handling_reason === "preliminary_answer") && (
               <div
                 className={`support-status-panel ${result.handling_reason || "manual_review"}`}
                 role="status"
@@ -513,7 +514,13 @@ export default function CustomerSupportPage({ onStaffEntry, onWorkflowEntry }) {
                         ? "处理过程中出现了异常"
                         : result.handling_reason === "quality_review"
                           ? "需要人工检查回复是否可靠"
-                          : "已转交人工客服"}
+                          : result.handling_reason === "preliminary_answer"
+                            ? "已给出初步答复，人工客服复核中"
+                            : result.handling_reason === "incident_review"
+                              ? "已按紧急故障转交技术支持"
+                              : result.handling_reason === "business_review"
+                                ? "需要人工客服核对后办理"
+                                : "已转交人工客服"}
                   </strong>
                   <span>{result.message}</span>
                   {result.ticket_id && (

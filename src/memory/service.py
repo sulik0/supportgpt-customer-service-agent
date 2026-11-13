@@ -43,6 +43,8 @@ _TRACKING_ID = re.compile(
 )
 _ALLOWED_ROLES = {"user", "assistant"}
 _FINAL_STATUS = "final"
+# 已展示给用户、仍待人工复核的草稿；审批后由 finalize_approval 改为 final 或 rejected。
+_PRELIMINARY_STATUS = "preliminary"
 
 
 class MemoryOwnershipError(ValueError):
@@ -282,7 +284,7 @@ class ConversationMemoryService:
             elif record.status == "rejected" and role == "assistant":
                 role = "status"
                 content = "本次自动回复未通过人工审核，客服人员将重新核对并继续处理。"
-            elif record.status != _FINAL_STATUS:
+            elif record.status not in {_FINAL_STATUS, _PRELIMINARY_STATUS}:
                 continue
             messages.append(
                 {
@@ -306,11 +308,19 @@ class ConversationMemoryService:
         approval_id: int | None,
         intent: Any,
         department: str | None,
+        preliminary: bool = False,
     ) -> None:
-        """普通回复立即生效，待审草稿只保存为 pending。"""
+        """普通回复立即生效，待审草稿只保存为 pending。
+
+        preliminary：草稿已作为初步答复展示给用户，但仍待人工复核，不进入下一轮 Prompt。
+        """
         if not settings.MEMORY_ENABLED:
             return
-        status = "pending" if approval_id else _FINAL_STATUS
+        status = (
+            (_PRELIMINARY_STATUS if preliminary else "pending")
+            if approval_id
+            else _FINAL_STATUS
+        )
         await self._append_message(
             db,
             session_id=context.session_id,

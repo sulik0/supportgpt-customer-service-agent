@@ -2,6 +2,7 @@ import datetime
 import logging
 import time
 import uuid
+from typing import Callable
 from contextlib import asynccontextmanager
 from pathlib import Path
 
@@ -26,6 +27,11 @@ from src.observability.logging_config import configure_logging
 configure_logging(settings.LOG_LEVEL)
 
 from src.agents.checkpointing import checkpoint_manager
+from src.agents.public_reply import (
+    preliminary_answer_allowed,
+    preliminary_answer_note,
+    public_review_feedback,
+)
 from src.agents.durable_execution import (
     AgentExecutionStatus,
     durable_execution_service,
@@ -282,6 +288,7 @@ async def _process_ticket_with_agent(
     session_id: str | None = None,
     memory_context: MemoryContext | None = None,
     require_persisted_result: bool = False,
+    release_preliminary: Callable[[dict], bool] | None = None,
 ) -> tuple[dict, int | None, AgentRun | None]:
     """执行并持久化工单 Workflow，供创建工单和对话入口复用。"""
     execution = await durable_execution_service.create(
@@ -354,6 +361,11 @@ async def _process_ticket_with_agent(
             approval_id=approval_id,
             intent=agent_output.get("intent"),
             department=agent_output.get("department"),
+            preliminary=bool(
+                approval_id
+                and release_preliminary is not None
+                and release_preliminary(agent_output)
+            ),
         )
     await db.commit()
 
@@ -1702,47 +1714,8 @@ async def retry_tool_outbox_event(
 
 
 # --- GENERAL TICKETING APIS ---
-def _public_review_feedback(agent_output: dict) -> tuple[str, str, str]:
-    """将内部风险原因转换为可安全展示给用户的处理说明。"""
-    degradation = str(agent_output.get("degradation_level", "none")).lower()
-    # 安全拦截会往 errors 写入记录，必须先于处理异常判断，否则被误显示为服务不可用。
-    if agent_output.get("security_threat_detected"):
-        return (
-            "risk_review",
-            "我已经收到您的请求。由于该问题涉及敏感或高风险操作，自动处理已暂停并转交人工客服进行安全核验。",
-            "为保护您的账户和业务权益，客服人员确认后会继续处理。",
-        )
-    if agent_output.get("errors") or degradation in {"human_required", "failed"}:
-        return (
-            "processing_exception",
-            "我已经收到您的问题，但部分处理服务暂时不可用。工单已保留并转交人工客服，您无需重复提交。",
-            "系统会保留当前工单，由人工客服核对业务信息后继续处理。",
-        )
-    if (
-        agent_output.get("security_threat_detected")
-        or agent_output.get("risk_requires_human")
-        or str(agent_output.get("risk_level", "low")).lower() in {"high", "critical"}
-    ):
-        return (
-            "risk_review",
-            "我已经收到您的请求。由于该问题涉及敏感或高风险操作，自动处理已暂停并转交人工客服进行安全核验。",
-            "为保护您的账户和业务权益，客服人员确认后会继续处理。",
-        )
-    if (
-        agent_output.get("hallucination_detected")
-        or agent_output.get("response_requires_human")
-        or float(agent_output.get("qa_score", 1.0)) < settings.RISK_QA_SCORE_THRESHOLD
-    ):
-        return (
-            "quality_review",
-            "我已完成初步查询，但当前结果的依据或置信度不足。为避免提供不准确的信息，工单已转交人工客服复核。",
-            "人工客服会结合业务记录和服务政策确认后回复。",
-        )
-    return (
-        "manual_review",
-        "我已经收到您的问题。该请求需要人工客服进一步确认，工单已进入处理队列。",
-        "客服人员会核对 AI 草稿和相关业务信息后继续处理。",
-    )
+# 文案和先答策略在 src/agents/public_reply.py；保留旧名字供测试和内部调用。
+_public_review_feedback = public_review_feedback
 
 
 @app.get("/support/runs/{agent_run_id}/insight", response_model=PublicRunInsightResponse)
@@ -1889,12 +1862,31 @@ async def create_public_support_request(
         session_id=internal_session_id,
         memory_context=memory_context,
         require_persisted_result=True,
+        release_preliminary=lambda output: preliminary_answer_allowed(output, message),
     )
     await db.refresh(ticket)
+    preliminary_released = bool(
+        approval_id and preliminary_answer_allowed(agent_output, message)
+    )
 
+    if approval_id and preliminary_released:
+        # 人工复核照常进行；只读咨询先把通过 QA 的草稿给用户看。
+        return PublicSupportResponse(
+            ticket_id=ticket.id,
+            session_id=session_id,
+            status="answered",
+            response=agent_output.get("suggested_response", ""),
+            message=preliminary_answer_note(message),
+            handling_reason="preliminary_answer",
+            created_at=ticket.created_at,
+            agent_run_id=agent_run.id if agent_run else None,
+            feedback_token=(
+                getattr(agent_run, "_feedback_token", None) if agent_run else None
+            ),
+        )
     if approval_id:
         handling_reason, public_response, public_message = _public_review_feedback(
-            agent_output
+            agent_output, message
         )
         return PublicSupportResponse(
             ticket_id=ticket.id,

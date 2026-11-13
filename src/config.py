@@ -36,6 +36,9 @@ class Settings(BaseSettings):
     PUBLIC_VISITOR_COOKIE_MAX_AGE_SECONDS: int = Field(
         default=2592000, ge=3600, le=31536000
     )
+    # 只读的账务/故障咨询：人工复核照常进行，但先向用户展示通过 QA 的初步答复。
+    PUBLIC_PRELIMINARY_ANSWER_ENABLED: bool = Field(default=True)
+    PUBLIC_PRELIMINARY_ANSWER_MIN_QA_SCORE: float = Field(default=0.8, ge=0.0, le=1.0)
     PUBLIC_RATE_LIMIT_ENABLED: bool = Field(default=True)
     PUBLIC_CHAT_RATE_LIMIT_PER_MINUTE: int = Field(default=5, ge=1, le=1000)
     PUBLIC_CHAT_RATE_LIMIT_PER_DAY: int = Field(default=50, ge=1, le=100000)

@@ -228,10 +228,11 @@ async def test_public_support_request_hides_draft_and_enters_staff_queue(
     assert response.status_code == 201
     payload = response.json()
     assert payload["status"] == "pending_human"
-    assert payload["handling_reason"] == "risk_review"
+    # 非安全原因的转人工不再显示“安全核验”。
+    assert payload["handling_reason"] == "business_review"
     assert payload["response"]
     assert payload["response"] != "这是可直接展示给用户的回复。"
-    assert "安全核验" in payload["response"]
+    assert "人工客服" in payload["response"]
 
     register = await client.post(
         "/auth/register",
@@ -247,3 +248,88 @@ async def test_public_support_request_hides_draft_and_enters_staff_queue(
 
     assert queue.status_code == 200
     assert [ticket["id"] for ticket in queue.json()] == [payload["ticket_id"]]
+
+
+@pytest.mark.asyncio
+async def test_readonly_billing_question_shows_preliminary_answer_and_keeps_review(
+    client: AsyncClient, monkeypatch
+):
+    """只读账务咨询：用户先看到初步答复，审批记录和人工队列照常保留。"""
+
+    async def fake_workflow(state):
+        output = _public_workflow_output(state, approval_required=True)
+        output.update(
+            {
+                "intent": "billing_dispute",
+                "risk_level": "high",
+                "risk_requires_human": True,
+                "risk_reasons": ["high_priority", "high_risk_business_intent"],
+            }
+        )
+        return output
+
+    monkeypatch.setattr("src.main.run_agent_workflow", fake_workflow)
+    session_id = "preliminary-session-0001"
+    response = await client.post(
+        "/support/requests",
+        json={
+            "customer_id": "cust_101",
+            "session_id": session_id,
+            "message": "我的发票开了吗？发票号是多少",
+        },
+    )
+
+    assert response.status_code == 201
+    payload = response.json()
+    assert payload["status"] == "answered"
+    assert payload["handling_reason"] == "preliminary_answer"
+    assert payload["response"] == "这是可直接展示给用户的回复。"
+    assert "人工客服复核" in payload["message"]
+
+    history = await client.get(
+        "/support/history",
+        params={"customer_id": "cust_101", "session_id": session_id},
+    )
+    replies = [m for m in history.json()["messages"] if m["role"] == "assistant"]
+    assert [m["status"] for m in replies] == ["preliminary"]
+    assert replies[0]["content"] == "这是可直接展示给用户的回复。"
+
+    await client.post(
+        "/auth/register",
+        json={"username": "prelim_agent", "password": "queue-pass", "role": "agent"},
+    )
+    login = await client.post(
+        "/auth/token",
+        json={"username": "prelim_agent", "password": "queue-pass"},
+    )
+    headers = {"Authorization": f"Bearer {login.json()['access_token']}"}
+    queue = await client.get("/staff/review-queue", headers=headers)
+    assert payload["ticket_id"] in [ticket["id"] for ticket in queue.json()]
+
+
+@pytest.mark.asyncio
+async def test_preliminary_answer_is_not_fed_into_next_turn_prompt(
+    client: AsyncClient, monkeypatch
+):
+    """未经人工确认的初步答复不进入下一轮 Prompt。"""
+    seen: list[str] = []
+
+    async def fake_workflow(state):
+        seen.append(str(state.get("memory_prompt_context", "")))
+        output = _public_workflow_output(state, approval_required=True)
+        output.update(
+            {
+                "intent": "billing_dispute",
+                "risk_level": "high",
+                "risk_requires_human": True,
+                "risk_reasons": ["high_priority"],
+            }
+        )
+        return output
+
+    monkeypatch.setattr("src.main.run_agent_workflow", fake_workflow)
+    body = {"customer_id": "cust_101", "session_id": "preliminary-session-0002"}
+    await client.post("/support/requests", json={**body, "message": "发票开了吗？"})
+    await client.post("/support/requests", json={**body, "message": "金额是多少？"})
+
+    assert "这是可直接展示给用户的回复。" not in seen[1]
