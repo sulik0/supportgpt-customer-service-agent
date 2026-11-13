@@ -27,7 +27,7 @@
 - [x] 将 Risk Engine 结果接入 LangGraph 路由、QA、Escalation、API、结构化日志、OpenTelemetry Trace 与 Metrics。
 - [x] 在 Dataset + Workflow Replay 中增加安全混淆矩阵、Precision / Recall / F1 / 误报率和安全处置正确率。
 - [x] 将业务回归 Baseline 扩展到 100 条，增加多语言、安全攻击与安全 hard negative 覆盖。
-- [x] 增加真实 LLM Regression 专用入口、smoke/full 套件、Dry Run、付费调用前确认、调用预算，并记录模型、Token 与成本。
+- [x] 增加真实 LLM Regression 专用入口、regression/full 套件、Dry Run、付费调用前确认、调用预算，并记录模型、Token 与成本。
 - [x] 拆分用户咨询页与客服员工后台；用户端采用连续会话展示正常回复或安全的风险/异常状态，异常请求进入受 RBAC 保护的人工审批队列。
 - [x] 人工处理台支持按部门、优先级、客户情绪和关键词组合筛选完整待审批队列；工单显示部门，可一键清除筛选，不重新调用 Agent。
 - [x] 建立统一 `IntentType`，让规则、LLM Provider、AgentState、Tooling、Risk Engine 和 Agent Evaluation 共用同一套意图枚举与兜底策略。
@@ -103,7 +103,7 @@
 - [x] 2026-09-08 完成 231 条全量测试，并通过固定 100 条 Baseline 的 PR Agent Quality Gate；CI / Docker 使用 Python 3.11。
 - [x] 2026-11-12 修复 LangSmith 直连链路 4 个次要问题（应用内 Agent Span 过滤、Workflow 根 Span 的 HTTP Span Link、DeepSeek 计价与未知模型 WARN、用户回复去引用标记），仅 Mock 测试验证。
 - [x] 2026-11-12 修复线上真实模型测试的 3 个问题：Jev 高置信度意图不再被 `operation_mode` 低置信度连带丢弃；明确投诉确定性提为 high 优先级转人工，并补强集群故障、登录失败的规则兜底；安全拦截优先显示 `risk_review`；Resolver 追加确定性回复语言指令。仅 Mock 测试验证。
-- [ ] 上述 3 个修复涉及意图识别和 Prompt，需用真实模型复测 C05（投诉）、C06（重置密码）、C08（提示词泄露）、C10（英文订单查询）、C12（集群故障）：`python scripts/run_real_llm_regression.py --suite smoke --dry-run` 看预估后再 `--confirm-live`。投诉没有独立 Intent，目前归 `feedback` + high 优先级；若要在统计上单独区分，需另行评估新增 Intent。
+- [ ] 上述 3 个修复涉及意图识别和 Prompt，需用真实模型复测 C05（投诉）、C06（重置密码）、C08（提示词泄露）、C10（英文订单查询）、C12（集群故障）：`python scripts/run_real_llm_regression.py --suite regression --dry-run` 看预估后再 `--confirm-live`。投诉没有独立 Intent，目前归 `feedback` + high 优先级；若要在统计上单独区分，需另行评估新增 Intent。
 - [ ] 上述 Span 过滤与 Span Link 的线上效果、`deepseek-flash` 实际模型名是否命中计价表，需部署后在 LangSmith 用真实请求核对；真实模型下 `[S1]` 是否仍有变体（如“【S1】”之外的写法）尚未验证。
 - [ ] DeepSeek 价格按高峰价、cache miss 估算，未区分错峰与缓存命中，官方调价后需手动更新 `MODEL_PRICING`。
 - [ ] 旧的 Python 3.13 `.venv` 仍是混装环境，不再作为项目验收环境。

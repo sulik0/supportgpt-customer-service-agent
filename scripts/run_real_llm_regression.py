@@ -53,7 +53,7 @@ def parse_args() -> argparse.Namespace:
         ),
         help="Supplementary cases merged into the run; pass a missing path to skip.",
     )
-    parser.add_argument("--suite", choices=("smoke", "full"), default="smoke")
+    parser.add_argument("--suite", choices=("regression", "full"), default="regression")
     parser.add_argument(
         "--case-id",
         action="append",

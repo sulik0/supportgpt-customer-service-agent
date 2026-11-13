@@ -7,7 +7,7 @@ from urllib.parse import urlparse
 
 
 REAL_LLM_PROVIDERS = frozenset({"openai", "azure"})
-SMOKE_CASE_IDS = (
+REGRESSION_CASE_IDS = (
     "baseline-refund-v1-within-window",
     "baseline-refund-v2-fee",
     "baseline-account-email-validation",
@@ -147,21 +147,21 @@ def select_real_llm_cases(
     suite: str,
     explicit_case_ids: Sequence[str] | None = None,
 ) -> list[str]:
-    """按 smoke、full 或显式 ID 生成稳定的回归用例清单。"""
+    """按 regression、full 或显式 ID 生成稳定的回归用例清单。"""
     case_index = {str(case.id): case for case in cases}
     if len(case_index) != len(cases):
         raise ValueError("Real LLM regression case ids must be unique.")
     if explicit_case_ids:
         selected = list(dict.fromkeys(str(case_id) for case_id in explicit_case_ids))
-    elif suite == "smoke":
+    elif suite == "regression":
         # 补充数据集已合并进来时一并选入。
-        selected = list(SMOKE_CASE_IDS) + [
+        selected = list(REGRESSION_CASE_IDS) + [
             case_id for case_id in ONLINE_REGRESSION_CASE_IDS if case_id in case_index
         ]
     elif suite == "full":
         selected = [str(case.id) for case in cases]
     else:
-        raise ValueError("suite must be either 'smoke' or 'full'.")
+        raise ValueError("suite must be either 'regression' or 'full'.")
 
     missing = [case_id for case_id in selected if case_id not in case_index]
     if missing:

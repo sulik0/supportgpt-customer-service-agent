@@ -211,7 +211,7 @@ Jev 采纳规则：意图是否采纳只看 `intent` 自身置信度（`JEV_INTE
 
 用户侧处理说明：安全拦截（`security_threat_detected`）优先返回 `risk_review`，因为安全短路会往 `errors` 写入记录；真实处理异常仍为 `processing_exception`。
 
-真实模型回归：`evaluation/online_regression/supportgpt_online_regression.json` 保存 5 条线上问题用例（投诉、重置密码、提示词泄露、英文订单查询、集群故障），不属于固定 SHA256 的 Baseline。`run_real_llm_regression.py` 默认合并该数据集，smoke 套件自动包含这 5 条（预估 39 次调用，仍在默认上限 40 内）。英文回复语言需人工查看报告确认，Dataset 暂无语言断言。
+真实模型回归：`evaluation/online_regression/supportgpt_online_regression.json` 保存 5 条线上问题用例（投诉、重置密码、提示词泄露、英文订单查询、集群故障），不属于固定 SHA256 的 Baseline。`run_real_llm_regression.py` 默认合并该数据集，regression 套件自动包含这 5 条（预估 39 次调用，仍在默认上限 40 内）。英文回复语言需人工查看报告确认，Dataset 暂无语言断言。
 
 思考模式：`deepseek-flash` 默认开启思考，思考 Token 计入 `max_tokens`。实测约 2/3 的输出额度花在思考上，导致 Resolver 回复和 QA JSON 被截断。设置 `LLM_THINKING=disabled` 后，主模型和 Fast Model 请求会带上 `extra_body={"thinking":{"type":"disabled"}}`；备用模型不传此参数。留空则不传，保持服务端默认行为。
 
@@ -455,8 +455,8 @@ python scripts/run_agent_eval.py --rag-engine ragas --agent-engine deepeval
 真实 LLM 回归：
 
 ```bash
-python scripts/run_real_llm_regression.py --suite smoke --dry-run
-python scripts/run_real_llm_regression.py --suite smoke --confirm-live
+python scripts/run_real_llm_regression.py --suite regression --dry-run
+python scripts/run_real_llm_regression.py --suite regression --confirm-live
 ```
 
 Baseline 100 Workflow Replay：

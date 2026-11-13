@@ -5,7 +5,7 @@ import pytest
 
 from src.evaluation.offline_rag import load_evaluation_dataset
 from src.evaluation.real_llm_regression import (
-    SMOKE_CASE_IDS,
+    REGRESSION_CASE_IDS,
     build_real_llm_run_plan,
     prepare_judge_environment,
     require_live_confirmation,
@@ -35,18 +35,18 @@ def _settings(**overrides):
     return SimpleNamespace(**values)
 
 
-def test_real_llm_plan_selects_stratified_smoke_suite_and_records_safe_metadata():
+def test_real_llm_plan_selects_stratified_regression_suite_and_records_safe_metadata():
     cases = load_evaluation_dataset(BASELINE_PATH)
 
     plan = build_real_llm_run_plan(
         settings=_settings(),
         cases=cases,
-        suite="smoke",
+        suite="regression",
         explicit_case_ids=None,
         max_workflow_calls=40,
     )
 
-    assert plan.case_ids == SMOKE_CASE_IDS
+    assert plan.case_ids == REGRESSION_CASE_IDS
     assert plan.estimated_workflow_llm_calls == 27
     assert plan.endpoint_host == "llm.example.com"
     assert plan.report_metadata() == {
@@ -54,7 +54,7 @@ def test_real_llm_plan_selects_stratified_smoke_suite_and_records_safe_metadata(
         "llm_provider": "openai",
         "llm_model": "compatible-chat-model",
         "endpoint_host": "llm.example.com",
-        "suite": "smoke",
+        "suite": "regression",
         "selected_case_count": 12,
         "estimated_workflow_llm_calls": 27,
     }
@@ -136,7 +136,7 @@ def test_judge_key_is_only_required_for_external_judges(monkeypatch):
     assert __import__("os").environ["OPENAI_API_KEY"] == "judge-test-key"
 
 
-def test_smoke_suite_includes_online_regression_cases_from_extra_dataset(tmp_path):
+def test_regression_suite_includes_online_regression_cases_from_extra_dataset(tmp_path):
     from src.evaluation.real_llm_regression import (
         ONLINE_REGRESSION_CASE_IDS,
         merge_dataset_files,
@@ -151,11 +151,11 @@ def test_smoke_suite_includes_online_regression_cases_from_extra_dataset(tmp_pat
     plan = build_real_llm_run_plan(
         settings=_settings(),
         cases=cases,
-        suite="smoke",
+        suite="regression",
         explicit_case_ids=None,
         max_workflow_calls=40,
     )
 
-    assert plan.case_ids == (*SMOKE_CASE_IDS, *ONLINE_REGRESSION_CASE_IDS)
+    assert plan.case_ids == (*REGRESSION_CASE_IDS, *ONLINE_REGRESSION_CASE_IDS)
     # 10 个非攻击用例中新增 4 个，C08 安全短路不计调用
     assert plan.estimated_workflow_llm_calls == 27 + 4 * 3

@@ -303,7 +303,7 @@ Baseline V1 是独立的真实回放报告：固定读取上述 100 条数据，
 
 每次 Baseline 完成后还会读取本次时间戳 JSON，生成同 Run ID 的 `error_analysis_<run_id>.md` 和 `error_analysis_latest.md`。该后处理只分析 FAIL Case，包含 Failure Breakdown、Intent Confusion Matrix、HITL/Approval mismatch、Tool 问题以及逐 Case Expected/Actual/Trace；过程纯离线、deterministic，不调用 LLM，不重放 LangGraph，也不修改 Dataset 或 Agent。
 
-项目已提供真实 LLM Regression 专用入口：`smoke` 固定选取 12 条并预计 27 次 Workflow LLM 调用，`full` 运行 100 条并预计 258 次；入口拒绝 Mock，需要显式 `--confirm-live`，并在报告中记录 Provider、Model、Endpoint Host、Token、成本和延迟。2026-08-26 首次 DeepSeek + Qwen 真实 100 条 Baseline 为 Case Pass `0.54`、平均 `2.50s`、P95 `4.15s`、平均总 Token `715.59`、LLM Calls `217`；2026-08-30 在完全相同 Dataset SHA256 下复测达到 Case Pass `0.99`、平均 `1.62s`、P95 `3.24s`、平均总 Token `453.29`、LLM Calls `87`。这些是特定 Dataset、Prompt、模型和阈值组合下的离线实验结果，不代表生产流量质量。
+项目已提供真实 LLM Regression 专用入口：`regression` 固定选取 12 条并预计 27 次 Workflow LLM 调用，`full` 运行 100 条并预计 258 次；入口拒绝 Mock，需要显式 `--confirm-live`，并在报告中记录 Provider、Model、Endpoint Host、Token、成本和延迟。2026-08-26 首次 DeepSeek + Qwen 真实 100 条 Baseline 为 Case Pass `0.54`、平均 `2.50s`、P95 `4.15s`、平均总 Token `715.59`、LLM Calls `217`；2026-08-30 在完全相同 Dataset SHA256 下复测达到 Case Pass `0.99`、平均 `1.62s`、P95 `3.24s`、平均总 Token `453.29`、LLM Calls `87`。这些是特定 Dataset、Prompt、模型和阈值组合下的离线实验结果，不代表生产流量质量。
 
 CI/CD 采用两级门禁：PR/Push 强制使用 Mock Provider 回放固定 100 条 Workflow，要求六项行为指标全部达到确定性目标且无新失败 Case；Release Gate 需要人工确认付费调用，使用真实 LLM 完整回放，固定检查行为、P95、Token、LLM Calls 和 Analyzer Rule Hit Rate。仅 Release Gate 通过的同一 Git SHA 可由 CD 发布到 GHCR；当前没有自动部署到生产 Kubernetes 集群。
 

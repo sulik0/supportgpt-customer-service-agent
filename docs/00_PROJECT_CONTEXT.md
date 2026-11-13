@@ -392,7 +392,7 @@ resolved / closed --reopen--> in_progress
 - RAGAS / DeepEval Adapter、本地评测降级和 JSON 报告输出。
 - Dataset + Workflow Replay 离线评测，统一输出 RAG / Agent / Security 指标并关联 Trace ID。
 - Baseline Workflow Replay V1：固定 100 条 Dataset、完整 Ticket State、六项确定性行为指标、逐 Case 执行结果及 OTel Trace 同源性能报告。
-- 真实 LLM Regression 专用入口，支持 12 条 smoke 和 100 条 full 套件，能拒绝 Mock、要求明确确认并控制调用预算；同时记录使用的模型、Token 数和成本。
+- 真实 LLM Regression 专用入口，支持 12 条 regression 和 100 条 full 套件，能拒绝 Mock、要求明确确认并控制调用预算；同时记录使用的模型、Token 数和成本。
 - Feedback Pipeline 第一阶段：Agent Run 快照、用户评价、人工修正、评测结果关联，以及脱敏后的 SFT / DPO 候选导出。
 - LangSmith 前端入口：主管/管理员可分页或按工单编号精确查询 Agent Run、Trace ID、Workflow Path 和执行快照；列表时间统一展示为北京时间，并可跳转至配置的 LangSmith Project 下钻。
 - Prompt Injection 多层检测已覆盖用户输入、Tool 返回和 RAG 文档，命中时从当前信任边界短路到 Escalation。

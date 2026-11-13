@@ -8,6 +8,19 @@ SupportGPT：售后客服 Agent 后端（FastAPI + LangGraph）加 React 前端�
 
 文档在 `docs/`，用中文写。改代码前先读 `docs/00_PROJECT_CONTEXT.md`；`docs/03_INTERVIEW_CANON.md` 是唯一可对外引用的事实口径，`docs/05_ENGINEERING_GUIDE.md` 是完整操作手册，`docs/08_TODO.md` 是任务和技术债清单。文档可能落后于代码，以代码和测试为准。
 
+## 两个需要特别注意的问题
+
+这两点是项目反复出问题的地方，每次改动都要考虑。
+
+1. **线上部署经常出配置类小问题。** 后端部署在 Railway，前端部署在 Vercel，推送到 GitHub 会触发自动部署。线上配置只存在于两个平台的后台，仓库里没有对应的配置文件。已经出过的问题包括 LangSmith API Key 返回 403、缺少环境变量。因此：
+   - 改动只要新增或修改了环境变量、外部服务、密钥或 CORS，就要明确列出 Railway 和 Vercel 上各需要改哪些配置，并同步 `.env.example`。
+   - 本地通过不代表线上可用。没有在线上验证过，就不要说“已部署成功”或“线上正常”。
+   - `/health` 只表示进程存活，不检查数据库、模型、Redis、向量库和遥测。遥测失败不影响主流程，所以 LangSmith 鉴权失败不会报错，只会没有 Trace。
+2. **测试没有调用真实模型，导致很多问题上线后才发现、需要返工。** pytest 和 PR 门禁全部使用 Mock Provider。因此：
+   - 改动涉及 Prompt、Agent 节点、Tool 选择、意图识别或输出解析时，Mock 测试通过不能算验证完成，要明确告诉用户“真实模型下还没验证”。
+   - 这类改动完成后，主动建议用真实模型验证（`scripts/run_real_llm_regression.py --suite regression`，先 `--dry-run` 看预估调用次数）。真实调用要花钱，运行前先问用户。
+   - 因真实模型行为返工过的问题，建议补成回归用例。
+
 ## 常用命令
 
 推荐 Python 3.11（CI 和 Docker 都用 3.11）。
