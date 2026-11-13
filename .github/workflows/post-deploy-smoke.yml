@@ -21,7 +21,7 @@ jobs:
     timeout-minutes: 25
     env:
       SMOKE_API_URL: https://supportgpt-api.up.railway.app
-      # 回查 Trace 用：只读 Service Key；组织级 Key 才需要 Tenant ID（Variables 里可选）。
+      # 回查 Trace 用：Service Key + 工作区 ID（Tenant ID，缺失会 403）。
       LANGSMITH_API_KEY: ${{ secrets.LANGSMITH_API_KEY }}
       LANGSMITH_TENANT_ID: ${{ vars.LANGSMITH_TENANT_ID }}
       LANGSMITH_PROJECT_ID: 7d32fff4-60c2-4d6b-9e52-64eb027c38d2

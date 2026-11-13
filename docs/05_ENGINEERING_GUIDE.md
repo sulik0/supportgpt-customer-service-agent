@@ -473,7 +473,7 @@ python scripts/run_post_deploy_smoke.py --api-url ... --with-chat
 
 失败项会指出该改 Railway 还是 Vercel 的哪个变量。
 
-`--with-chat` 会带上随机的 `X-Request-Id`（必须是 32 位十六进制，后端脱敏会改写其他格式），随后用 `LANGSMITH_API_KEY`（只读 Service Key）和 `--langsmith-project-id` 回查 LangSmith，确认本次请求的根 Run 与 LLM 子节点都已到达，60 秒内查不到判为失败。GitHub 上对应 Secret `LANGSMITH_API_KEY`；组织级 Key 另需 Variable `LANGSMITH_TENANT_ID`。本地没设 Key 时回查跳过，加 `--require-trace` 则判失败（CI 使用）。
+`--with-chat` 会带上随机的 `X-Request-Id`（必须是 32 位十六进制，后端脱敏会改写其他格式），随后用 `LANGSMITH_API_KEY`（只读 Service Key）和 `--langsmith-project-id` 回查 LangSmith，确认本次请求的根 Run 与 LLM 子节点都已到达，60 秒内查不到判为失败。GitHub 上对应 Secret `LANGSMITH_API_KEY` 和 Variable `LANGSMITH_TENANT_ID`（工作区 ID；不带它 LangSmith 返回 403，与线上 `OTEL_EXPORTER_OTLP_HEADERS` 里的 `X-Tenant-Id` 同值）。本地没设 Key 时回查跳过，加 `--require-trace` 则判失败（CI 使用）。
 
 它不检查数据库/Redis 的独立状态。
 
