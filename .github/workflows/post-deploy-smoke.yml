@@ -1,0 +1,49 @@
+name: Post-Deploy Smoke
+
+# 推送 main 后，对线上 Railway + Vercel 做一次含真实问答的冒烟检查。
+# 每次会在线上建 1 张测试工单并调用 1 次模型。
+on:
+  push:
+    branches: ["main"]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: post-deploy-smoke
+  cancel-in-progress: true
+
+jobs:
+  smoke:
+    name: Live Smoke (with chat)
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    env:
+      SMOKE_API_URL: https://supportgpt-api.up.railway.app
+      SMOKE_FRONTEND_URLS: https://support-gpt-enterprise-resume.vercel.app,https://supportgpt-demo.vercel.app
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      # Railway / Vercel 在 GitHub 之外自动部署，这里只能先等一段时间再测。
+      # /health 不带版本号，无法确认测到的就是本次提交的构建。
+      - name: Wait for platform deploys
+        if: github.event_name == 'push'
+        run: sleep 300
+
+      - name: Run smoke (retry while deploy settles)
+        run: |
+          for attempt in 1 2 3; do
+            if python scripts/run_post_deploy_smoke.py --with-chat; then
+              exit 0
+            fi
+            echo "Attempt ${attempt} failed"
+            [ "${attempt}" -lt 3 ] && sleep 120
+          done
+          exit 1
