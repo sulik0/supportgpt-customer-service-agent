@@ -18,7 +18,9 @@ import json
 import os
 import re
 import sys
+import time
 import urllib.error
+import uuid
 import urllib.request
 from dataclasses import dataclass
 from typing import Any
@@ -188,12 +190,14 @@ def check_chat(
     profile: str,
     message: str,
     timeout: float,
+    request_id: str | None = None,
 ) -> list[Result]:
     """走一遍公开咨询入口：写库 → Workflow → 模型 → 公开运行摘要。"""
     name = "公开咨询 POST /support/requests"
     resp = client.request(
         "POST",
         api + "/support/requests",
+        headers={"X-Request-Id": request_id} if request_id else None,
         body={"customer_id": profile, "message": message},
         timeout=timeout,
     )
@@ -257,6 +261,90 @@ def check_chat(
     return results
 
 
+def _query_runs(client: Http, args: argparse.Namespace, body: dict) -> Response:
+    headers = {"x-api-key": os.environ["LANGSMITH_API_KEY"]}
+    tenant = os.getenv("LANGSMITH_TENANT_ID")
+    if tenant:
+        headers["X-Tenant-Id"] = tenant
+    return client.request(
+        "POST",
+        args.langsmith_url.rstrip("/") + "/api/v1/runs/query",
+        headers=headers,
+        body=body,
+    )
+
+
+def check_langsmith_trace(
+    client: Http, args: argparse.Namespace, request_id: str
+) -> Result:
+    """按本次请求号回查 LangSmith：根 Run 要存在，且带 LLM 子节点。
+
+    请求号必须是 32 位十六进制：后端上报前会脱敏，其他格式会被改写，回查不到。
+    """
+    name = "LangSmith Trace 回查"
+    if not os.getenv("LANGSMITH_API_KEY"):
+        status = FAIL if args.require_trace else SKIP
+        return Result(name, status, "未设置 LANGSMITH_API_KEY")
+    if not args.langsmith_project_id:
+        return Result(name, FAIL, "缺少 --langsmith-project-id")
+
+    # 不依赖过滤语法：取最近的根 Run，在客户端按请求号匹配。
+    since = time.strftime(
+        "%Y-%m-%dT%H:%M:%SZ", time.gmtime(time.time() - args.trace_lookback)
+    )
+    deadline = time.monotonic() + args.trace_wait
+    last = "尚未查询"
+    root = None
+    while True:
+        resp = _query_runs(
+            client,
+            args,
+            {
+                "session": [args.langsmith_project_id],
+                "is_root": True,
+                "start_time": since,
+                "limit": 50,
+                "select": ["id", "trace_id", "name", "extra", "start_time"],
+            },
+        )
+        if resp.status != 200:
+            return Result(
+                name,
+                FAIL,
+                f"{http_detail(resp)} {resp.text()[:200]}；检查 Key、"
+                "LANGSMITH_TENANT_ID（组织级 Key 需要）和项目 ID",
+            )
+        runs = resp.json().get("runs", [])
+        last = f"最近 {len(runs)} 条根 Run 中没有本次请求号"
+        root = next((r for r in runs if request_id in json.dumps(r)), None)
+        if root or time.monotonic() >= deadline:
+            break
+        time.sleep(args.trace_interval)
+    if not root:
+        return Result(
+            name,
+            FAIL,
+            f"{args.trace_wait:.0f}s 内未找到 request_id={request_id}（{last}）；"
+            "可能是 Key 失效、项目不对、过滤器丢了 Span 或导出链路不通",
+        )
+
+    trace_id = root.get("trace_id") or root.get("id")
+    llm = _query_runs(
+        client,
+        args,
+        {
+            "session": [args.langsmith_project_id],
+            "trace": trace_id,
+            "run_type": "llm",
+            "limit": 1,
+            "select": ["id", "name"],
+        },
+    )
+    if llm.status != 200 or not llm.json().get("runs"):
+        return Result(name, FAIL, f"根 Run 已到达，但没有 LLM 子节点（{http_detail(llm)}）")
+    return Result(name, PASS, f"根 Run {root.get('name')} 及 LLM 子节点均已到达")
+
+
 def run_checks(args: argparse.Namespace, client: Http | None = None) -> list[Result]:
     client = client or Http()
     api = args.api_url.rstrip("/")
@@ -275,15 +363,23 @@ def run_checks(args: argparse.Namespace, client: Http | None = None) -> list[Res
         results.append(check_cors(client, api, origin_of(frontend)))
 
     if args.with_chat:
-        results.extend(
-            check_chat(
-                client,
-                api,
-                profile=args.profile,
-                message=args.message,
-                timeout=args.chat_timeout,
-            )
+        request_id = uuid.uuid4().hex
+        chat_results = check_chat(
+            client,
+            api,
+            profile=args.profile,
+            message=args.message,
+            timeout=args.chat_timeout,
+            request_id=request_id,
         )
+        results.extend(chat_results)
+        first = chat_results[0]
+        # 请求根本没送达（非 201 / 连不上）时，没有 Trace 可查，不再空等。
+        not_delivered = first.status == FAIL and first.detail.startswith(
+            ("HTTP", "无法连接")
+        )
+        if not not_delivered:
+            results.append(check_langsmith_trace(client, args, request_id))
     else:
         results.append(
             Result("公开咨询（真实问答）", SKIP, "未加 --with-chat，不创建工单、不调模型")
@@ -312,6 +408,23 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--profile", default=DEFAULT_PROFILE)
     parser.add_argument("--message", default=DEFAULT_MESSAGE)
     parser.add_argument("--chat-timeout", type=float, default=90.0)
+    parser.add_argument(
+        "--langsmith-url",
+        default=os.getenv("LANGSMITH_ENDPOINT", "https://api.smith.langchain.com"),
+    )
+    parser.add_argument(
+        "--langsmith-project-id",
+        default=os.getenv("LANGSMITH_PROJECT_ID"),
+        help="Tracing 项目 ID（LangSmith 项目页 URL 里的 UUID）。",
+    )
+    parser.add_argument(
+        "--require-trace",
+        action="store_true",
+        help="没有 LANGSMITH_API_KEY 时判为失败（CI 用）；默认跳过回查。",
+    )
+    parser.add_argument("--trace-wait", type=float, default=60.0)
+    parser.add_argument("--trace-interval", type=float, default=10.0)
+    parser.add_argument("--trace-lookback", type=float, default=900.0)
     parser.add_argument("--json", action="store_true", help="输出 JSON。")
     return parser
 

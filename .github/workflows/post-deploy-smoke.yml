@@ -21,6 +21,10 @@ jobs:
     timeout-minutes: 25
     env:
       SMOKE_API_URL: https://supportgpt-api.up.railway.app
+      # 回查 Trace 用：只读 Service Key；组织级 Key 才需要 Tenant ID（Variables 里可选）。
+      LANGSMITH_API_KEY: ${{ secrets.LANGSMITH_API_KEY }}
+      LANGSMITH_TENANT_ID: ${{ vars.LANGSMITH_TENANT_ID }}
+      LANGSMITH_PROJECT_ID: 7d32fff4-60c2-4d6b-9e52-64eb027c38d2
       SMOKE_FRONTEND_URLS: https://support-gpt-enterprise-resume.vercel.app,https://supportgpt-demo.vercel.app
     steps:
       - name: Checkout
@@ -40,7 +44,7 @@ jobs:
       - name: Run smoke (retry while deploy settles)
         run: |
           for attempt in 1 2 3; do
-            if python scripts/run_post_deploy_smoke.py --with-chat; then
+            if python scripts/run_post_deploy_smoke.py --with-chat --require-trace; then
               exit 0
             fi
             echo "Attempt ${attempt} failed"
