@@ -256,7 +256,7 @@ resolved / closed --reopen--> in_progress
 1. 终端用户通过用户咨询页提交问题，前端调用 `POST /support/requests`。
 2. API 创建唯一业务工单并执行 LangGraph Workflow，随后持久化 `AgentRun`，包含回复、citation、Tool Call、QA、版本、Token、延迟和 Trace ID。
 3. 普通请求返回安全回复。仅在隔离 Demo 中，访客可凭本次反馈令牌展开已保存的路径、工具/引用摘要、QA 与风险结论；不返回输入原文、草稿、异常正文、参数或 Trace。
-4. 高风险、低置信度、低 QA、幻觉或异常请求创建 `ResponseApproval`；用户页持续显示安全的处理回复，并以 `risk_review`、`quality_review`、`processing_exception` 或 `manual_review` 告知人工介入类别，但不暴露内部规则和未经审批的草稿。
+4. 高风险、低置信度、低 QA、幻觉或异常请求创建 `ResponseApproval`；用户页持续显示安全的处理回复，并以 `risk_review`（仅安全拦截）、`business_review`（退款、取消、投诉等需人工办理）、`incident_review`（故障已升级）、`quality_review`、`processing_exception` 或 `manual_review` 告知人工介入类别，文案跟随用户输入语言，不暴露内部规则。例外（先答后审）：只读的账务咨询和故障求助如果只因业务域默认规则转人工、QA 通过且无任何异常或安全信号，用户会先看到 AI 的初步答复（`status=answered`、`handling_reason=preliminary_answer`），审批记录和人工队列照常保留；要求实际办理、表达争议或投诉的请求仍不展示草稿。
 5. 客服员工后台通过受 RBAC 保护的 `GET /staff/review-queue` 仅加载 `pending_approval` 工单，不展示普通自动处理工单。
 6. 员工打开详情时调用 `GET /tickets/{ticket_id}/agent-result`，只读取最新持久化结果，不重新执行 Workflow；审批完成后工单自动移出人工队列。
 
@@ -274,7 +274,7 @@ resolved / closed --reopen--> in_progress
 10. API 回写工单的情绪、优先级、部门和 SLA。
 11. Approval Gate 对普通请求直接结束；如果 `approval_required = true`，则在持久化 Checkpoint 后 `interrupt`。
 12. API 创建 `ResponseApproval(status="pending")` 和 `AgentExecution(status="interrupted")`，并通过状态机将工单转为 `pending_approval`。
-13. 普通 Assistant 回复直接写为 final；待审草稿只写为 pending，不进入后续 Prompt，直到人工通过/修改后再幂等回写，拒绝则标记 rejected。
+13. 普通 Assistant 回复直接写为 final；待审草稿只写为 pending，不进入后续 Prompt，直到人工通过/修改后再幂等回写，拒绝则标记 rejected。已作为初步答复展示给用户的草稿写为 preliminary：公开历史可见，同样不进入后续 Prompt，审批后转为 final 或 rejected。
 
 **当前限制**：Memory V1 是有界短期对话记忆，不是向量化长期记忆；实体提取仅覆盖明确订单号/运单号，用户端身份仍是 Demo 客户选择器，生产仍需真实登录与租户边界。
 

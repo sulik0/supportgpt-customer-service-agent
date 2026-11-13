@@ -209,7 +209,19 @@ Jev 采纳规则：意图是否采纳只看 `intent` 自身置信度（`JEV_INTE
 
 回复语言兜底：Prompt 虽已要求跟随当前 Description 的语言，`deepseek-flash` 在工具结果和 RAG 多为中文时仍可能用中文回答。`src/llm/provider.py` 的 `resolution_language_directive` 按 CJK 字符占比（≥30% 判中文）或英文常用词（且无非 ASCII 字母）判断主要语言，在发给 Resolver 的用户消息末尾追加 `Respond in English.` / `Respond in Chinese.`。用户明确指定回复语言、或无法可靠判断（如法语）时不追加，交给 Prompt 规则。QA 和范围外固定回复本来就按 Description 的 CJK 判断语言，未改动。
 
-用户侧处理说明：安全拦截（`security_threat_detected`）优先返回 `risk_review`，因为安全短路会往 `errors` 写入记录；真实处理异常仍为 `processing_exception`。
+用户侧处理说明（`src/agents/public_reply.py`，文案跟随用户输入语言）：
+
+| `handling_reason` | 触发条件 | 用户看到 |
+|---|---|---|
+| `risk_review` | 安全拦截（`security_threat_detected` / `risk_block_automation`），优先于其他判断 | 出于安全考虑转人工核验 |
+| `processing_exception` | 真实依赖失败或降级；QA 的幻觉告警虽然也写进 `errors`，但不算 | 部分服务暂时不可用 |
+| `quality_review` | 幻觉、`response_requires_human` 或 QA 分低于阈值 | 依据不足，转人工复核 |
+| `incident_review` | `outage_report` 转人工 | 故障已按紧急级别转技术支持 |
+| `business_review` | 其他高风险转人工（退款、取消、投诉） | 需人工核对后办理 |
+| `manual_review` | 其余审批 | 需人工进一步确认 |
+| `preliminary_answer` | 先答后审，见下 | AI 初步答复 + “人工复核中”说明，`status=answered` |
+
+先答后审（`PUBLIC_PRELIMINARY_ANSWER_ENABLED`，默认开启）：只改公开入口给用户看什么，Workflow 的升级结论、`ResponseApproval`、人工队列和 Baseline 期望都不变。放行必须同时满足：意图是 `billing_dispute` 或 `outage_report`；风险原因只有业务域默认项（`high_priority`、`urgent_priority`、`high_risk_business_intent`、`negative_high_priority`）；`qa_score ≥ PUBLIC_PRELIMINARY_ANSWER_MIN_QA_SCORE`（默认 0.8）；没有 errors、降级、幻觉、安全或语义风险信号；用户原文不含办理、争议、投诉、越权类说法，账务类还必须是提问或查询。任何一条不满足就只显示转人工说明。
 
 真实模型回归：`evaluation/online_regression/supportgpt_online_regression.json` 保存 5 条线上问题用例（投诉、重置密码、提示词泄露、英文订单查询、集群故障），不属于固定 SHA256 的 Baseline。`run_real_llm_regression.py` 默认合并该数据集，regression 套件自动包含这 5 条（预估 39 次调用，仍在默认上限 40 内）。英文回复语言需人工查看报告确认，Dataset 暂无语言断言。
 
@@ -390,7 +402,7 @@ OTEL_COLLECTOR_LANGSMITH_PROJECT=supportgpt-enterprise
 - 新对话使用新 `session_id`；续问必须复用同一 `session_id` 和 `customer_id`。跨客户复用会话标识返回 `409`，且不创建孤儿 Ticket。
 - 每轮先读取上一 revision 的有界上下文，再追加 User 消息；最近消息、摘要、实体和上一轮路由分字段进入 `AgentState`。
 - 历史内容在每次读取时再次执行 PII 脱敏和 Prompt Injection 检测，并在 Prompt 中标记为不可信客户上下文。
-- 只有 final 消息可以被下一轮读取。待审草稿保存为 pending，approved/modified 后幂等转为 final，rejected 草稿永不进入 Prompt。
+- 只有 final 消息可以被下一轮读取。待审草稿保存为 pending，approved/modified 后幂等转为 final，rejected 草稿永不进入 Prompt。先答后审展示过的草稿保存为 preliminary，公开历史可见但同样不进入 Prompt。
 - 动态订单、退款、物流状态必须重新调用 Tool 确认；Memory 只用于指代、Slot 续接和任务连贯。
 
 与 Memory 相关的可调参数：

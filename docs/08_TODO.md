@@ -106,6 +106,11 @@
 - [x] 2026-11-12 修复线上真实模型测试的 3 个问题：Jev 高置信度意图不再被 `operation_mode` 低置信度连带丢弃；明确投诉确定性提为 high 优先级转人工，并补强集群故障、登录失败的规则兜底；安全拦截优先显示 `risk_review`；Resolver 追加确定性回复语言指令。仅 Mock 测试验证。
 - [ ] 上述 3 个修复涉及意图识别和 Prompt，需用真实模型复测 C05（投诉）、C06（重置密码）、C08（提示词泄露）、C10（英文订单查询）、C12（集群故障）：`python scripts/run_real_llm_regression.py --suite regression --dry-run` 看预估后再 `--confirm-live`。投诉没有独立 Intent，目前归 `feedback` + high 优先级；若要在统计上单独区分，需另行评估新增 Intent。
 - [ ] 上述 Span 过滤与 Span Link 的线上效果、`deepseek-flash` 实际模型名是否命中计价表，需部署后在 LangSmith 用真实请求核对；真实模型下 `[S1]` 是否仍有变体（如“【S1】”之外的写法）尚未验证。
+- [x] 2026-11-14 线上模拟 32 条用户请求后修复：按 IP 限流改读代理写入的客户端地址；冒烟 Trace 回查失败不再重发问答；转人工文案按原因区分并跟随语言，QA 幻觉告警不再显示“服务不可用”；只读账务/故障咨询先答后审；保修记录查询和实体设备故障确定性路由到保修支持；辱骂和监管/媒体威胁按投诉转人工；写代码、翻译、写诗、数学题、纯问候确定性拦截；没查订单时证据标注“未查询”；RAG 间接注入改为逐篇检测。本地真实模型（deepseek-flash + Jev）28 条复测通过主要场景。
+- [ ] 线上 Railway 必须把 `TRUST_PROXY_HEADERS` 改为 `true` 才能让按 IP 限流生效；改完后要用伪造 `X-Real-IP` / `X-Forwarded-For` 复测是否可绕过（Railway 文档没有说明代理是否覆盖客户端自带的头）。
+- [ ] 先答后审是公开入口层的策略，Workflow 层账务/故障类仍全部转人工（Baseline 100 条固定如此）。如果要在 Workflow 层取消这些只读咨询的人工审批，需要修改固定 SHA256 的 Baseline 期望并重跑真实模型 Release Gate，属于设计意图变更，回规划会话决定。
+- [ ] 真实模型回归脚本（`run_real_llm_regression.py`）的旧用例期望路径不含 `skill_selector`，13/17 条因此判失败，报告的通过率不可用；新增的 4 条线上用例已按当前路径写期望。
+- [ ] 保修状态查询在真实模型下路由和 Tool 正确，但 QA 评委偶尔把“仍在保修期内”判为幻觉而转人工（保守方向），未处理。
 - [ ] DeepSeek 价格按高峰价、cache miss 估算，未区分错峰与缓存命中，官方调价后需手动更新 `MODEL_PRICING`。
 - [ ] 旧的 Python 3.13 `.venv` 仍是混装环境，不再作为项目验收环境。
 - [ ] 当前新增表依赖 SQLAlchemy `create_all`，不等同于生产 Schema Migration。

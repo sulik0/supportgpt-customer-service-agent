@@ -311,7 +311,7 @@ CI/CD 采用两级门禁：PR/Push 强制使用 Mock Provider 回放固定 100 �
 
 第一阶段已可以收集用户反馈和人工修改，并导出经脱敏处理的训练候选数据：
 
-- 用户咨询页通过 `POST /support/requests` 创建唯一工单并立即执行 Workflow；普通请求返回安全回复，需要审批时返回安全的占位回复和人工介入类别，主响应不含内部诊断字段；隔离 Demo 另有凭本次反馈令牌读取的白名单运行摘要，不公开工具参数、输入原文、待审草稿、异常正文或 Trace。
+- 用户咨询页通过 `POST /support/requests` 创建唯一工单并立即执行 Workflow；普通请求返回安全回复，需要审批时返回安全的占位回复和人工介入类别（只读的账务咨询和故障求助在 QA 通过、无异常和安全信号时先展示初步答复，人工复核照常进行），主响应不含内部诊断字段；隔离 Demo 另有凭本次反馈令牌读取的白名单运行摘要，不公开工具参数、输入原文、待审草稿、异常正文或 Trace。
 - 客服员工后台通过受 RBAC 保护的 `GET /staff/review-queue` 仅加载待审批工单；打开详情调用 `GET /tickets/{ticket_id}/agent-result` 读取最新持久化结果，不会重新执行 Agent，也不会新增 Ticket、AgentRun 或审批记录。
 - 用户通过 `agent_run_id + feedback_token` 提交评分；数据库只保存 Token 的 SHA-256 摘要，每个 Run 只接受一条不可变用户反馈。
 - 人工审批的通过、修改和拒绝结果自动写入 `FeedbackEvent`；人工修改可形成 SFT 与 DPO 候选。
