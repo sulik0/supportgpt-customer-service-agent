@@ -28,6 +28,7 @@
 - [x] 在 Dataset + Workflow Replay 中增加安全混淆矩阵、Precision / Recall / F1 / 误报率和安全处置正确率。
 - [x] 将业务回归 Baseline 扩展到 100 条，增加多语言、安全攻击与安全 hard negative 覆盖。
 - [x] 增加真实 LLM Regression 专用入口、regression/full 套件、Dry Run、付费调用前确认、调用预算，并记录模型、Token 与成本。
+- [x] 增加部署后冒烟脚本 `scripts/run_post_deploy_smoke.py`：检查 /health、前端首页、前端构建产物指向的后端地址、CORS 预检；`--with-chat` 走一遍公开咨询并核对运行摘要。已在线上（Railway + Vercel）跑通含 `--with-chat` 的全部检查（2026-11-14）。尚未接入 CI/CD 自动触发。
 - [x] 拆分用户咨询页与客服员工后台；用户端采用连续会话展示正常回复或安全的风险/异常状态，异常请求进入受 RBAC 保护的人工审批队列。
 - [x] 人工处理台支持按部门、优先级、客户情绪和关键词组合筛选完整待审批队列；工单显示部门，可一键清除筛选，不重新调用 Agent。
 - [x] 建立统一 `IntentType`，让规则、LLM Provider、AgentState、Tooling、Risk Engine 和 Agent Evaluation 共用同一套意图枚举与兜底策略。

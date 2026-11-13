@@ -459,6 +459,20 @@ python scripts/run_real_llm_regression.py --suite regression --dry-run
 python scripts/run_real_llm_regression.py --suite regression --confirm-live
 ```
 
+部署后冒烟检查（只用标准库，对线上地址运行；与上面的回归评测是两件事）：
+
+```bash
+# 只读检查：/health、前端首页、前端构建产物指向的后端地址、CORS 预检
+python scripts/run_post_deploy_smoke.py \
+  --api-url https://supportgpt-api.up.railway.app \
+  --frontend-url https://support-gpt-enterprise-resume.vercel.app
+
+# 加 --with-chat：在线上创建 1 张工单并调用 1 次模型，覆盖数据库、Workflow、模型
+python scripts/run_post_deploy_smoke.py --api-url ... --with-chat
+```
+
+失败项会指出该改 Railway 还是 Vercel 的哪个变量。它不检查数据库/Redis 的独立状态，也看不到 LangSmith 是否收到 Trace，这两项仍需到后台确认。
+
 Baseline 100 Workflow Replay：
 
 ```bash

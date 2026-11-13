@@ -57,6 +57,7 @@ python -m unittest discover -s tests/mcp -v
 ```bash
 python scripts/run_ci_quality_gate.py            # PR 门禁：Mock Provider 回放固定 100 条 Baseline
 python scripts/run_baseline_eval.py --dry-run    # --confirm-live 才会调用真实模型（付费）
+python scripts/run_post_deploy_smoke.py --api-url <Railway 域名> --frontend-url <Vercel 域名>   # 部署后冒烟；--with-chat 会建 1 张线上工单并调 1 次模型
 python scripts/check_quality_gate.py --profile release --report evaluation/reports/baseline_v1/baseline_v1_latest.json
 python scripts/run_postgres_tool_drill.py --confirm-isolated-database   # 需要 TOOL_DRILL_DATABASE_URL，库名必须以 _test 或 _drill 结尾
 ```
