@@ -360,3 +360,51 @@ def test_production_accepts_explicit_security_configuration():
     )
 
     assert configured.cors_allowed_origins == ["https://support.example.com"]
+
+
+def _request_with(headers: dict[str, str], client_host: str = "100.64.0.9"):
+    from starlette.requests import Request
+
+    return Request(
+        {
+            "type": "http",
+            "headers": [(k.lower().encode(), v.encode()) for k, v in headers.items()],
+            "client": (client_host, 1234),
+        }
+    )
+
+
+def test_client_ip_ignores_proxy_headers_when_untrusted(monkeypatch):
+    monkeypatch.setattr(settings, "TRUST_PROXY_HEADERS", False)
+    request = _request_with({"X-Real-IP": "203.0.113.5", "X-Forwarded-For": "1.1.1.1"})
+
+    assert public_access_service.client_ip(request) == "100.64.0.9"
+
+
+def test_client_ip_prefers_real_ip_header_behind_proxy(monkeypatch):
+    monkeypatch.setattr(settings, "TRUST_PROXY_HEADERS", True)
+    request = _request_with(
+        {"X-Real-IP": "203.0.113.5", "X-Forwarded-For": "6.6.6.6, 203.0.113.5"}
+    )
+
+    assert public_access_service.client_ip(request) == "203.0.113.5"
+
+
+def test_client_ip_uses_rightmost_forwarded_hop_not_client_supplied(monkeypatch):
+    # 最左一段是客户端自带的，伪造它不能换一个限流身份。
+    monkeypatch.setattr(settings, "TRUST_PROXY_HEADERS", True)
+    request = _request_with({"X-Forwarded-For": "6.6.6.6, 203.0.113.5"})
+
+    assert public_access_service.client_ip(request) == "203.0.113.5"
+
+
+def test_rate_limit_ip_identity_is_stable_across_proxy_nodes(monkeypatch):
+    # 复现线上问题：代理节点地址每次不同，但同一客户端的限流身份必须相同。
+    monkeypatch.setattr(settings, "TRUST_PROXY_HEADERS", True)
+    first = _request_with({"X-Real-IP": "203.0.113.5"}, client_host="100.64.0.4")
+    second = _request_with({"X-Real-IP": "203.0.113.5"}, client_host="100.64.0.22")
+
+    assert (
+        public_access_service.rate_limit_identities(first, "visitor-a")[0]
+        == public_access_service.rate_limit_identities(second, "visitor-b")[0]
+    )

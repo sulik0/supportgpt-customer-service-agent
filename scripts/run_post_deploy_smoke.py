@@ -30,6 +30,8 @@ PASS, FAIL, WARN, SKIP = "PASS", "FAIL", "WARN", "SKIP"
 # 与 .env.example 的 PUBLIC_DEMO_PROFILE_IDS 对应，公开入口只认这些虚构画像。
 DEFAULT_PROFILE = "cust_101"
 DEFAULT_MESSAGE = "你们的退货政策是什么？"
+TRACE_CHECK_NAME = "LangSmith Trace 回查"
+EXIT_TRACE_ONLY = 3
 
 
 @dataclass
@@ -281,7 +283,7 @@ def check_langsmith_trace(
 
     请求号必须是 32 位十六进制：后端上报前会脱敏，其他格式会被改写，回查不到。
     """
-    name = "LangSmith Trace 回查"
+    name = TRACE_CHECK_NAME
     if not os.getenv("LANGSMITH_API_KEY"):
         status = FAIL if args.require_trace else SKIP
         return Result(name, status, "未设置 LANGSMITH_API_KEY")
@@ -448,7 +450,13 @@ def main(argv: list[str] | None = None) -> int:
             "\n未覆盖：数据库/Redis 的独立状态、LangSmith 等遥测是否上报"
             "（只能到对应后台查看）。"
         )
-    return 1 if any(r.status == FAIL for r in results) else 0
+    failed = [r for r in results if r.status == FAIL]
+    if not failed:
+        return 0
+    # 问答已成功、只有 Trace 回查失败：重跑只会再建工单、再调模型，用 3 告诉 CI 不要重试。
+    if all(r.name == TRACE_CHECK_NAME for r in failed):
+        return EXIT_TRACE_ONLY
+    return 1
 
 
 if __name__ == "__main__":

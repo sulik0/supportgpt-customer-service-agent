@@ -348,3 +348,24 @@ def test_trace_missing_key_fails_when_required(monkeypatch):
     finally:
         api.shutdown()
     assert results["LangSmith Trace 回查"].status == smoke.FAIL
+
+
+def test_trace_only_failure_returns_no_retry_exit_code(monkeypatch):
+    # 问答成功、只有回查失败时返回 3，CI 据此不再重发问答。
+    monkeypatch.delenv("LANGSMITH_API_KEY", raising=False)
+    api, api_url = start(make_api(cors_origin="x"))
+    try:
+        code = smoke.main(["--api-url", api_url, "--with-chat", "--require-trace"])
+    finally:
+        api.shutdown()
+    assert code == smoke.EXIT_TRACE_ONLY
+
+
+def test_chat_failure_keeps_retryable_exit_code(monkeypatch):
+    monkeypatch.delenv("LANGSMITH_API_KEY", raising=False)
+    api, api_url = start(make_api(cors_origin="x", reason="processing_exception"))
+    try:
+        code = smoke.main(["--api-url", api_url, "--with-chat", "--require-trace"])
+    finally:
+        api.shutdown()
+    assert code == 1

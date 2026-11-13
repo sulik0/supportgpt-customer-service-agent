@@ -64,13 +64,25 @@ class PublicAccessService:
         ).hexdigest()
         return f"public-{digest}"
 
+    @staticmethod
+    def client_ip(request: Request) -> str:
+        """取真实客户端 IP；直连地址在反向代理后是代理节点，会让按 IP 限流失效。
+
+        只读代理写入的值：X-Real-IP，或 X-Forwarded-For 最右一段（最后一跳代理追加）。
+        最左一段由客户端自带，可伪造，不能用于限流。
+        """
+        direct = request.client.host if request.client else "unknown"
+        if not settings.TRUST_PROXY_HEADERS:
+            return direct
+        real_ip = request.headers.get("x-real-ip", "").strip()
+        if real_ip:
+            return real_ip
+        forwarded = request.headers.get("x-forwarded-for", "")
+        return forwarded.rsplit(",", 1)[-1].strip() or direct
+
     def rate_limit_identities(self, request: Request, visitor_id: str) -> tuple[str, ...]:
         """同时按 IP 和访客限流，降低删 Cookie 绕过限额的风险。"""
-        client_ip = request.client.host if request.client else "unknown"
-        if settings.TRUST_PROXY_HEADERS:
-            forwarded = request.headers.get("x-forwarded-for", "")
-            if forwarded:
-                client_ip = forwarded.split(",", 1)[0].strip() or client_ip
+        client_ip = self.client_ip(request)
         return (
             self._opaque_identifier("ip", client_ip),
             self._opaque_identifier("visitor", visitor_id),
@@ -78,11 +90,7 @@ class PublicAccessService:
 
     def login_identity(self, request: Request, username: str) -> tuple[str, ...]:
         """登录失败限额按 IP 和用户名分别约束。"""
-        client_ip = request.client.host if request.client else "unknown"
-        if settings.TRUST_PROXY_HEADERS:
-            forwarded = request.headers.get("x-forwarded-for", "")
-            if forwarded:
-                client_ip = forwarded.split(",", 1)[0].strip() or client_ip
+        client_ip = self.client_ip(request)
         return (
             self._opaque_identifier("login-ip", client_ip),
             self._opaque_identifier("login-user", username.strip().lower()),

@@ -294,6 +294,7 @@ QWEN3_GUARD_MODEL_NAME=Qwen/Qwen3Guard-Gen-0.6B
 - `CORS_ALLOWED_ORIGINS` 只填写已部署前端的完整 Origin，生产禁止 `*`，Swagger/OpenAPI 自动关闭。
 - `PUBLIC_VISITOR_SECRET` 签发 `HttpOnly + Secure + SameSite=None` 匿名 Cookie，后端由访客身份派生内部 Session ID，不同浏览器不会共享演示对话。
 - `/support/requests`、`/support/history`、`/feedback/user` 和登录接口执行 Redis 分布式限流，Redis 故障时降级为有界进程内计数。
+- 限流同时按客户端 IP 和访客 Cookie 计数。部署在反向代理后（Railway）必须设 `TRUST_PROXY_HEADERS=true`：否则后端看到的是轮换的代理节点地址，不带 Cookie 的脚本可以绕过全部限额。开启后读取代理写入的 `X-Real-IP`，没有时取 `X-Forwarded-For` 最右一段；最左一段由客户端自带，不参与限流。
 - `/chat`、回复建议、情感分析、升级判断和在线 Evaluation 都是员工内部接口，必须通过 RBAC。
 - 生产启动会拒绝默认/弱 JWT Secret、缺失的 Fernet Tool Key、缺失的访客密钥、开启自助注册或通配 CORS。
 
@@ -474,6 +475,8 @@ python scripts/run_post_deploy_smoke.py --api-url ... --with-chat
 失败项会指出该改 Railway 还是 Vercel 的哪个变量。
 
 `--with-chat` 会带上随机的 `X-Request-Id`（必须是 32 位十六进制，后端脱敏会改写其他格式），随后用 `LANGSMITH_API_KEY`（只读 Service Key）和 `--langsmith-project-id` 回查 LangSmith，确认本次请求的根 Run 与 LLM 子节点都已到达，60 秒内查不到判为失败。GitHub 上对应 Secret `LANGSMITH_API_KEY` 和 Variable `LANGSMITH_TENANT_ID`（工作区 ID；不带它 LangSmith 返回 403，与线上 `OTEL_EXPORTER_OTLP_HEADERS` 里的 `X-Tenant-Id` 同值）。本地没设 Key 时回查跳过，加 `--require-trace` 则判失败（CI 使用）。
+
+退出码：0 全部通过；1 有检查失败；3 问答已成功、只有 Trace 回查失败。CI 遇到 3 不再重试，避免重复建工单和调模型。
 
 它不检查数据库/Redis 的独立状态。
 
