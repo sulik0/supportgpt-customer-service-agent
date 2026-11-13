@@ -83,6 +83,14 @@ _COMPLAINT_REQUEST = re.compile(
     r"\b(?:file|make|lodge|submit) (?:a |an |my )?(?:formal )?complaint\b|"
     r"\b(?:i|we) (?:want to |would like to |need to |will )?complain\b"
 )
+# 以监管、媒体、法律途径相威胁，或直接辱骂，同样按投诉处理。
+_COMPLAINT_THREAT = re.compile(
+    r"消协|12315|工商局|市场监管|曝光|找媒体|起诉|告你们|律师函|举报你们|维权|"
+    r"骗子|垃圾公司|黑店|"
+    r"\b(?:report you|consumer protection|better business bureau|sue you|"
+    r"take legal action|legal action|my lawyer|go to the (?:media|press)|"
+    r"scam(?:mers?)?)\b"
+)
 _COMPLAINT_INFORMATION = re.compile(
     r"(?:怎么|如何|哪里|在哪|怎样|渠道|流程|方式).{0,8}投诉|"
     r"\bhow (?:do|can|to|should)\b.{0,20}complain|\bwhere (?:do|can|to)\b.{0,20}complain"
@@ -91,6 +99,18 @@ _WARRANTY_ACTION = re.compile(
     r"\b(?:file|open|start|submit) (?:a )?(?:warranty )?claim\b|"
     r"\b(?:repair|replace) my (?:device|hardware|item)\b|"
     r"申请保修|发起维修|维修我的|更换我的"
+)
+# 实体设备故障走保修支持；带 API/服务信号的才算 API 故障。
+_DEVICE_FAULT = re.compile(
+    r"(?:设备|网关|终端|硬件|路由器|机器).{0,12}"
+    r"(?:断网|掉线|坏了|损坏|不亮|无法开机|开不了机|死机|没反应|不工作|连不上网|老是重启|自动重启)|"
+    r"\b(?:device|hardware|gateway|router|terminal)\b.{0,40}"
+    r"\b(?:is broken|not working|won't turn on|will not turn on|"
+    r"keeps? (?:disconnecting|rebooting|dropping)|dead|faulty|defective)\b"
+)
+_API_SIGNAL = re.compile(
+    r"\bapi\b|接口|服务|集群|生产环境|请求|\bcluster\b|\bproduction\b|\bendpoint\b|"
+    r"\brequests?\b|\b(?:401|403|429|502|503|504)\b"
 )
 _FEEDBACK = re.compile(r"\bthank you\b|\bthanks\b|\bgreat service\b|谢谢|感谢")
 _CONTEXTUAL_CANCELLATION = re.compile(
@@ -107,7 +127,10 @@ _CONTEXTUAL_ORDER_STATUS = re.compile(
 def is_explicit_complaint(normalized_text: str) -> bool:
     """识别明确的投诉诉求，排除“怎么投诉”这类流程咨询。"""
     return bool(
-        _COMPLAINT_REQUEST.search(normalized_text)
+        (
+            _COMPLAINT_REQUEST.search(normalized_text)
+            or _COMPLAINT_THREAT.search(normalized_text)
+        )
         and not _COMPLAINT_INFORMATION.search(normalized_text)
     )
 
@@ -253,6 +276,10 @@ class TicketAnalyzerAgent:
             intent_is_known = isinstance(raw_intent, IntentType) or (
                 str(raw_intent).strip().lower() in IntentType.values()
             )
+            # 具体设备的保修记录查询和实体设备故障需要保修 Tool，不随模型分类漂移。
+            normalized_intent = self._device_intent_override(
+                clean_description or clean_subject, normalized_intent
+            )
             analyzer_confidence = self._confidence(
                 analysis.get("confidence_score", analysis.get("confidence", 0.0))
             )
@@ -350,6 +377,7 @@ class TicketAnalyzerAgent:
             if (
                 _WARRANTY_ACTION.search(normalized)
                 or requested_record_tool(normalized) == "warranty.get_entitlements"
+                or _DEVICE_FAULT.search(normalized)
             ):
                 candidates.append(IntentType.WARRANTY_CLAIM)
             if _FEEDBACK.search(normalized):
@@ -379,6 +407,24 @@ class TicketAnalyzerAgent:
             ),
             "confidence_score": 0.95,
         }
+
+    @staticmethod
+    def _device_intent_override(text: str, intent: IntentType) -> IntentType:
+        """模型把“我的设备还在保修期内吗 / 设备老断网”判成通用咨询或 API 故障时纠正。
+
+        只改这两类明确场景：其他意图、以及带 API/服务信号的故障保持原判。
+        """
+        if intent not in {IntentType.INFORMATION_REQUEST, IntentType.OUTAGE_REPORT}:
+            return intent
+        normalized = " ".join(text.lower().split())
+        if _API_SIGNAL.search(normalized):
+            return intent
+        if (
+            requested_record_tool(normalized) == "warranty.get_entitlements"
+            or _DEVICE_FAULT.search(normalized)
+        ):
+            return IntentType.WARRANTY_CLAIM
+        return intent
 
     @staticmethod
     def _escalate_complaint(

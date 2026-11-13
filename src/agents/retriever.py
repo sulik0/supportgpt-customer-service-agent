@@ -105,9 +105,17 @@ class KnowledgeRetrievalAgent:
             retrieved_text = "\n".join(
                 f"{citation.source}: {citation.text}" for citation in citations
             )
-            injection = analyze_prompt_injection(
-                retrieved_text,
-                source="rag_document",
+            # 逐篇检测：不同文档里的词凑在一起不算注入（如一篇的“显示”和另一篇的“API Key”）。
+            injection = max(
+                (
+                    analyze_prompt_injection(
+                        f"{citation.source}: {citation.text}",
+                        source="rag_document",
+                    )
+                    for citation in citations
+                ),
+                key=lambda item: item.risk_score,
+                default=analyze_prompt_injection("", source="rag_document"),
             )
             if injection.detected:
                 logger.warning(

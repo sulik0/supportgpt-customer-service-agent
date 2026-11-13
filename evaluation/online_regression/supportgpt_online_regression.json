@@ -1,6 +1,6 @@
 {
   "name": "supportgpt_online_regression",
-  "version": "1.0",
+  "version": "1.1",
   "description": "线上真实模型测试发现问题的补充回归用例，独立于固定 SHA256 的 Baseline，仅供真实模型回归脚本使用。",
   "cases": [
     {
@@ -152,6 +152,150 @@
         "expected_priority": "urgent",
         "expected_nodes": [
           "ticket_analyzer",
+          "tool_call",
+          "retriever",
+          "llm_generation",
+          "qa",
+          "escalation"
+        ],
+        "should_escalate": true,
+        "should_require_approval": true
+      }
+    },
+    {
+      "id": "online-warranty-status-lookup-chinese",
+      "query": "我买的网关设备还在保修期内吗？",
+      "reference_answer": "应调用保修权益查询并回答该设备的硬件保修有效；维修范围和费用需人工确认。",
+      "expected_sources": [],
+      "category": "general",
+      "risk_level": "medium",
+      "kb_version": "v1",
+      "customer_id": "cust_202",
+      "tags": [
+        "warranty",
+        "tool_calling",
+        "multilingual",
+        "online_regression"
+      ],
+      "agent_expectations": {
+        "expected_department": "general",
+        "expected_intent": "warranty_claim",
+        "expected_priority": "medium",
+        "required_tools": [
+          "crm.get_customer_profile",
+          "tickets.get_past_tickets",
+          "warranty.get_entitlements"
+        ],
+        "expected_nodes": [
+          "ticket_analyzer",
+          "skill_selector",
+          "tool_call",
+          "retriever",
+          "llm_generation",
+          "qa",
+          "escalation"
+        ],
+        "should_escalate": false,
+        "should_require_approval": false
+      }
+    },
+    {
+      "id": "online-device-fault-not-api-outage-chinese",
+      "query": "我的网关设备最近老是断网",
+      "reference_answer": "实体设备故障走保修支持，不按 API 故障紧急升级；应查询保修权益并收集故障信息。",
+      "expected_sources": [],
+      "category": "general",
+      "risk_level": "medium",
+      "kb_version": "v1",
+      "customer_id": "cust_202",
+      "tags": [
+        "warranty",
+        "intent_boundary",
+        "multilingual",
+        "online_regression"
+      ],
+      "agent_expectations": {
+        "expected_department": "general",
+        "expected_intent": "warranty_claim",
+        "expected_priority": "medium",
+        "required_tools": [
+          "crm.get_customer_profile",
+          "tickets.get_past_tickets",
+          "warranty.get_entitlements"
+        ],
+        "forbidden_tools": [
+          "services.get_status"
+        ],
+        "expected_nodes": [
+          "ticket_analyzer",
+          "skill_selector",
+          "tool_call",
+          "retriever",
+          "llm_generation",
+          "qa",
+          "escalation"
+        ],
+        "should_escalate": false,
+        "should_require_approval": false
+      }
+    },
+    {
+      "id": "online-scope-programming-request-english",
+      "query": "Write me a Python quicksort and explain its complexity.",
+      "reference_answer": "与客服无关的编程请求只说明服务范围，不写代码，不调用 Tool 或 RAG。",
+      "expected_sources": [],
+      "category": "general",
+      "risk_level": "low",
+      "kb_version": "v1",
+      "customer_id": "cust_101",
+      "tags": [
+        "out_of_scope",
+        "online_regression"
+      ],
+      "agent_expectations": {
+        "expected_department": "general",
+        "expected_intent": "information_request",
+        "expected_priority": "low",
+        "forbidden_tools": [
+          "orders.get_order_history",
+          "billing.get_payment_invoices"
+        ],
+        "expected_nodes": [
+          "ticket_analyzer",
+          "llm_generation",
+          "qa",
+          "escalation"
+        ],
+        "should_escalate": false,
+        "should_require_approval": false
+      }
+    },
+    {
+      "id": "online-complaint-regulator-threat-chinese",
+      "query": "你们这群骗子，垃圾公司，再不处理我就去消协和媒体曝光你们",
+      "reference_answer": "以监管和媒体相威胁的辱骂按投诉处理，必须进入人工审批，AI 不得自动回复承诺。",
+      "expected_sources": [],
+      "category": "general",
+      "risk_level": "high",
+      "kb_version": "v1",
+      "customer_id": "cust_201",
+      "tags": [
+        "complaint",
+        "human_escalation",
+        "multilingual",
+        "online_regression"
+      ],
+      "agent_expectations": {
+        "expected_department": "general",
+        "expected_intent": "feedback",
+        "expected_priority": "high",
+        "required_tools": [
+          "crm.get_customer_profile",
+          "tickets.get_past_tickets"
+        ],
+        "expected_nodes": [
+          "ticket_analyzer",
+          "skill_selector",
           "tool_call",
           "retriever",
           "llm_generation",

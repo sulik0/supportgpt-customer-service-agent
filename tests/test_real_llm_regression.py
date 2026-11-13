@@ -153,9 +153,9 @@ def test_regression_suite_includes_online_regression_cases_from_extra_dataset(tm
         cases=cases,
         suite="regression",
         explicit_case_ids=None,
-        max_workflow_calls=40,
+        max_workflow_calls=60,
     )
 
     assert plan.case_ids == (*REGRESSION_CASE_IDS, *ONLINE_REGRESSION_CASE_IDS)
-    # 10 个非攻击用例中新增 4 个，C08 安全短路不计调用
-    assert plan.estimated_workflow_llm_calls == 27 + 4 * 3
+    # 9 条线上用例里 8 条按 3 次调用估算，C08 安全短路不计调用
+    assert plan.estimated_workflow_llm_calls == 27 + 8 * 3

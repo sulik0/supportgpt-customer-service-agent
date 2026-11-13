@@ -17,6 +17,11 @@ _SUPPORT_TOPIC = re.compile(
 )
 _UNSUPPORTED_TOPICS = (
     (
+        # 放在 weather 之前：“把‘今天天气很好’翻译成英文”是翻译请求，不是查天气。
+        "translation",
+        re.compile(r"翻译(?:成|为|一下)|译成|\btranslate\b", re.IGNORECASE),
+    ),
+    (
         "weather",
         re.compile(
             r"天气|气温|天气预报|\b(?:weather|forecast|temperature)\b", re.IGNORECASE
@@ -25,24 +30,40 @@ _UNSUPPORTED_TOPICS = (
     (
         "creative_request",
         re.compile(
-            r"(?:写|创作).{0,12}(?:诗|故事|小说|歌词)|讲.{0,5}(?:笑话|故事)|\b(?:write|tell|compose).{0,30}\b(?:poem|story|joke|lyrics)\b",
+            r"(?:写|创作|作).{0,12}(?:诗|绝句|律诗|对联|故事|小说|歌词|散文|作文|情书)|"
+            r"讲.{0,5}(?:笑话|故事)|"
+            r"\b(?:write|tell|compose).{0,30}\b(?:poem|haiku|story|joke|lyrics|essay|song)\b",
             re.IGNORECASE,
         ),
     ),
     (
         "general_knowledge",
         re.compile(
-            r"(?:首都|行星|太阳系|恐龙).{0,15}(?:哪|什么|多少|介绍)|(?:哪|什么).{0,15}(?:首都|行星|太阳系)|\b(?:capital of|solar system|dinosaurs?|planets?)\b",
+            r"(?:首都|行星|太阳系|恐龙).{0,15}(?:哪|什么|多少|介绍)|(?:哪|什么).{0,15}(?:首都|行星|太阳系)|\b(?:capital of|solar system|dinosaurs?|planets?)\b|"
+            r"求导|微积分|解方程|\b(?:derivative|integral) of\b",
             re.IGNORECASE,
         ),
     ),
     (
         "general_programming",
         re.compile(
-            r"(?:写|实现).{0,12}(?:算法|排序代码|小游戏)|\b(?:write|implement).{0,25}\b(?:sorting algorithm|game)\b",
+            r"(?:写|实现|编写|生成).{0,20}"
+            r"(?:算法|代码|程序|函数|脚本|排序|查找|爬虫|正则|小游戏)|"
+            r"\b(?:write|implement|code|create|generate)\b.{0,40}"
+            r"\b(?:quick ?sort|bubble sort|merge sort|binary search|sorting algorithm|"
+            r"algorithm|function|script|program|regex|game)\b",
             re.IGNORECASE,
         ),
     ),
+)
+
+
+# 只有问候、没有任何问题：直接说明能帮什么，不查工单、不调模型。
+_GREETING_ONLY = re.compile(
+    r"[\s!！。.,，~～?？]*(?:你好|您好|hi|hello|hey|嗨|哈喽|在吗|在不在|有人吗|"
+    r"早上好|下午好|晚上好|good (?:morning|afternoon|evening))"
+    r"(?:啊|呀|呢|吗)?[\s!！。.,，~～?？]*",
+    re.IGNORECASE,
 )
 
 
@@ -50,6 +71,8 @@ def out_of_scope_reason(text: str) -> str | None:
     """只识别明确的无关主题；含客服业务或多意图时保留原处理路径。"""
     if _SUPPORT_TOPIC.search(text):
         return None
+    if _GREETING_ONLY.fullmatch(text or ""):
+        return "greeting"
     for reason, pattern in _UNSUPPORTED_TOPICS:
         if pattern.search(text):
             return reason
@@ -112,6 +135,13 @@ def scope_boundary_response(state: Mapping[str, Any]) -> str:
     chinese = chinese_requested or (
         not english_requested and bool(re.search(r"[\u4e00-\u9fff]", text))
     )
+    if state.get("scope_reason") == "greeting":
+        return (
+            "您好！我可以帮您处理订单、退款、账户、保修和售后相关问题，请告诉我您需要什么帮助。"
+            if chinese
+            else "Hello! I can help with orders, refunds, accounts, warranties and "
+            "after-sales support. What can I help you with?"
+        )
     if chinese:
         limitation = (
             "暂时无法查询实时天气"

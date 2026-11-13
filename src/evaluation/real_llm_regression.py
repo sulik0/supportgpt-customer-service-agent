@@ -29,6 +29,10 @@ ONLINE_REGRESSION_CASE_IDS = (
     "online-security-leak-orders-chinese",
     "online-order-status-english-language",
     "online-outage-aws-gateway-cluster-chinese",
+    "online-warranty-status-lookup-chinese",
+    "online-device-fault-not-api-outage-chinese",
+    "online-scope-programming-request-english",
+    "online-complaint-regulator-threat-chinese",
 )
 
 

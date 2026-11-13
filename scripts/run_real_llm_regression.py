@@ -67,7 +67,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--max-workflow-calls",
         type=int,
-        default=40,
+        default=60,
         help="Maximum estimated Analyzer/Resolver/QA live calls.",
     )
     parser.add_argument(

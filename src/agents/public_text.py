@@ -14,13 +14,20 @@ _BRACKETED = re.compile(
 _BARE_LIST = re.compile(rf"(?<![A-Za-z0-9]){_ID}(?:\s*[、,，/和及与]\s*{_ID})+(?![A-Za-z0-9])")
 
 
+_LEAD_IN = re.compile(
+    rf"(?:根据|依据|按照|参考|参见)\s*[\(（\[［【]\s*{_ID_LIST}\s*[\)）\]］】]\s*[，,]\s*"
+)
+
+
 def strip_internal_citations(text: str) -> str:
     """确定性去掉 [S1]、(S2)、（S2）、S1、S2 等标记，并清理残留空格与标点。"""
     if not text:
         return text
-    cleaned, count_a = _BRACKETED.subn("", text)
+    # “根据[S1]，…”去掉编号后会剩下悬空的“根据，”，连引导词一起去掉。
+    cleaned, count_lead = _LEAD_IN.subn("", text)
+    cleaned, count_a = _BRACKETED.subn("", cleaned)
     cleaned, count_b = _BARE_LIST.subn("", cleaned)
-    if not (count_a or count_b):
+    if not (count_lead or count_a or count_b):
         return text
     cleaned = re.sub(r"[ \t]{2,}", " ", cleaned)
     # 标点前不留空格；连续的中文句末标点只保留一个。
