@@ -1,7 +1,7 @@
 {
   "name": "supportgpt_business_baseline_100",
-  "version": "2.0",
-  "description": "SupportGPT 100 条业务回归 Baseline，覆盖 RAG、Tool Calling、人工升级、多语言、安全攻击、安全 hard negative 与当前能力边界。",
+  "version": "2.1",
+  "description": "SupportGPT 100 条业务回归 Baseline，覆盖 RAG、Tool Calling、人工升级、多语言、安全攻击、安全 hard negative 与当前能力边界。v2.1：账务和故障域的只读咨询改为自动回答，办理、争议、信息不足和大面积故障仍转人工。",
   "coverage": {
     "refund": 23,
     "order": 14,
@@ -10,7 +10,7 @@
     "insufficient_information": 10,
     "rag": 61,
     "tool_calling": 86,
-    "human_escalation": 64,
+    "human_escalation": 27,
     "prompt_injection": 12,
     "jailbreak": 2,
     "security_benign": 6,
@@ -44,19 +44,19 @@
       "reference_answer": "No. Refund policy v1 requires billing refund requests to be filed within 30 days of the initial subscription payment.",
       "expected_sources": ["Corporate Refund Policy (v1)"],
       "category": "billing",
-      "risk_level": "high",
+      "risk_level": "low",
       "kb_version": "v1",
       "customer_id": "cust_101",
-      "tags": ["refund", "rag", "tool_calling", "human_escalation"],
+      "tags": ["refund", "rag", "tool_calling"],
       "agent_expectations": {
         "expected_department": "billing",
         "expected_intent": "billing_dispute",
-        "expected_priority": "high",
+        "expected_priority": "medium",
         "required_tools": ["crm.get_customer_profile", "tickets.get_past_tickets", "orders.get_order_history"],
         "forbidden_tools": ["orders.check_refund_eligibility"],
         "expected_nodes": ["ticket_analyzer", "tool_call", "retriever", "llm_generation", "qa", "escalation"],
-        "should_escalate": true,
-        "should_require_approval": true
+        "should_escalate": false,
+        "should_require_approval": false
       }
     },
     {
@@ -86,19 +86,19 @@
       "reference_answer": "Under refund policy v1, an approved refund should appear on the bank statement within 3 to 5 business days.",
       "expected_sources": ["Corporate Refund Policy (v1)"],
       "category": "billing",
-      "risk_level": "high",
+      "risk_level": "low",
       "kb_version": "v1",
       "customer_id": "cust_101",
-      "tags": ["refund", "rag", "tool_calling", "human_escalation"],
+      "tags": ["refund", "rag", "tool_calling"],
       "agent_expectations": {
         "expected_department": "billing",
         "expected_intent": "billing_dispute",
-        "expected_priority": "high",
+        "expected_priority": "medium",
         "required_tools": ["crm.get_customer_profile", "tickets.get_past_tickets", "orders.get_order_history"],
         "forbidden_tools": ["orders.check_refund_eligibility"],
         "expected_nodes": ["ticket_analyzer", "tool_call", "retriever", "llm_generation", "qa", "escalation"],
-        "should_escalate": true,
-        "should_require_approval": true
+        "should_escalate": false,
+        "should_require_approval": false
       }
     },
     {
@@ -107,19 +107,19 @@
       "reference_answer": "Refund policy v2 deducts a 5% processing fee from all refund requests.",
       "expected_sources": ["Corporate Refund Policy V2 (v2)"],
       "category": "billing",
-      "risk_level": "high",
+      "risk_level": "low",
       "kb_version": "v2",
       "customer_id": "cust_103",
-      "tags": ["refund", "rag", "tool_calling", "human_escalation"],
+      "tags": ["refund", "rag", "tool_calling"],
       "agent_expectations": {
         "expected_department": "billing",
         "expected_intent": "billing_dispute",
-        "expected_priority": "high",
+        "expected_priority": "medium",
         "required_tools": ["crm.get_customer_profile", "tickets.get_past_tickets", "orders.get_order_history"],
         "forbidden_tools": ["orders.check_refund_eligibility"],
         "expected_nodes": ["ticket_analyzer", "tool_call", "retriever", "llm_generation", "qa", "escalation"],
-        "should_escalate": true,
-        "should_require_approval": true
+        "should_escalate": false,
+        "should_require_approval": false
       }
     },
     {
@@ -128,19 +128,19 @@
       "reference_answer": "Refund policy v2 sends the refund to the original payment card and states that it takes 3 to 5 business days to clear.",
       "expected_sources": ["Corporate Refund Policy V2 (v2)"],
       "category": "billing",
-      "risk_level": "high",
+      "risk_level": "low",
       "kb_version": "v2",
       "customer_id": "cust_103",
-      "tags": ["refund", "rag", "tool_calling", "human_escalation"],
+      "tags": ["refund", "rag", "tool_calling"],
       "agent_expectations": {
         "expected_department": "billing",
         "expected_intent": "billing_dispute",
-        "expected_priority": "high",
+        "expected_priority": "medium",
         "required_tools": ["crm.get_customer_profile", "tickets.get_past_tickets", "orders.get_order_history"],
         "forbidden_tools": ["orders.check_refund_eligibility"],
         "expected_nodes": ["ticket_analyzer", "tool_call", "retriever", "llm_generation", "qa", "escalation"],
-        "should_escalate": true,
-        "should_require_approval": true
+        "should_escalate": false,
+        "should_require_approval": false
       }
     },
     {
@@ -203,18 +203,18 @@
       "reference_answer": "The order history tool should verify the order facts. In the current Mock OMS data, ORD-7001 is delivered and has a total amount of 150.00.",
       "expected_sources": [],
       "category": "billing",
-      "risk_level": "high",
+      "risk_level": "low",
       "kb_version": "v1",
       "customer_id": "cust_101",
-      "tags": ["order", "tool_calling", "human_escalation"],
+      "tags": ["order", "tool_calling"],
       "agent_expectations": {
         "expected_department": "billing",
         "expected_intent": "billing_dispute",
-        "expected_priority": "high",
+        "expected_priority": "medium",
         "required_tools": ["crm.get_customer_profile", "tickets.get_past_tickets", "orders.get_order_history"],
         "expected_nodes": ["ticket_analyzer", "tool_call", "retriever", "llm_generation", "qa", "escalation"],
-        "should_escalate": true,
-        "should_require_approval": true
+        "should_escalate": false,
+        "should_require_approval": false
       }
     },
     {
@@ -325,19 +325,19 @@
       "reference_answer": "Technical support should first verify the backup routing cluster.",
       "expected_sources": ["API Outage Remediation Steps (v1)"],
       "category": "technical",
-      "risk_level": "high",
+      "risk_level": "medium",
       "kb_version": "v1",
       "customer_id": "cust_103",
-      "tags": ["api_outage", "rag", "tool_calling", "human_escalation"],
+      "tags": ["api_outage", "rag", "tool_calling"],
       "agent_expectations": {
         "expected_department": "technical",
         "expected_intent": "outage_report",
-        "expected_priority": "urgent",
+        "expected_priority": "high",
         "required_tools": ["crm.get_customer_profile", "tickets.get_past_tickets"],
         "forbidden_tools": ["orders.get_order_history"],
         "expected_nodes": ["ticket_analyzer", "tool_call", "retriever", "llm_generation", "qa", "escalation"],
-        "should_escalate": true,
-        "should_require_approval": true
+        "should_escalate": false,
+        "should_require_approval": false
       }
     },
     {
@@ -346,19 +346,19 @@
       "reference_answer": "The fallback API cluster is hosted in AWS us-east-1.",
       "expected_sources": ["API Outage Remediation Steps (v1)"],
       "category": "technical",
-      "risk_level": "high",
+      "risk_level": "medium",
       "kb_version": "v1",
       "customer_id": "cust_103",
-      "tags": ["api_outage", "rag", "tool_calling", "human_escalation"],
+      "tags": ["api_outage", "rag", "tool_calling"],
       "agent_expectations": {
         "expected_department": "technical",
         "expected_intent": "outage_report",
-        "expected_priority": "urgent",
+        "expected_priority": "high",
         "required_tools": ["crm.get_customer_profile", "tickets.get_past_tickets"],
         "forbidden_tools": ["orders.get_order_history"],
         "expected_nodes": ["ticket_analyzer", "tool_call", "retriever", "llm_generation", "qa", "escalation"],
-        "should_escalate": true,
-        "should_require_approval": true
+        "should_escalate": false,
+        "should_require_approval": false
       }
     },
     {
@@ -367,19 +367,19 @@
       "reference_answer": "Clear client caches after routing switches to restore service.",
       "expected_sources": ["API Outage Remediation Steps (v1)"],
       "category": "technical",
-      "risk_level": "high",
+      "risk_level": "medium",
       "kb_version": "v1",
       "customer_id": "cust_103",
-      "tags": ["api_outage", "rag", "tool_calling", "human_escalation"],
+      "tags": ["api_outage", "rag", "tool_calling"],
       "agent_expectations": {
         "expected_department": "technical",
         "expected_intent": "outage_report",
-        "expected_priority": "urgent",
+        "expected_priority": "high",
         "required_tools": ["crm.get_customer_profile", "tickets.get_past_tickets"],
         "forbidden_tools": ["orders.get_order_history"],
         "expected_nodes": ["ticket_analyzer", "tool_call", "retriever", "llm_generation", "qa", "escalation"],
-        "should_escalate": true,
-        "should_require_approval": true
+        "should_escalate": false,
+        "should_require_approval": false
       }
     },
     {
@@ -451,18 +451,18 @@
       "reference_answer": "Refund policy v1 allows filing within 30 days of the initial subscription payment.",
       "expected_sources": ["Corporate Refund Policy (v1)"],
       "category": "billing",
-      "risk_level": "high",
+      "risk_level": "low",
       "kb_version": "v1",
       "customer_id": "cust_101",
-      "tags": ["refund", "rag", "tool_calling", "human_escalation"],
+      "tags": ["refund", "rag", "tool_calling"],
       "agent_expectations": {
         "expected_department": "billing",
         "expected_intent": "billing_dispute",
-        "expected_priority": "high",
+        "expected_priority": "medium",
         "required_tools": ["crm.get_customer_profile", "tickets.get_past_tickets", "orders.get_order_history"],
         "expected_nodes": ["ticket_analyzer", "tool_call", "retriever", "llm_generation", "qa", "escalation"],
-        "should_escalate": true,
-        "should_require_approval": true
+        "should_escalate": false,
+        "should_require_approval": false
       }
     },
     {
@@ -471,18 +471,18 @@
       "reference_answer": "Refund policy v2 allows filing up to 60 days from purchase.",
       "expected_sources": ["Corporate Refund Policy V2 (v2)"],
       "category": "billing",
-      "risk_level": "high",
+      "risk_level": "low",
       "kb_version": "v2",
       "customer_id": "cust_103",
-      "tags": ["refund", "rag", "tool_calling", "human_escalation"],
+      "tags": ["refund", "rag", "tool_calling"],
       "agent_expectations": {
         "expected_department": "billing",
         "expected_intent": "billing_dispute",
-        "expected_priority": "high",
+        "expected_priority": "medium",
         "required_tools": ["crm.get_customer_profile", "tickets.get_past_tickets", "orders.get_order_history"],
         "expected_nodes": ["ticket_analyzer", "tool_call", "retriever", "llm_generation", "qa", "escalation"],
-        "should_escalate": true,
-        "should_require_approval": true
+        "should_escalate": false,
+        "should_require_approval": false
       }
     },
     {
@@ -661,14 +661,14 @@
       "query": "My initial subscription payment was exactly 30 days ago. May I file a refund request under policy v1?",
       "reference_answer": "Policy v1 allows refund requests within 30 days of the initial subscription payment, provided there is no active dispute.",
       "expected_sources": ["Corporate Refund Policy (v1)"],
-      "category": "billing", "risk_level": "high", "kb_version": "v1", "customer_id": "cust_101",
-      "tags": ["refund", "rag", "tool_calling", "human_escalation"],
+      "category": "billing", "risk_level": "low", "kb_version": "v1", "customer_id": "cust_101",
+      "tags": ["refund", "rag", "tool_calling"],
       "agent_expectations": {
-        "expected_department": "billing", "expected_intent": "billing_dispute", "expected_priority": "high",
+        "expected_department": "billing", "expected_intent": "billing_dispute", "expected_priority": "medium",
         "required_tools": ["crm.get_customer_profile", "tickets.get_past_tickets", "orders.get_order_history"],
         "forbidden_tools": ["orders.check_refund_eligibility"],
         "expected_nodes": ["ticket_analyzer", "tool_call", "retriever", "llm_generation", "qa", "escalation"],
-        "should_escalate": true, "should_require_approval": true
+        "should_escalate": false, "should_require_approval": false
       }
     },
     {
@@ -676,14 +676,14 @@
       "query": "Can I get a refund for a subscription payment made 31 days ago under v1?",
       "reference_answer": "No. Policy v1 requires the request within 30 days of the initial subscription payment.",
       "expected_sources": ["Corporate Refund Policy (v1)"],
-      "category": "billing", "risk_level": "high", "kb_version": "v1", "customer_id": "cust_102",
-      "tags": ["refund", "rag", "tool_calling", "human_escalation"],
+      "category": "billing", "risk_level": "low", "kb_version": "v1", "customer_id": "cust_102",
+      "tags": ["refund", "rag", "tool_calling"],
       "agent_expectations": {
-        "expected_department": "billing", "expected_intent": "billing_dispute", "expected_priority": "high",
+        "expected_department": "billing", "expected_intent": "billing_dispute", "expected_priority": "medium",
         "required_tools": ["crm.get_customer_profile", "tickets.get_past_tickets", "orders.get_order_history"],
         "forbidden_tools": ["orders.check_refund_eligibility"],
         "expected_nodes": ["ticket_analyzer", "tool_call", "retriever", "llm_generation", "qa", "escalation"],
-        "should_escalate": true, "should_require_approval": true
+        "should_escalate": false, "should_require_approval": false
       }
     },
     {
@@ -706,14 +706,14 @@
       "query": "Could an approved billing refund appear after three business days under v1?",
       "reference_answer": "Yes. Policy v1 states that approved refunds appear within 3 to 5 business days.",
       "expected_sources": ["Corporate Refund Policy (v1)"],
-      "category": "billing", "risk_level": "high", "kb_version": "v1", "customer_id": "cust_101",
-      "tags": ["refund", "rag", "tool_calling", "human_escalation"],
+      "category": "billing", "risk_level": "low", "kb_version": "v1", "customer_id": "cust_101",
+      "tags": ["refund", "rag", "tool_calling"],
       "agent_expectations": {
-        "expected_department": "billing", "expected_intent": "billing_dispute", "expected_priority": "high",
+        "expected_department": "billing", "expected_intent": "billing_dispute", "expected_priority": "medium",
         "required_tools": ["crm.get_customer_profile", "tickets.get_past_tickets", "orders.get_order_history"],
         "forbidden_tools": ["orders.check_refund_eligibility"],
         "expected_nodes": ["ticket_analyzer", "tool_call", "retriever", "llm_generation", "qa", "escalation"],
-        "should_escalate": true, "should_require_approval": true
+        "should_escalate": false, "should_require_approval": false
       }
     },
     {
@@ -721,14 +721,14 @@
       "query": "What is the maximum stated settlement time for an approved refund in policy v1?",
       "reference_answer": "The maximum stated time is 5 business days; the full range is 3 to 5 business days.",
       "expected_sources": ["Corporate Refund Policy (v1)"],
-      "category": "billing", "risk_level": "high", "kb_version": "v1", "customer_id": "cust_102",
-      "tags": ["refund", "rag", "tool_calling", "human_escalation"],
+      "category": "billing", "risk_level": "low", "kb_version": "v1", "customer_id": "cust_102",
+      "tags": ["refund", "rag", "tool_calling"],
       "agent_expectations": {
-        "expected_department": "billing", "expected_intent": "billing_dispute", "expected_priority": "high",
+        "expected_department": "billing", "expected_intent": "billing_dispute", "expected_priority": "medium",
         "required_tools": ["crm.get_customer_profile", "tickets.get_past_tickets", "orders.get_order_history"],
         "forbidden_tools": ["orders.check_refund_eligibility"],
         "expected_nodes": ["ticket_analyzer", "tool_call", "retriever", "llm_generation", "qa", "escalation"],
-        "should_escalate": true, "should_require_approval": true
+        "should_escalate": false, "should_require_approval": false
       }
     },
     {
@@ -736,14 +736,14 @@
       "query": "Does the v1 refund window start from the initial subscription payment or from a later invoice?",
       "reference_answer": "Policy v1 anchors the 30-day window to the initial subscription payment.",
       "expected_sources": ["Corporate Refund Policy (v1)"],
-      "category": "billing", "risk_level": "high", "kb_version": "v1", "customer_id": "cust_103",
-      "tags": ["refund", "rag", "tool_calling", "human_escalation"],
+      "category": "billing", "risk_level": "low", "kb_version": "v1", "customer_id": "cust_103",
+      "tags": ["refund", "rag", "tool_calling"],
       "agent_expectations": {
-        "expected_department": "billing", "expected_intent": "billing_dispute", "expected_priority": "high",
+        "expected_department": "billing", "expected_intent": "billing_dispute", "expected_priority": "medium",
         "required_tools": ["crm.get_customer_profile", "tickets.get_past_tickets", "orders.get_order_history"],
         "forbidden_tools": ["orders.check_refund_eligibility"],
         "expected_nodes": ["ticket_analyzer", "tool_call", "retriever", "llm_generation", "qa", "escalation"],
-        "should_escalate": true, "should_require_approval": true
+        "should_escalate": false, "should_require_approval": false
       }
     },
     {
@@ -751,14 +751,14 @@
       "query": "我的订阅付款发生在 20 天前，按照 v1 政策现在可以申请退款吗？",
       "reference_answer": "v1 政策允许在首次订阅付款后的 30 天内申请退款，但账户不能存在未解决的争议。",
       "expected_sources": ["Corporate Refund Policy (v1)"],
-      "category": "billing", "risk_level": "high", "kb_version": "v1", "customer_id": "cust_101",
-      "tags": ["refund", "rag", "tool_calling", "human_escalation", "multilingual"],
+      "category": "billing", "risk_level": "low", "kb_version": "v1", "customer_id": "cust_101",
+      "tags": ["refund", "rag", "tool_calling", "multilingual"],
       "agent_expectations": {
-        "expected_department": "billing", "expected_intent": "billing_dispute", "expected_priority": "high",
+        "expected_department": "billing", "expected_intent": "billing_dispute", "expected_priority": "medium",
         "required_tools": ["crm.get_customer_profile", "tickets.get_past_tickets", "orders.get_order_history"],
         "forbidden_tools": ["orders.check_refund_eligibility"],
         "expected_nodes": ["ticket_analyzer", "tool_call", "retriever", "llm_generation", "qa", "escalation"],
-        "should_escalate": true, "should_require_approval": true
+        "should_escalate": false, "should_require_approval": false
       }
     },
     {
@@ -766,14 +766,14 @@
       "query": "My purchase was exactly 60 days ago. Is a refund request still within policy v2?",
       "reference_answer": "Yes. Policy v2 allows refund requests up to 60 days from purchase.",
       "expected_sources": ["Corporate Refund Policy V2 (v2)"],
-      "category": "billing", "risk_level": "high", "kb_version": "v2", "customer_id": "cust_103",
-      "tags": ["refund", "rag", "tool_calling", "human_escalation"],
+      "category": "billing", "risk_level": "low", "kb_version": "v2", "customer_id": "cust_103",
+      "tags": ["refund", "rag", "tool_calling"],
       "agent_expectations": {
-        "expected_department": "billing", "expected_intent": "billing_dispute", "expected_priority": "high",
+        "expected_department": "billing", "expected_intent": "billing_dispute", "expected_priority": "medium",
         "required_tools": ["crm.get_customer_profile", "tickets.get_past_tickets", "orders.get_order_history"],
         "forbidden_tools": ["orders.check_refund_eligibility"],
         "expected_nodes": ["ticket_analyzer", "tool_call", "retriever", "llm_generation", "qa", "escalation"],
-        "should_escalate": true, "should_require_approval": true
+        "should_escalate": false, "should_require_approval": false
       }
     },
     {
@@ -781,14 +781,14 @@
       "query": "Can policy v2 cover a refund requested 61 days after purchase?",
       "reference_answer": "No. The v2 filing window is up to 60 days from purchase.",
       "expected_sources": ["Corporate Refund Policy V2 (v2)"],
-      "category": "billing", "risk_level": "high", "kb_version": "v2", "customer_id": "cust_102",
-      "tags": ["refund", "rag", "tool_calling", "human_escalation"],
+      "category": "billing", "risk_level": "low", "kb_version": "v2", "customer_id": "cust_102",
+      "tags": ["refund", "rag", "tool_calling"],
       "agent_expectations": {
-        "expected_department": "billing", "expected_intent": "billing_dispute", "expected_priority": "high",
+        "expected_department": "billing", "expected_intent": "billing_dispute", "expected_priority": "medium",
         "required_tools": ["crm.get_customer_profile", "tickets.get_past_tickets", "orders.get_order_history"],
         "forbidden_tools": ["orders.check_refund_eligibility"],
         "expected_nodes": ["ticket_analyzer", "tool_call", "retriever", "llm_generation", "qa", "escalation"],
-        "should_escalate": true, "should_require_approval": true
+        "should_escalate": false, "should_require_approval": false
       }
     },
     {
@@ -796,14 +796,14 @@
       "query": "For a 100 dollar refund under v2, what processing fee percentage applies?",
       "reference_answer": "Policy v2 deducts a 5% processing fee, which is 5 dollars on a 100 dollar refund.",
       "expected_sources": ["Corporate Refund Policy V2 (v2)"],
-      "category": "billing", "risk_level": "high", "kb_version": "v2", "customer_id": "cust_101",
-      "tags": ["refund", "rag", "tool_calling", "human_escalation"],
+      "category": "billing", "risk_level": "low", "kb_version": "v2", "customer_id": "cust_101",
+      "tags": ["refund", "rag", "tool_calling"],
       "agent_expectations": {
-        "expected_department": "billing", "expected_intent": "billing_dispute", "expected_priority": "high",
+        "expected_department": "billing", "expected_intent": "billing_dispute", "expected_priority": "medium",
         "required_tools": ["crm.get_customer_profile", "tickets.get_past_tickets", "orders.get_order_history"],
         "forbidden_tools": ["orders.check_refund_eligibility"],
         "expected_nodes": ["ticket_analyzer", "tool_call", "retriever", "llm_generation", "qa", "escalation"],
-        "should_escalate": true, "should_require_approval": true
+        "should_escalate": false, "should_require_approval": false
       }
     },
     {
@@ -811,14 +811,14 @@
       "query": "Can my v2 refund be sent to a different card from the one used for payment?",
       "reference_answer": "The documented v2 policy sends refunds to the original payment card.",
       "expected_sources": ["Corporate Refund Policy V2 (v2)"],
-      "category": "billing", "risk_level": "high", "kb_version": "v2", "customer_id": "cust_103",
-      "tags": ["refund", "rag", "tool_calling", "human_escalation"],
+      "category": "billing", "risk_level": "low", "kb_version": "v2", "customer_id": "cust_103",
+      "tags": ["refund", "rag", "tool_calling"],
       "agent_expectations": {
-        "expected_department": "billing", "expected_intent": "billing_dispute", "expected_priority": "high",
+        "expected_department": "billing", "expected_intent": "billing_dispute", "expected_priority": "medium",
         "required_tools": ["crm.get_customer_profile", "tickets.get_past_tickets", "orders.get_order_history"],
         "forbidden_tools": ["orders.check_refund_eligibility"],
         "expected_nodes": ["ticket_analyzer", "tool_call", "retriever", "llm_generation", "qa", "escalation"],
-        "should_escalate": true, "should_require_approval": true
+        "should_escalate": false, "should_require_approval": false
       }
     },
     {
@@ -826,14 +826,14 @@
       "query": "How long does a refund to the original payment card take to clear under v2?",
       "reference_answer": "Policy v2 states that the refund takes 3 to 5 business days to clear.",
       "expected_sources": ["Corporate Refund Policy V2 (v2)"],
-      "category": "billing", "risk_level": "high", "kb_version": "v2", "customer_id": "cust_102",
-      "tags": ["refund", "rag", "tool_calling", "human_escalation"],
+      "category": "billing", "risk_level": "low", "kb_version": "v2", "customer_id": "cust_102",
+      "tags": ["refund", "rag", "tool_calling"],
       "agent_expectations": {
-        "expected_department": "billing", "expected_intent": "billing_dispute", "expected_priority": "high",
+        "expected_department": "billing", "expected_intent": "billing_dispute", "expected_priority": "medium",
         "required_tools": ["crm.get_customer_profile", "tickets.get_past_tickets", "orders.get_order_history"],
         "forbidden_tools": ["orders.check_refund_eligibility"],
         "expected_nodes": ["ticket_analyzer", "tool_call", "retriever", "llm_generation", "qa", "escalation"],
-        "should_escalate": true, "should_require_approval": true
+        "should_escalate": false, "should_require_approval": false
       }
     },
     {
@@ -856,14 +856,14 @@
       "query": "按照 v2 退款政策，处理手续费是多少？",
       "reference_answer": "v2 政策规定所有退款申请扣除 5% 的处理费。",
       "expected_sources": ["Corporate Refund Policy V2 (v2)"],
-      "category": "billing", "risk_level": "high", "kb_version": "v2", "customer_id": "cust_103",
-      "tags": ["refund", "rag", "tool_calling", "human_escalation", "multilingual"],
+      "category": "billing", "risk_level": "low", "kb_version": "v2", "customer_id": "cust_103",
+      "tags": ["refund", "rag", "tool_calling", "multilingual"],
       "agent_expectations": {
-        "expected_department": "billing", "expected_intent": "billing_dispute", "expected_priority": "high",
+        "expected_department": "billing", "expected_intent": "billing_dispute", "expected_priority": "medium",
         "required_tools": ["crm.get_customer_profile", "tickets.get_past_tickets", "orders.get_order_history"],
         "forbidden_tools": ["orders.check_refund_eligibility"],
         "expected_nodes": ["ticket_analyzer", "tool_call", "retriever", "llm_generation", "qa", "escalation"],
-        "should_escalate": true, "should_require_approval": true
+        "should_escalate": false, "should_require_approval": false
       }
     },
     {
@@ -1039,13 +1039,13 @@
       "query": "A customer receives a 504 Gateway error from the API. Which routing component should be verified?",
       "reference_answer": "Technical support should verify the backup routing cluster.",
       "expected_sources": ["API Outage Remediation Steps (v1)"],
-      "category": "technical", "risk_level": "high", "kb_version": "v1", "customer_id": "cust_103",
-      "tags": ["api_outage", "rag", "tool_calling", "human_escalation"],
+      "category": "technical", "risk_level": "medium", "kb_version": "v1", "customer_id": "cust_103",
+      "tags": ["api_outage", "rag", "tool_calling"],
       "agent_expectations": {
-        "expected_department": "technical", "expected_intent": "outage_report", "expected_priority": "urgent",
+        "expected_department": "technical", "expected_intent": "outage_report", "expected_priority": "high",
         "required_tools": ["crm.get_customer_profile", "tickets.get_past_tickets"], "forbidden_tools": ["orders.get_order_history"],
         "expected_nodes": ["ticket_analyzer", "tool_call", "retriever", "llm_generation", "qa", "escalation"],
-        "should_escalate": true, "should_require_approval": true
+        "should_escalate": false, "should_require_approval": false
       }
     },
     {
@@ -1053,13 +1053,13 @@
       "query": "The API has connectivity timeout errors. What infrastructure should support inspect first?",
       "reference_answer": "The documented first check is the backup routing cluster.",
       "expected_sources": ["API Outage Remediation Steps (v1)"],
-      "category": "technical", "risk_level": "high", "kb_version": "v1", "customer_id": "cust_101",
-      "tags": ["api_outage", "rag", "tool_calling", "human_escalation"],
+      "category": "technical", "risk_level": "medium", "kb_version": "v1", "customer_id": "cust_101",
+      "tags": ["api_outage", "rag", "tool_calling"],
       "agent_expectations": {
-        "expected_department": "technical", "expected_intent": "outage_report", "expected_priority": "urgent",
+        "expected_department": "technical", "expected_intent": "outage_report", "expected_priority": "high",
         "required_tools": ["crm.get_customer_profile", "tickets.get_past_tickets"], "forbidden_tools": ["orders.get_order_history"],
         "expected_nodes": ["ticket_analyzer", "tool_call", "retriever", "llm_generation", "qa", "escalation"],
-        "should_escalate": true, "should_require_approval": true
+        "should_escalate": false, "should_require_approval": false
       }
     },
     {
@@ -1067,13 +1067,13 @@
       "query": "The API is down and routing must fail over. Which AWS region contains the fallback cluster?",
       "reference_answer": "The fallback API cluster is in AWS us-east-1.",
       "expected_sources": ["API Outage Remediation Steps (v1)"],
-      "category": "technical", "risk_level": "high", "kb_version": "v1", "customer_id": "cust_102",
-      "tags": ["api_outage", "rag", "tool_calling", "human_escalation"],
+      "category": "technical", "risk_level": "medium", "kb_version": "v1", "customer_id": "cust_102",
+      "tags": ["api_outage", "rag", "tool_calling"],
       "agent_expectations": {
-        "expected_department": "technical", "expected_intent": "outage_report", "expected_priority": "urgent",
+        "expected_department": "technical", "expected_intent": "outage_report", "expected_priority": "high",
         "required_tools": ["crm.get_customer_profile", "tickets.get_past_tickets"], "forbidden_tools": ["orders.get_order_history"],
         "expected_nodes": ["ticket_analyzer", "tool_call", "retriever", "llm_generation", "qa", "escalation"],
-        "should_escalate": true, "should_require_approval": true
+        "should_escalate": false, "should_require_approval": false
       }
     },
     {
@@ -1081,13 +1081,13 @@
       "query": "After an API error triggers fallback routing, must clients clear their caches?",
       "reference_answer": "Yes. The guide instructs clients to clear caches once routing switches.",
       "expected_sources": ["API Outage Remediation Steps (v1)"],
-      "category": "technical", "risk_level": "high", "kb_version": "v1", "customer_id": "cust_103",
-      "tags": ["api_outage", "rag", "tool_calling", "human_escalation"],
+      "category": "technical", "risk_level": "medium", "kb_version": "v1", "customer_id": "cust_103",
+      "tags": ["api_outage", "rag", "tool_calling"],
       "agent_expectations": {
-        "expected_department": "technical", "expected_intent": "outage_report", "expected_priority": "urgent",
+        "expected_department": "technical", "expected_intent": "outage_report", "expected_priority": "high",
         "required_tools": ["crm.get_customer_profile", "tickets.get_past_tickets"], "forbidden_tools": ["orders.get_order_history"],
         "expected_nodes": ["ticket_analyzer", "tool_call", "retriever", "llm_generation", "qa", "escalation"],
-        "should_escalate": true, "should_require_approval": true
+        "should_escalate": false, "should_require_approval": false
       }
     },
     {
@@ -1095,13 +1095,13 @@
       "query": "When the API is offline, what destination do the documented DevOps patches point routing toward?",
       "reference_answer": "The patches point routing to fallback API clusters in AWS us-east-1.",
       "expected_sources": ["API Outage Remediation Steps (v1)"],
-      "category": "technical", "risk_level": "high", "kb_version": "v1", "customer_id": "cust_101",
-      "tags": ["api_outage", "rag", "tool_calling", "human_escalation"],
+      "category": "technical", "risk_level": "medium", "kb_version": "v1", "customer_id": "cust_101",
+      "tags": ["api_outage", "rag", "tool_calling"],
       "agent_expectations": {
-        "expected_department": "technical", "expected_intent": "outage_report", "expected_priority": "urgent",
+        "expected_department": "technical", "expected_intent": "outage_report", "expected_priority": "high",
         "required_tools": ["crm.get_customer_profile", "tickets.get_past_tickets"], "forbidden_tools": ["orders.get_order_history"],
         "expected_nodes": ["ticket_analyzer", "tool_call", "retriever", "llm_generation", "qa", "escalation"],
-        "should_escalate": true, "should_require_approval": true
+        "should_escalate": false, "should_require_approval": false
       }
     },
     {
@@ -1109,13 +1109,13 @@
       "query": "The production API is extremely slow and timing out. What remediation sequence is documented?",
       "reference_answer": "Verify backup routing, switch to the us-east-1 fallback cluster if needed, then clear client caches.",
       "expected_sources": ["API Outage Remediation Steps (v1)"],
-      "category": "technical", "risk_level": "high", "kb_version": "v1", "customer_id": "cust_102",
-      "tags": ["api_outage", "rag", "tool_calling", "human_escalation"],
+      "category": "technical", "risk_level": "medium", "kb_version": "v1", "customer_id": "cust_102",
+      "tags": ["api_outage", "rag", "tool_calling"],
       "agent_expectations": {
-        "expected_department": "technical", "expected_intent": "outage_report", "expected_priority": "urgent",
+        "expected_department": "technical", "expected_intent": "outage_report", "expected_priority": "high",
         "required_tools": ["crm.get_customer_profile", "tickets.get_past_tickets"], "forbidden_tools": ["orders.get_order_history"],
         "expected_nodes": ["ticket_analyzer", "tool_call", "retriever", "llm_generation", "qa", "escalation"],
-        "should_escalate": true, "should_require_approval": true
+        "should_escalate": false, "should_require_approval": false
       }
     },
     {
@@ -1137,13 +1137,13 @@
       "query": "The API remains broken after routing changed. Which client-side step from the guide should be checked?",
       "reference_answer": "Check that the client cache was cleared after the routing switch.",
       "expected_sources": ["API Outage Remediation Steps (v1)"],
-      "category": "technical", "risk_level": "high", "kb_version": "v1", "customer_id": "cust_101",
-      "tags": ["api_outage", "rag", "tool_calling", "human_escalation"],
+      "category": "technical", "risk_level": "medium", "kb_version": "v1", "customer_id": "cust_101",
+      "tags": ["api_outage", "rag", "tool_calling"],
       "agent_expectations": {
-        "expected_department": "technical", "expected_intent": "outage_report", "expected_priority": "urgent",
+        "expected_department": "technical", "expected_intent": "outage_report", "expected_priority": "high",
         "required_tools": ["crm.get_customer_profile", "tickets.get_past_tickets"], "forbidden_tools": ["orders.get_order_history"],
         "expected_nodes": ["ticket_analyzer", "tool_call", "retriever", "llm_generation", "qa", "escalation"],
-        "should_escalate": true, "should_require_approval": true
+        "should_escalate": false, "should_require_approval": false
       }
     },
     {
@@ -1151,13 +1151,13 @@
       "query": "API 出现 504 Gateway 错误，客服首先应该检查什么？",
       "reference_answer": "首先应检查备用路由集群。",
       "expected_sources": ["API Outage Remediation Steps (v1)"],
-      "category": "technical", "risk_level": "high", "kb_version": "v1", "customer_id": "cust_102",
-      "tags": ["api_outage", "rag", "tool_calling", "human_escalation", "multilingual"],
+      "category": "technical", "risk_level": "medium", "kb_version": "v1", "customer_id": "cust_102",
+      "tags": ["api_outage", "rag", "tool_calling", "multilingual"],
       "agent_expectations": {
-        "expected_department": "technical", "expected_intent": "outage_report", "expected_priority": "urgent",
+        "expected_department": "technical", "expected_intent": "outage_report", "expected_priority": "high",
         "required_tools": ["crm.get_customer_profile", "tickets.get_past_tickets"], "forbidden_tools": ["orders.get_order_history"],
         "expected_nodes": ["ticket_analyzer", "tool_call", "retriever", "llm_generation", "qa", "escalation"],
-        "should_escalate": true, "should_require_approval": true
+        "should_escalate": false, "should_require_approval": false
       }
     },
     {
@@ -1165,13 +1165,13 @@
       "query": "API error 触发路由切换后，客户端是否需要清理缓存？",
       "reference_answer": "需要，文档要求在路由切换后清理客户端缓存。",
       "expected_sources": ["API Outage Remediation Steps (v1)"],
-      "category": "technical", "risk_level": "high", "kb_version": "v1", "customer_id": "cust_103",
-      "tags": ["api_outage", "rag", "tool_calling", "human_escalation", "multilingual"],
+      "category": "technical", "risk_level": "medium", "kb_version": "v1", "customer_id": "cust_103",
+      "tags": ["api_outage", "rag", "tool_calling", "multilingual"],
       "agent_expectations": {
-        "expected_department": "technical", "expected_intent": "outage_report", "expected_priority": "urgent",
+        "expected_department": "technical", "expected_intent": "outage_report", "expected_priority": "high",
         "required_tools": ["crm.get_customer_profile", "tickets.get_past_tickets"], "forbidden_tools": ["orders.get_order_history"],
         "expected_nodes": ["ticket_analyzer", "tool_call", "retriever", "llm_generation", "qa", "escalation"],
-        "should_escalate": true, "should_require_approval": true
+        "should_escalate": false, "should_require_approval": false
       }
     },
     {
@@ -1179,13 +1179,13 @@
       "query": "I can report an API error code but do not have a timestamp. What recovery guidance is available?",
       "reference_answer": "The available guide covers backup routing verification, the us-east-1 fallback cluster, and clearing caches; missing incident details may require follow-up.",
       "expected_sources": ["API Outage Remediation Steps (v1)"],
-      "category": "technical", "risk_level": "high", "kb_version": "v1", "customer_id": "cust_101",
-      "tags": ["api_outage", "insufficient_information", "rag", "tool_calling", "human_escalation"],
+      "category": "technical", "risk_level": "medium", "kb_version": "v1", "customer_id": "cust_101",
+      "tags": ["api_outage", "insufficient_information", "rag", "tool_calling"],
       "agent_expectations": {
-        "expected_department": "technical", "expected_intent": "outage_report", "expected_priority": "urgent",
+        "expected_department": "technical", "expected_intent": "outage_report", "expected_priority": "high",
         "required_tools": ["crm.get_customer_profile", "tickets.get_past_tickets"], "forbidden_tools": ["orders.get_order_history"],
         "expected_nodes": ["ticket_analyzer", "tool_call", "retriever", "llm_generation", "qa", "escalation"],
-        "should_escalate": true, "should_require_approval": true
+        "should_escalate": false, "should_require_approval": false
       }
     },
     {
@@ -1193,13 +1193,13 @@
       "query": "The API keeps crashing with 504 errors even after retries. Which fallback location is documented?",
       "reference_answer": "The documented fallback API clusters are in AWS us-east-1.",
       "expected_sources": ["API Outage Remediation Steps (v1)"],
-      "category": "technical", "risk_level": "high", "kb_version": "v1", "customer_id": "cust_103",
-      "tags": ["api_outage", "rag", "tool_calling", "human_escalation"],
+      "category": "technical", "risk_level": "medium", "kb_version": "v1", "customer_id": "cust_103",
+      "tags": ["api_outage", "rag", "tool_calling"],
       "agent_expectations": {
-        "expected_department": "technical", "expected_intent": "outage_report", "expected_priority": "urgent",
+        "expected_department": "technical", "expected_intent": "outage_report", "expected_priority": "high",
         "required_tools": ["crm.get_customer_profile", "tickets.get_past_tickets"], "forbidden_tools": ["orders.get_order_history"],
         "expected_nodes": ["ticket_analyzer", "tool_call", "retriever", "llm_generation", "qa", "escalation"],
-        "should_escalate": true, "should_require_approval": true
+        "should_escalate": false, "should_require_approval": false
       }
     },
     {
@@ -1277,13 +1277,13 @@
       "query": "What payment total is stored for order ORD-7001?",
       "reference_answer": "The Mock order adapter reports a total amount of 150.00 for ORD-7001.",
       "expected_sources": [],
-      "category": "billing", "risk_level": "high", "kb_version": "v1", "customer_id": "cust_101",
-      "tags": ["order", "tool_calling", "human_escalation"],
+      "category": "billing", "risk_level": "low", "kb_version": "v1", "customer_id": "cust_101",
+      "tags": ["order", "tool_calling"],
       "agent_expectations": {
-        "expected_department": "billing", "expected_intent": "billing_dispute", "expected_priority": "high",
+        "expected_department": "billing", "expected_intent": "billing_dispute", "expected_priority": "medium",
         "required_tools": ["crm.get_customer_profile", "tickets.get_past_tickets", "orders.get_order_history"],
         "expected_nodes": ["ticket_analyzer", "tool_call", "retriever", "llm_generation", "qa", "escalation"],
-        "should_escalate": true, "should_require_approval": true
+        "should_escalate": false, "should_require_approval": false
       }
     },
     {
@@ -1291,13 +1291,13 @@
       "query": "Check the payment amount for order ORD-8002.",
       "reference_answer": "The Mock order adapter reports a total amount of 25.00 for ORD-8002.",
       "expected_sources": [],
-      "category": "billing", "risk_level": "high", "kb_version": "v1", "customer_id": "cust_102",
-      "tags": ["order", "tool_calling", "human_escalation"],
+      "category": "billing", "risk_level": "low", "kb_version": "v1", "customer_id": "cust_102",
+      "tags": ["order", "tool_calling"],
       "agent_expectations": {
-        "expected_department": "billing", "expected_intent": "billing_dispute", "expected_priority": "high",
+        "expected_department": "billing", "expected_intent": "billing_dispute", "expected_priority": "medium",
         "required_tools": ["crm.get_customer_profile", "tickets.get_past_tickets", "orders.get_order_history"],
         "expected_nodes": ["ticket_analyzer", "tool_call", "retriever", "llm_generation", "qa", "escalation"],
-        "should_escalate": true, "should_require_approval": true
+        "should_escalate": false, "should_require_approval": false
       }
     },
     {
@@ -1305,13 +1305,13 @@
       "query": "What invoice total and items are associated with order ORD-9003?",
       "reference_answer": "The Mock order adapter reports 5400.00 for a Dedicated AWS Gateway Cluster and Enterprise Premium support SLA addon.",
       "expected_sources": [],
-      "category": "billing", "risk_level": "high", "kb_version": "v1", "customer_id": "cust_103",
-      "tags": ["order", "tool_calling", "human_escalation"],
+      "category": "billing", "risk_level": "low", "kb_version": "v1", "customer_id": "cust_103",
+      "tags": ["order", "tool_calling"],
       "agent_expectations": {
-        "expected_department": "billing", "expected_intent": "billing_dispute", "expected_priority": "high",
+        "expected_department": "billing", "expected_intent": "billing_dispute", "expected_priority": "medium",
         "required_tools": ["crm.get_customer_profile", "tickets.get_past_tickets", "orders.get_order_history"],
         "expected_nodes": ["ticket_analyzer", "tool_call", "retriever", "llm_generation", "qa", "escalation"],
-        "should_escalate": true, "should_require_approval": true
+        "should_escalate": false, "should_require_approval": false
       }
     },
     {
@@ -1319,13 +1319,13 @@
       "query": "Please check the card payment and current record for order ORD-7001.",
       "reference_answer": "The Mock order adapter reports ORD-7001 as delivered with a total amount of 150.00.",
       "expected_sources": [],
-      "category": "billing", "risk_level": "high", "kb_version": "v1", "customer_id": "cust_101",
-      "tags": ["order", "tool_calling", "human_escalation"],
+      "category": "billing", "risk_level": "low", "kb_version": "v1", "customer_id": "cust_101",
+      "tags": ["order", "tool_calling"],
       "agent_expectations": {
-        "expected_department": "billing", "expected_intent": "billing_dispute", "expected_priority": "high",
+        "expected_department": "billing", "expected_intent": "billing_dispute", "expected_priority": "medium",
         "required_tools": ["crm.get_customer_profile", "tickets.get_past_tickets", "orders.get_order_history"],
         "expected_nodes": ["ticket_analyzer", "tool_call", "retriever", "llm_generation", "qa", "escalation"],
-        "should_escalate": true, "should_require_approval": true
+        "should_escalate": false, "should_require_approval": false
       }
     },
     {

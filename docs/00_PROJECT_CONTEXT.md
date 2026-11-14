@@ -256,7 +256,7 @@ resolved / closed --reopen--> in_progress
 1. 终端用户通过用户咨询页提交问题，前端调用 `POST /support/requests`。
 2. API 创建唯一业务工单并执行 LangGraph Workflow，随后持久化 `AgentRun`，包含回复、citation、Tool Call、QA、版本、Token、延迟和 Trace ID。
 3. 普通请求返回安全回复。仅在隔离 Demo 中，访客可凭本次反馈令牌展开已保存的路径、工具/引用摘要、QA 与风险结论；不返回输入原文、草稿、异常正文、参数或 Trace。
-4. 高风险、低置信度、低 QA、幻觉或异常请求创建 `ResponseApproval`；用户页持续显示安全的处理回复，并以 `risk_review`（仅安全拦截）、`business_review`（退款、取消、投诉等需人工办理）、`incident_review`（故障已升级）、`quality_review`、`processing_exception` 或 `manual_review` 告知人工介入类别，文案跟随用户输入语言，不暴露内部规则。例外（先答后审）：只读的账务咨询和故障求助如果只因业务域默认规则转人工、QA 通过且无任何异常或安全信号，用户会先看到 AI 的初步答复（`status=answered`、`handling_reason=preliminary_answer`），审批记录和人工队列照常保留；要求实际办理、表达争议或投诉的请求仍不展示草稿。
+4. 高风险、低置信度、低 QA、幻觉或异常请求创建 `ResponseApproval`；用户页持续显示安全的处理回复，并以 `risk_review`（仅安全拦截）、`business_review`（退款、取消、投诉等需人工办理）、`incident_review`（故障已升级）、`quality_review`、`processing_exception` 或 `manual_review` 告知人工介入类别，文案跟随用户输入语言，不暴露内部规则。账务和故障域的只读咨询（是提问，且不含办理、争议、投诉、越权或大面积故障的说法，由 `src/agents/inquiry.py` 的确定性规则判定）在 Workflow 层直接自动回答，不创建审批；置信度、QA、幻觉、降级和安全条件照常生效。另有先答后审：仍被业务域规则转人工的只读提问（如带负面情绪），如果 QA 通过且无任何异常或安全信号，用户会先看到 AI 的初步答复（`status=answered`、`handling_reason=preliminary_answer`），审批记录和人工队列照常保留；要求实际办理、表达争议或投诉的请求仍不展示草稿。
 5. 客服员工后台通过受 RBAC 保护的 `GET /staff/review-queue` 仅加载 `pending_approval` 工单，不展示普通自动处理工单。
 6. 员工打开详情时调用 `GET /tickets/{ticket_id}/agent-result`，只读取最新持久化结果，不重新执行 Workflow；审批完成后工单自动移出人工队列。
 

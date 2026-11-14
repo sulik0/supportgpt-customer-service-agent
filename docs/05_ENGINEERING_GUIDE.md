@@ -209,6 +209,8 @@ Jev 采纳规则：意图是否采纳只看 `intent` 自身置信度（`JEV_INTE
 
 回复语言兜底：Prompt 虽已要求跟随当前 Description 的语言，`deepseek-flash` 在工具结果和 RAG 多为中文时仍可能用中文回答。`src/llm/provider.py` 的 `resolution_language_directive` 按 CJK 字符占比（≥30% 判中文）或英文常用词（且无非 ASCII 字母）判断主要语言，在发给 Resolver 的用户消息末尾追加 `Respond in English.` / `Respond in Chinese.`。用户明确指定回复语言、或无法可靠判断（如法语）时不追加，交给 Prompt 规则。QA 和范围外固定回复本来就按 Description 的 CJK 判断语言，未改动。
 
+只读咨询（`src/agents/inquiry.py`，2026-11-14 起）：账务（`billing_dispute`）和故障（`outage_report`）域里只是在问信息的请求，不再按业务域默认规则强制转人工。判定只看用户原文，是确定性规则，不使用模型输出：必须是提问或查询；不含办理、争议、投诉、越权类说法（“我要退款”“多扣”“dispute”“do not execute”等）；故障类还不能带大面积影响的说法（“所有用户”“大面积”“all users”）。命中后 Analyzer 写入 `read_only_inquiry=true`，账务优先级降为 `medium`、故障降为 `high`（不再是 `urgent`），域默认的负面情绪改为 `neutral`，Risk Engine 不再加 `high_risk_business_intent`。用户原文带明确负面情绪时不算只读咨询。其余审批条件不变：分类置信度低、QA 分低、幻觉、`response_requires_human`、依赖降级、安全信号任何一项出现仍转人工审批。意图和部门不变，退款写 Tool 仍不在自动路径上。Baseline v2.1 相应把 37 条只读咨询的期望改为不转人工，8 条（要求退款、涉及争议、“不要执行”、信息不足的故障陈述、全量用户故障）保持转人工。
+
 用户侧处理说明（`src/agents/public_reply.py`，文案跟随用户输入语言）：
 
 | `handling_reason` | 触发条件 | 用户看到 |
@@ -216,12 +218,12 @@ Jev 采纳规则：意图是否采纳只看 `intent` 自身置信度（`JEV_INTE
 | `risk_review` | 安全拦截（`security_threat_detected` / `risk_block_automation`），优先于其他判断 | 出于安全考虑转人工核验 |
 | `processing_exception` | 真实依赖失败或降级；QA 的幻觉告警虽然也写进 `errors`，但不算 | 部分服务暂时不可用 |
 | `quality_review` | 幻觉、`response_requires_human` 或 QA 分低于阈值 | 依据不足，转人工复核 |
-| `incident_review` | `outage_report` 转人工 | 故障已按紧急级别转技术支持 |
+| `incident_review` | `outage_report` 转人工（故障陈述、大面积故障） | 故障已按紧急级别转技术支持 |
 | `business_review` | 其他高风险转人工（退款、取消、投诉） | 需人工核对后办理 |
 | `manual_review` | 其余审批 | 需人工进一步确认 |
 | `preliminary_answer` | 先答后审，见下 | AI 初步答复 + “人工复核中”说明，`status=answered` |
 
-先答后审（`PUBLIC_PRELIMINARY_ANSWER_ENABLED`，默认开启）：只改公开入口给用户看什么，Workflow 的升级结论、`ResponseApproval`、人工队列和 Baseline 期望都不变。放行必须同时满足：意图是 `billing_dispute` 或 `outage_report`；风险原因只有业务域默认项（`high_priority`、`urgent_priority`、`high_risk_business_intent`、`negative_high_priority`）；`qa_score ≥ PUBLIC_PRELIMINARY_ANSWER_MIN_QA_SCORE`（默认 0.8）；没有 errors、降级、幻觉、安全或语义风险信号；用户原文不含办理、争议、投诉、越权类说法，账务类还必须是提问或查询。任何一条不满足就只显示转人工说明。
+先答后审（`PUBLIC_PRELIMINARY_ANSWER_ENABLED`，默认开启）：中性的只读咨询已在 Workflow 层直接自动回答（见上），这里是第二层，覆盖仍被业务域规则转人工的提问（例如带负面情绪的账务提问）。它只改公开入口给用户看什么，Workflow 的升级结论、`ResponseApproval` 和人工队列都不变。放行必须同时满足：意图是 `billing_dispute` 或 `outage_report`；风险原因只有业务域默认项（`high_priority`、`urgent_priority`、`high_risk_business_intent`、`negative_high_priority`）；`qa_score ≥ PUBLIC_PRELIMINARY_ANSWER_MIN_QA_SCORE`（默认 0.8）；没有 errors、降级、幻觉、安全或语义风险信号；用户原文不含办理、争议、投诉、越权类说法，账务类还必须是提问或查询。任何一条不满足就只显示转人工说明。
 
 真实模型回归：`evaluation/online_regression/supportgpt_online_regression.json` 保存 5 条线上问题用例（投诉、重置密码、提示词泄露、英文订单查询、集群故障），不属于固定 SHA256 的 Baseline。`run_real_llm_regression.py` 默认合并该数据集，regression 套件自动包含这 5 条（预估 39 次调用，仍在默认上限 40 内）。英文回复语言需人工查看报告确认，Dataset 暂无语言断言。
 

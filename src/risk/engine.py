@@ -107,7 +107,8 @@ class RiskEngine:
             score = max(score, 0.75)
             reasons.add("negative_high_priority")
 
-        if intent in _HIGH_RISK_INTENTS:
+        # 只读咨询由 Analyzer 用确定性规则标记，不按高风险业务域处理。
+        if intent in _HIGH_RISK_INTENTS and not state.get("read_only_inquiry"):
             score = max(score, 0.78)
             reasons.add("high_risk_business_intent")
 

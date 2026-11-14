@@ -24,12 +24,19 @@ from src.observability.metrics import (
 )
 from src.observability.sanitization import redact_text
 from src.risk.engine import risk_engine
+from src.agents.inquiry import is_read_only_inquiry
 
 logger = logging.getLogger("supportgpt.agents.analyzer")
 
+# 只读咨询的优先级：账务按普通咨询，故障仍高于普通咨询但不触发紧急升级。
+_READ_ONLY_PRIORITY = {
+    IntentType.BILLING_DISPUTE: "medium",
+    IntentType.OUTAGE_REPORT: "high",
+}
+
 _BILLING_DOMAIN = re.compile(
     r"\b(refund|payment|invoice|billing|charged?|card payment|bank statement)\b|"
-    r"退款|支付|发票|账单|扣款|银行卡"
+    r"退款|支付|发票|账单|扣款|扣费|多扣|乱扣|重复扣|银行卡"
 )
 _BILLING_INFORMATION_QUERY = re.compile(
     r"(?:了解|咨询|请问).{0,12}(?:退款|退费|退钱|发票|账单)|"
@@ -52,6 +59,10 @@ _EXPLICIT_NEGATIVE_SENTIMENT = re.compile(
     r"overcharged|wrongly charged|charged twice|failed|rejected|never arrived)\b|"
     r"不满|生气|愤怒|投诉|糟糕|离谱|坑人|欺骗|乱扣|错误扣款|"
     r"多扣|重复扣款|不能退|无法退|退款失败|退款被拒|未收到|没收到|迟迟"
+)
+_EMOTIONAL_NEGATIVE = re.compile(
+    r"\b(?:angry|upset|furious|unacceptable|terrible|awful|disappointed|complain|"
+    r"complaint)\b|不满|生气|愤怒|投诉|糟糕|离谱|坑人|欺骗|迟迟"
 )
 _API_INCIDENT = re.compile(
     r"(?:\bapi\b|接口|服务|集群|生产环境|\bcluster\b|\bproduction\b).{0,50}"
@@ -313,12 +324,19 @@ class TicketAnalyzerAgent:
                 defaults.priority,
                 sentiment,
             )
+            # 只读的账务/故障咨询不按业务域默认规则强制转人工；负面情绪除外。
+            read_only_inquiry = sentiment != "negative" and is_read_only_inquiry(
+                normalized_intent, clean_description or clean_subject
+            )
+            if read_only_inquiry:
+                priority = _READ_ONLY_PRIORITY.get(normalized_intent, priority)
             next_state = {
                 **state,
                 "description": clean_description,
                 "subject": clean_subject,
                 "sentiment": sentiment,
                 "priority": priority,
+                "read_only_inquiry": read_only_inquiry,
                 "intent": normalized_intent,
                 "department": defaults.department,
                 "analyzer_confidence": analyzer_confidence,
@@ -455,8 +473,18 @@ class TicketAnalyzerAgent:
         """将情绪与业务意图解耦，避免把中性政策咨询标成负向。"""
         normalized = " ".join(str(text).lower().split())
         sentiment = str(candidate or "neutral").strip().lower()
+        read_only = is_read_only_inquiry(intent, normalized)
         if _EXPLICIT_NEGATIVE_SENTIMENT.search(normalized):
-            return "negative"
+            # 故障求助里的 failed/rejected 是在描述现象，不算负面情绪。
+            if not (
+                intent == IntentType.OUTAGE_REPORT
+                and read_only
+                and not _EMOTIONAL_NEGATIVE.search(normalized)
+            ):
+                return "negative"
+        # 域默认的“负面”不是文本证据：只读咨询没有明确负面表达时按中性处理。
+        if read_only:
+            return "neutral"
         if (
             intent == IntentType.BILLING_DISPUTE
             and _BILLING_INFORMATION_QUERY.search(normalized)

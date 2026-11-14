@@ -740,8 +740,11 @@ async def test_compiled_langgraph_flow():
     final_output = await run_agent_workflow(initial_state)
 
     assert final_output["ticket_id"] == 99
-    assert final_output["sentiment"] == "negative"
-    assert final_output["priority"] == "high"
+    # 只读的退款政策咨询：账务域，但不按高风险业务强制转人工。
+    assert final_output["read_only_inquiry"] is True
+    assert final_output["sentiment"] == "neutral"
+    assert final_output["priority"] == "medium"
+    assert final_output["approval_required"] is False
     assert final_output["department"] == "billing"
     assert final_output["tool_context"]["tool_policy"]["permission_checked"] is True
     assert len(final_output["tool_calls"]) >= 2
@@ -749,7 +752,7 @@ async def test_compiled_langgraph_flow():
     assert "suggested_response" in final_output
     assert final_output["cost_usd"] >= 0.0
     assert final_output["latency_seconds"] > 0.0
-    assert final_output["sla_hours"] == 12.0
+    assert final_output["sla_hours"] == 24.0
 
 
 @pytest.mark.asyncio

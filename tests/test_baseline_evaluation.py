@@ -359,7 +359,7 @@ async def test_v1_replays_full_ticket_state_and_records_trace_performance(tmp_pa
     assert report["experiment_config"]["dataset"]["dataset_name"] == (
         "supportgpt_business_baseline_100"
     )
-    assert report["experiment_config"]["dataset"]["version"] == "2.0"
+    assert report["experiment_config"]["dataset"]["version"] == "2.1"
     assert report["experiment_config"]["workflow"]["version"]
     assert report["experiment_config"]["models"]["provider"] == "mock"
     assert paths["snapshot_json"].name.startswith("baseline_v1_20")

@@ -7,6 +7,7 @@ Workflow 的升级与审批结论不在这里改，这里只决定终端用户�
 import re
 from typing import Any, Mapping
 
+from src.agents.inquiry import ACTION_OR_DISPUTE, QUESTION
 from src.config import settings
 from src.models.intents import IntentType, normalize_intent
 
@@ -26,30 +27,6 @@ _DOMAIN_ONLY_REASONS = frozenset(
 _PRELIMINARY_INTENTS = frozenset(
     {IntentType.BILLING_DISPUTE, IntentType.OUTAGE_REPORT}
 )
-# 要求实际办理、表达争议或越权的说法：这些必须等人工，不展示草稿。
-_ACTION_OR_DISPUTE = re.compile(
-    r"我要退|要求退|申请退|办理退|帮我退|给我退|直接退|立即退|马上退|退给我|退我|"
-    r"退\s*\d|退款工具|无需审批|不用审批|跳过审批|免审批|"
-    r"赔偿|赔付|补偿|投诉|举报|曝光|起诉|律师|消协|12315|"
-    r"取消|撤销|撤回|拒付|争议|不认可|不承认|"
-    r"多扣|乱扣|错扣|重复扣|扣错|盗刷|被骗|欺骗|骗子|"
-    r"\b(?:i (?:want|need|demand|would like)|give me|issue|process|"
-    r"please (?:refund|cancel|reverse|credit))\b.{0,30}"
-    r"\b(?:refund|money back|chargeback|credit|compensation)\b|"
-    r"\b(?:want|need|demand|request(?:ing)?) (?:a |my |the |full )*refund\b|"
-    r"\b(?:chargeback|dispute|compensat\w+|complain\w*|lawsuit|lawyer|sue|fraud|scam|"
-    r"cancel|reverse|overcharged|charged twice|double charged|without approval|"
-    r"skip approval|do not execute|don't execute)\b",
-    re.IGNORECASE,
-)
-# 账务类必须是明确的提问或查询，陈述句和指令不算只读咨询。
-_QUESTION = re.compile(
-    r"[?？]|吗|么|多少|多久|什么|怎么|如何|是否|能否|可否|哪|几|查|确认|核实|"
-    r"\b(?:what|when|where|which|how|why|is|are|was|were|does|do|did|can|could|"
-    r"may|will|would|should|check|confirm|verify|look up|tell me|show me)\b",
-    re.IGNORECASE,
-)
-
 
 def _is_chinese(text: str) -> bool:
     return bool(re.search(r"[一-鿿]", text or ""))
@@ -68,7 +45,9 @@ def _service_errors(agent_output: Mapping[str, Any]) -> list[str]:
 def preliminary_answer_allowed(
     agent_output: Mapping[str, Any], customer_text: str
 ) -> bool:
-    """只读的账务咨询和故障求助：人工复核照常进行，但用户先看到 AI 的初步答复。
+    """仍被业务域规则转人工的只读咨询（如带负面情绪的提问）：先展示 AI 初步答复。
+
+    中性的只读咨询已在 Workflow 层直接自动回答（见 inquiry.py），这里是第二层。
 
     放行条件全部是确定性判断：转人工只因业务域默认规则、质量检查通过、
     没有任何异常或安全信号，且用户没有要求实际办理或表达争议。
@@ -102,9 +81,9 @@ def preliminary_answer_allowed(
     if not reasons or not reasons <= _DOMAIN_ONLY_REASONS:
         return False
     text = " ".join(str(customer_text or "").split())
-    if not text or _ACTION_OR_DISPUTE.search(text):
+    if not text or ACTION_OR_DISPUTE.search(text):
         return False
-    if intent == IntentType.BILLING_DISPUTE and not _QUESTION.search(text):
+    if intent == IntentType.BILLING_DISPUTE and not QUESTION.search(text):
         return False
     return True
 

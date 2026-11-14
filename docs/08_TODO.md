@@ -107,8 +107,9 @@
 - [ ] 上述 3 个修复涉及意图识别和 Prompt，需用真实模型复测 C05（投诉）、C06（重置密码）、C08（提示词泄露）、C10（英文订单查询）、C12（集群故障）：`python scripts/run_real_llm_regression.py --suite regression --dry-run` 看预估后再 `--confirm-live`。投诉没有独立 Intent，目前归 `feedback` + high 优先级；若要在统计上单独区分，需另行评估新增 Intent。
 - [ ] 上述 Span 过滤与 Span Link 的线上效果、`deepseek-flash` 实际模型名是否命中计价表，需部署后在 LangSmith 用真实请求核对；真实模型下 `[S1]` 是否仍有变体（如“【S1】”之外的写法）尚未验证。
 - [x] 2026-11-14 线上模拟 32 条用户请求后修复：按 IP 限流改读代理写入的客户端地址；冒烟 Trace 回查失败不再重发问答；转人工文案按原因区分并跟随语言，QA 幻觉告警不再显示“服务不可用”；只读账务/故障咨询先答后审；保修记录查询和实体设备故障确定性路由到保修支持；辱骂和监管/媒体威胁按投诉转人工；写代码、翻译、写诗、数学题、纯问候确定性拦截；没查订单时证据标注“未查询”；RAG 间接注入改为逐篇检测。本地真实模型（deepseek-flash + Jev）28 条复测通过主要场景。
-- [ ] 线上 Railway 必须把 `TRUST_PROXY_HEADERS` 改为 `true` 才能让按 IP 限流生效；改完后要用伪造 `X-Real-IP` / `X-Forwarded-For` 复测是否可绕过（Railway 文档没有说明代理是否覆盖客户端自带的头）。
-- [ ] 先答后审是公开入口层的策略，Workflow 层账务/故障类仍全部转人工（Baseline 100 条固定如此）。如果要在 Workflow 层取消这些只读咨询的人工审批，需要修改固定 SHA256 的 Baseline 期望并重跑真实模型 Release Gate，属于设计意图变更，回规划会话决定。
+- [x] 2026-11-14 Railway 已把 `TRUST_PROXY_HEADERS` 改为 `true`，线上复测通过：无 Cookie 的 40 次读请求被限到 30 次（10 次 429）；每次伪造不同的 `X-Forwarded-For` 或 `X-Real-IP` 结果相同，不能绕过。
+- [x] 2026-11-14 Workflow 层取消只读账务/故障咨询的人工审批（用户决定，本会话执行）：`src/agents/inquiry.py` 用确定性规则识别只读咨询，Analyzer 写入 `read_only_inquiry`，Risk Engine 不再按高风险业务域处理；Baseline 升到 v2.1，37 条期望改为不转人工、8 条保持转人工，SHA256 已更新。Mock 门禁 100/100。真实模型（deepseek-flash + Jev，rules）完整回放一次：45 条账务/故障用例的 HITL 和 Approval 全部符合新期望；整体 Case Pass 0.91，Release Gate 未通过，9 条失败见下一条。
+- [ ] 真实模型 Release Gate 未通过（2026-11-14，Case Pass 0.91，与 2026-10-27 的 0.91 持平）。9 条失败都不是只读咨询放行造成的：4 条故障咨询被 Jev 判成 `information_request`（规则本来能判对，Jev 覆盖了规则）；2 条无依据的保修政策问题没有转人工（回答改成了“请提供订单号”，`response_requires_human` 未触发）；2 条安全概念的无害提问被判为范围外，没有调必需 Tool；1 条 QA 模型输出解析失败。另外平均 Token 2274 远高于门禁的 550，这个阈值与当前 Prompt 体量不符，需要重新定。
 - [ ] 真实模型回归脚本（`run_real_llm_regression.py`）的旧用例期望路径不含 `skill_selector`，13/17 条因此判失败，报告的通过率不可用；新增的 4 条线上用例已按当前路径写期望。
 - [ ] 保修状态查询在真实模型下路由和 Tool 正确，但 QA 评委偶尔把“仍在保修期内”判为幻觉而转人工（保守方向），未处理。
 - [ ] DeepSeek 价格按高峰价、cache miss 估算，未区分错峰与缓存命中，官方调价后需手动更新 `MODEL_PRICING`。
