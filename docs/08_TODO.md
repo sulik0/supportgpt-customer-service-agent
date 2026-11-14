@@ -110,8 +110,10 @@
 - [x] 2026-11-14 Railway 已把 `TRUST_PROXY_HEADERS` 改为 `true`，线上复测通过：无 Cookie 的 40 次读请求被限到 30 次（10 次 429）；每次伪造不同的 `X-Forwarded-For` 或 `X-Real-IP` 结果相同，不能绕过。
 - [x] 2026-11-14 Workflow 层取消只读账务/故障咨询的人工审批（用户决定，本会话执行）：`src/agents/inquiry.py` 用确定性规则识别只读咨询，Analyzer 写入 `read_only_inquiry`，Risk Engine 不再按高风险业务域处理；Baseline 升到 v2.1，37 条期望改为不转人工、8 条保持转人工，SHA256 已更新。Mock 门禁 100/100。真实模型（deepseek-flash + Jev，rules）完整回放一次：45 条账务/故障用例的 HITL 和 Approval 全部符合新期望；整体 Case Pass 0.91，Release Gate 未通过，9 条失败见下一条。
 - [x] 2026-11-14 修复真实模型 100 条回放的 9 条失败（首轮 Case Pass 0.91）：规则命中账务/故障域时 Jev 不能降成 `information_request`；问保修期限时只有流程文档不算权威依据，恢复转人工；提示词、注入、客服系统安全类提问不走范围外短路；JSON 输出带代码围栏时取出对象；Analyzer/QA 的快速模型端点失败时退回主模型。修复后真实模型（deepseek-flash + Jev，rules）再回放一次：Case Pass 0.99，Intent/Department/Required Tool 均为 1.0，HITL 和 Approval 0.99，P95 3.05s。
-- [ ] 真实模型 Release Gate 仍未通过，剩两项：① 平均 Token 2212，高于门禁的 550，这个阈值与当前 Prompt 体量不符，需要重新定；② `baseline-security-benign-prompt-comparison`（解释 system prompt 和 user prompt 的区别）失败：知识库没有相关内容，回答来自模型常识，QA 判为无依据而转人工，期望是不转人工。“快速端点失败退回主模型”是在第二次回放之后加的，只对这一条单独验证过调用成功，没有再跑完整 100 条。
-- [ ] 本地 `.env` 的 `LLM_FAST_BASE_URL`（qwen-turbo）返回 404，端点已失效；Jev 的 QA 结论未被采纳时会走到这里。现在有主模型兜底，但 Railway 上的同名变量需要核对是否同样失效。
+- [x] 2026-11-14 只是询问争议相关政策的提问放开为只读咨询（Baseline v2.2，3 条期望改为不转人工，SHA256 已更新）；真实模型回放中这 3 条全部自动回答。
+- [x] 2026-11-14 Release Gate 的 Token 上限按实测重定并拆成两项：生成模型 ≤ 750、合计 ≤ 2600。Token 从 453（2026-08-30）涨到 2308，增量几乎全部来自 Jev 的分类和评判（平均 1704/条）；生成模型自身是 604/条，与 2026-10-27 的 707 相当。
+- [x] 2026-11-14 核实快速模型端点：Railway 上没有任何 `LLM_FAST_*` 变量，线上 Analyzer/QA 直接用主模型，不存在失败。本地 `.env` 失效有两个原因：`LLM_FAST_BASE_URL` 的路径是 `/api/v1`，OpenAI 兼容接口应为 `/compatible-mode/v1`；该账号下已没有 `qwen-turbo` 这个模型（`qwen-flash`、`qwen-plus` 可用）。本地 `.env` 未改动。
+- [ ] 真实模型 Release Gate 仍未通过（2026-11-14 第三次回放，配置与线上一致：Case Pass 0.96，Intent/Department/Tool 均 1.0，HITL 0.96，P95 3.39s，Token 两项达标）。4 条失败都是 Jev 的 QA 结论未被采纳、改由主模型评判时给出 0 分而转人工：西班牙语账户导航（白名单内的已知失败）和 3 条安全概念的无害提问（知识库没有相关内容，回答来自模型常识）。同样的代码在第二次回放里只失败 1 条，说明结果随 Jev 是否给出结论而波动。“安全概念提问不走范围外短路”的改动已撤回：它让这类问题从礼貌拒答变成转人工，没有改善。撤回后没有再跑真实模型。
 - [ ] 真实模型回归脚本（`run_real_llm_regression.py`）的旧用例期望路径不含 `skill_selector`，13/17 条因此判失败，报告的通过率不可用；新增的 4 条线上用例已按当前路径写期望。
 - [ ] 保修状态查询在真实模型下路由和 Tool 正确，但 QA 评委偶尔把“仍在保修期内”判为幻觉而转人工（保守方向），未处理。
 - [ ] DeepSeek 价格按高峰价、cache miss 估算，未区分错峰与缓存命中，官方调价后需手动更新 `MODEL_PRICING`。

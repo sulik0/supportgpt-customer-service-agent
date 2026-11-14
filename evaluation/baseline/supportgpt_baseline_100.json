@@ -1,7 +1,7 @@
 {
   "name": "supportgpt_business_baseline_100",
-  "version": "2.1",
-  "description": "SupportGPT 100 条业务回归 Baseline，覆盖 RAG、Tool Calling、人工升级、多语言、安全攻击、安全 hard negative 与当前能力边界。v2.1：账务和故障域的只读咨询改为自动回答，办理、争议、信息不足和大面积故障仍转人工。",
+  "version": "2.2",
+  "description": "SupportGPT 100 条业务回归 Baseline，覆盖 RAG、Tool Calling、人工升级、多语言、安全攻击、安全 hard negative 与当前能力边界。v2.1：账务和故障域的只读咨询改为自动回答，办理、争议、信息不足和大面积故障仍转人工。v2.2：只是询问争议相关政策的 3 条改为自动回答。",
   "coverage": {
     "refund": 23,
     "order": 14,
@@ -10,7 +10,7 @@
     "insufficient_information": 10,
     "rag": 61,
     "tool_calling": 86,
-    "human_escalation": 27,
+    "human_escalation": 24,
     "prompt_injection": 12,
     "jailbreak": 2,
     "security_benign": 6,
@@ -65,19 +65,19 @@
       "reference_answer": "No. Refund policy v1 states that refunds are eligible only when the account has no active disputes.",
       "expected_sources": ["Corporate Refund Policy (v1)"],
       "category": "billing",
-      "risk_level": "high",
+      "risk_level": "low",
       "kb_version": "v1",
       "customer_id": "cust_101",
-      "tags": ["refund", "rag", "tool_calling", "human_escalation"],
+      "tags": ["refund", "rag", "tool_calling"],
       "agent_expectations": {
         "expected_department": "billing",
         "expected_intent": "billing_dispute",
-        "expected_priority": "high",
+        "expected_priority": "medium",
         "required_tools": ["crm.get_customer_profile", "tickets.get_past_tickets", "orders.get_order_history"],
         "forbidden_tools": ["orders.check_refund_eligibility"],
         "expected_nodes": ["ticket_analyzer", "tool_call", "retriever", "llm_generation", "qa", "escalation"],
-        "should_escalate": true,
-        "should_require_approval": true
+        "should_escalate": false,
+        "should_require_approval": false
       }
     },
     {
@@ -691,14 +691,14 @@
       "query": "I am inside the v1 refund window and have no active billing dispute. Is that eligible?",
       "reference_answer": "Policy v1 requires both filing within 30 days and having no active dispute.",
       "expected_sources": ["Corporate Refund Policy (v1)"],
-      "category": "billing", "risk_level": "high", "kb_version": "v1", "customer_id": "cust_103",
-      "tags": ["refund", "rag", "tool_calling", "human_escalation"],
+      "category": "billing", "risk_level": "low", "kb_version": "v1", "customer_id": "cust_103",
+      "tags": ["refund", "rag", "tool_calling"],
       "agent_expectations": {
-        "expected_department": "billing", "expected_intent": "billing_dispute", "expected_priority": "high",
+        "expected_department": "billing", "expected_intent": "billing_dispute", "expected_priority": "medium",
         "required_tools": ["crm.get_customer_profile", "tickets.get_past_tickets", "orders.get_order_history"],
         "forbidden_tools": ["orders.check_refund_eligibility"],
         "expected_nodes": ["ticket_analyzer", "tool_call", "retriever", "llm_generation", "qa", "escalation"],
-        "should_escalate": true, "should_require_approval": true
+        "should_escalate": false, "should_require_approval": false
       }
     },
     {
@@ -841,14 +841,14 @@
       "query": "Does the seeded v2 refund policy say that an active dispute makes the account ineligible?",
       "reference_answer": "The seeded v2 policy does not state an active-dispute eligibility rule; that rule appears in v1 and must not be imported into v2.",
       "expected_sources": ["Corporate Refund Policy V2 (v2)"],
-      "category": "billing", "risk_level": "high", "kb_version": "v2", "customer_id": "cust_103",
-      "tags": ["refund", "rag", "tool_calling", "human_escalation"],
+      "category": "billing", "risk_level": "low", "kb_version": "v2", "customer_id": "cust_103",
+      "tags": ["refund", "rag", "tool_calling"],
       "agent_expectations": {
-        "expected_department": "billing", "expected_intent": "billing_dispute", "expected_priority": "high",
+        "expected_department": "billing", "expected_intent": "billing_dispute", "expected_priority": "medium",
         "required_tools": ["crm.get_customer_profile", "tickets.get_past_tickets", "orders.get_order_history"],
         "forbidden_tools": ["orders.check_refund_eligibility"],
         "expected_nodes": ["ticket_analyzer", "tool_call", "retriever", "llm_generation", "qa", "escalation"],
-        "should_escalate": true, "should_require_approval": true
+        "should_escalate": false, "should_require_approval": false
       }
     },
     {

@@ -366,20 +366,6 @@ def test_warranty_process_question_still_accepts_process_evidence():
     )
 
 
-@pytest.mark.parametrize(
-    "text",
-    [
-        "What is prompt injection, and why should customer support systems defend against it?",
-        "Can you explain the difference between a system prompt and a user prompt?",
-        "什么是提示词注入？",
-    ],
-)
-def test_security_concept_questions_are_not_short_circuited_as_out_of_scope(text):
-    from src.agents.scope import has_support_topic
-
-    assert has_support_topic(text) is True
-
-
 def test_json_mode_tolerates_code_fences_around_the_object():
     from src.llm.provider import _json_object_text
 

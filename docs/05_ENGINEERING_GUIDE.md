@@ -209,9 +209,9 @@ Jev 采纳规则：意图是否采纳只看 `intent` 自身置信度（`JEV_INTE
 
 回复语言兜底：Prompt 虽已要求跟随当前 Description 的语言，`deepseek-flash` 在工具结果和 RAG 多为中文时仍可能用中文回答。`src/llm/provider.py` 的 `resolution_language_directive` 按 CJK 字符占比（≥30% 判中文）或英文常用词（且无非 ASCII 字母）判断主要语言，在发给 Resolver 的用户消息末尾追加 `Respond in English.` / `Respond in Chinese.`。用户明确指定回复语言、或无法可靠判断（如法语）时不追加，交给 Prompt 规则。QA 和范围外固定回复本来就按 Description 的 CJK 判断语言，未改动。
 
-只读咨询（`src/agents/inquiry.py`，2026-11-14 起）：账务（`billing_dispute`）和故障（`outage_report`）域里只是在问信息的请求，不再按业务域默认规则强制转人工。判定只看用户原文，是确定性规则，不使用模型输出：必须是提问或查询；不含办理、争议、投诉、越权类说法（“我要退款”“多扣”“dispute”“do not execute”等）；故障类还不能带大面积影响的说法（“所有用户”“大面积”“all users”）。命中后 Analyzer 写入 `read_only_inquiry=true`，账务优先级降为 `medium`、故障降为 `high`（不再是 `urgent`），域默认的负面情绪改为 `neutral`，Risk Engine 不再加 `high_risk_business_intent`。用户原文带明确负面情绪时不算只读咨询。其余审批条件不变：分类置信度低、QA 分低、幻觉、`response_requires_human`、依赖降级、安全信号任何一项出现仍转人工审批。意图和部门不变，退款写 Tool 仍不在自动路径上。Baseline v2.1 相应把 37 条只读咨询的期望改为不转人工，8 条（要求退款、涉及争议、“不要执行”、信息不足的故障陈述、全量用户故障）保持转人工。
+只读咨询（`src/agents/inquiry.py`，2026-11-14 起）：账务（`billing_dispute`）和故障（`outage_report`）域里只是在问信息的请求，不再按业务域默认规则强制转人工。判定只看用户原文，是确定性规则，不使用模型输出：必须是提问或查询；不含办理、争议、投诉、越权类说法（“我要退款”“多扣”“dispute”“do not execute”等）；故障类还不能带大面积影响的说法（“所有用户”“大面积”“all users”）。命中后 Analyzer 写入 `read_only_inquiry=true`，账务优先级降为 `medium`、故障降为 `high`（不再是 `urgent`），域默认的负面情绪改为 `neutral`，Risk Engine 不再加 `high_risk_business_intent`。用户原文带明确负面情绪时不算只读咨询。其余审批条件不变：分类置信度低、QA 分低、幻觉、`response_requires_human`、依赖降级、安全信号任何一项出现仍转人工审批。意图和部门不变，退款写 Tool 仍不在自动路径上。只是询问争议相关政策（“有未结争议的账户能退款吗”）算只读咨询；“我有异议”“发起争议”“dispute this charge”才算表达争议。Baseline v2.2 相应把 40 条只读咨询的期望改为不转人工，5 条（要求退款、“不要执行”、信息不足的故障陈述、全量用户故障）保持转人工。
 
-分类和 QA 的几条确定性兜底（2026-11-14，来自真实模型 100 条回放）：规则明确命中账务或故障域时，Jev 不能把意图降成 `information_request`（其他方向的改判仍听 Jev）；问保修期限（多久、几个月）时，检索到的文档必须含具体期限才算权威依据，否则 `response_requires_human=true`；含提示词、注入、客服系统安全等说法的提问不走范围外短路；Analyzer 和 QA 使用独立快速端点时，该端点调用失败会退回主模型再试一次。
+分类和 QA 的几条确定性兜底（2026-11-14，来自真实模型 100 条回放）：规则明确命中账务或故障域时，Jev 不能把意图降成 `information_request`（其他方向的改判仍听 Jev）；问保修期限（多久、几个月）时，检索到的文档必须含具体期限才算权威依据，否则 `response_requires_human=true`；Analyzer 和 QA 使用独立快速端点时，该端点调用失败会退回主模型再试一次。
 
 用户侧处理说明（`src/agents/public_reply.py`，文案跟随用户输入语言）：
 
@@ -511,7 +511,7 @@ python scripts/check_quality_gate.py \
   --report evaluation/reports/baseline_v1/baseline_v1_latest.json
 ```
 
-Release Profile 当前要求：Intent、Department、Required Tool 均为 `1.0`，Forbidden Tool Violation 为 `0`，HITL、Approval 与 Case Pass 至少 `0.99`，P95 不超过 `5s`，平均 Token 不超过 `550`，100 Case 总 LLM Calls 不超过 `100`，Analyzer Rule Hit Rate 至少 `0.95`。已知失败 Case 采用显式 ID 白名单，聚合分数达标也不能掩盖新的 `PASS→FAIL`。
+Release Profile 当前要求：Intent、Department、Required Tool 均为 `1.0`，Forbidden Tool Violation 为 `0`，HITL、Approval 与 Case Pass 至少 `0.99`，P95 不超过 `5s`，生成模型（Analyzer/Resolver/QA 的 LLM 调用）平均 Token 不超过 `750`、含决策模型 Jev 的平均总 Token 不超过 `2600`（2026-11-14 按实测重定：生成模型 604、Jev 1704、合计 2308；原上限 `550` 定于未接入 Jev 时，当时实测 453），100 Case 总 LLM Calls 不超过 `100`，Analyzer Rule Hit Rate 至少 `0.95`。已知失败 Case 采用显式 ID 白名单，聚合分数达标也不能掩盖新的 `PASS→FAIL`。
 
 正式 Baseline 每次产生一组不可变时间戳 JSON/Markdown 快照，`baseline_v1_latest.json/md` 是可直接打开的最新普通文件副本，由报告器原子替换。报告目录不进 Git；实验配置、Dataset SHA256、模型、Prompt/Workflow 版本、Token 与 Trace ID 必须写入报告。
 

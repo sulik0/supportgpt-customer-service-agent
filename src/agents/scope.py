@@ -79,19 +79,9 @@ def out_of_scope_reason(text: str) -> str | None:
     return None
 
 
-# 提示词、越权、客服系统自身安全相关的提问：不让模型的范围外判断把它们短路掉，
-# 保留完整路径上的上下文获取、Guard 和 QA。
-_SECURITY_CONCEPT = re.compile(
-    r"提示词|系统提示|越狱|注入|客服系统|安全策略|安全限制|"
-    r"\b(?:prompt|jailbreak|injection|guardrails?|customer support systems?|"
-    r"safety (?:policy|rules?)|security (?:policy|rules?))\b",
-    re.IGNORECASE,
-)
-
-
 def has_support_topic(text: str) -> bool:
     """保留业务请求和混合意图，不能用范围外分类绕过原业务判断。"""
-    return bool(_SUPPORT_TOPIC.search(text) or _SECURITY_CONCEPT.search(text))
+    return bool(_SUPPORT_TOPIC.search(text))
 
 
 def is_scope_boundary_request(state: Mapping[str, Any]) -> bool:

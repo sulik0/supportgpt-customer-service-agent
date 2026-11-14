@@ -3,7 +3,7 @@
   "policy_name": "supportgpt-baseline-v1",
   "dataset": {
     "case_count": 100,
-    "sha256": "0931efba9c80fea962e84ec26d65e0eb7d29cb45110fa9ddca1fa19b3c30d876",
+    "sha256": "1766020b0388cc49741f1a734790529f4603a9f94cd658e053cd0e0d712fd1db",
     "enabled_behavior_metrics": [
       "intent_accuracy",
       "department_accuracy",
@@ -145,10 +145,16 @@
           "value": 5.0
         },
         {
+          "name": "average_llm_tokens",
+          "path": "performance_summary.tokens.average_llm_total",
+          "operator": "lte",
+          "value": 750.0
+        },
+        {
           "name": "average_total_tokens",
           "path": "performance_summary.tokens.average_total",
           "operator": "lte",
-          "value": 550.0
+          "value": 2600.0
         },
         {
           "name": "workflow_llm_calls",

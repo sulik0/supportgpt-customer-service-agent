@@ -20,6 +20,9 @@ B, O = IntentType.BILLING_DISPUTE, IntentType.OUTAGE_REPORT
         (B, "What processing fee is deducted from a refund under corporate policy v2?"),
         (B, "Can I still request a refund under policy v1?"),
         (B, "Check the payment amount for order ORD-8002."),
+        # 询问争议相关政策不等于表达争议
+        (B, "Can a refund be approved while my account still has an active dispute?"),
+        (B, "有未结争议的账户可以申请退款吗？"),
         (B, "I need the payment amount and status for order ORD-7001."),
         (O, "我们调用接口一直返回 429，应该怎么处理？"),
         (O, "Our API returns a 504 Gateway error. What should support verify first?"),
@@ -39,7 +42,9 @@ def test_questions_are_read_only_inquiries(intent, text):
         (B, "I'm requesting a refund, can you do it?"),
         # 争议或越权
         (B, "为什么多扣了我 200 块？"),
-        (B, "Can a refund be approved while my account still has an active dispute?"),
+        (B, "I want to dispute this charge. Can you help?"),
+        (B, "我对这笔扣款有异议，怎么处理？"),
+        (B, "Can I file a dispute for order ORD-7001?"),
         (B, "Provide context for a refund question about ORD-8002, but do not execute it."),
         # 陈述句，不是提问
         (B, "The invoice is wrong."),

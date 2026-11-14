@@ -18,7 +18,10 @@ ACTION_OR_DISPUTE = re.compile(
     r"想退|想要退|(?:我要|我想|帮我|给我|请|麻烦)(?:立即|现在|马上|直接)?(?:申请|办理)退|"
     r"退\s*\d|退款工具|无需审批|不用审批|跳过审批|免审批|"
     r"赔偿|赔付|补偿|投诉|举报|曝光|起诉|律师|消协|12315|"
-    r"取消|撤销|撤回|拒付|争议|不认可|不承认|"
+    r"取消|撤销|撤回|拒付|不认可|不承认|"
+    # “有争议的账户能退款吗”是在问政策；“我有异议/要发起争议”才是在表达争议。
+    r"(?:我|我们)(?:要|想|需要)?(?:对|就)?.{0,12}(?:有|提出|发起|申请)(?:争议|异议)|"
+    r"(?:发起|提出|提交)(?:争议|异议|申诉)|"
     r"多扣|乱扣|错扣|重复扣|扣错|盗刷|被骗|欺骗|骗子|"
     r"金额不对|金额有误|金额错|扣款有误|"
     r"\b(?:i (?:want|need|demand|would like)|give me|issue|process|"
@@ -26,7 +29,10 @@ ACTION_OR_DISPUTE = re.compile(
     r"\b(?:refund|money back|chargeback|credit|compensation)\b|"
     r"\b(?:want|need|demand) (?:a |my |the |full )*refund\b|"
     r"\bi(?:'m| am)? request(?:ing)? (?:a |my |the |full )*refund\b|"
-    r"\b(?:chargeback|dispute|compensat\w+|complain\w*|lawsuit|lawyer|sue|fraud|scam|"
+    r"\bi (?:want to |need to |will |would like to |am going to )?dispute\b|"
+    r"\b(?:file|open|raise|start|submit)(?:ing)? (?:a |my )?dispute\b|"
+    r"\bdisput(?:e|ing) (?:this|the|that|my) (?:charge|payment|invoice|bill|transaction)\b|"
+    r"\b(?:chargeback|compensat\w+|complain\w*|lawsuit|lawyer|sue|fraud|scam|"
     r"cancel|reverse|overcharged|charged twice|double charged|wrong(?:ly)? charged?|"
     r"incorrect(?:ly)? charged?|without approval|skip approval|do not execute|"
     r"don't execute)\b",

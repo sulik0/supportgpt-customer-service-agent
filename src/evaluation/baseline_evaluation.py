@@ -243,6 +243,10 @@ def build_case_performance(record: EvaluationRecord) -> Dict[str, Any]:
 
     input_tokens = _safe_int(record.workflow_output.get("tokens_input", 0))
     output_tokens = _safe_int(record.workflow_output.get("tokens_output", 0))
+    llm_tokens = sum(
+        _safe_int(call.get("input_tokens", 0)) + _safe_int(call.get("output_tokens", 0))
+        for call in llm_calls
+    )
     workflow_latency = _safe_float(
         record.workflow_output.get("latency_seconds", 0.0)
     )
@@ -261,6 +265,10 @@ def build_case_performance(record: EvaluationRecord) -> Dict[str, Any]:
             "input": input_tokens,
             "output": output_tokens,
             "total": input_tokens + output_tokens,
+            # 生成模型（Analyzer/Resolver/QA 的 LLM 调用）单独计数；
+            # 其余是决策模型（Jev）做分类和评判用掉的。
+            "llm": llm_tokens,
+            "decision": max(input_tokens + output_tokens - llm_tokens, 0),
         },
         "models": sorted(
             {str(call.get("model")) for call in llm_calls if call.get("model")}
@@ -330,6 +338,8 @@ def aggregate_performance(cases: Sequence[Dict[str, Any]]) -> Dict[str, Any]:
     token_input = [_safe_int(case["tokens"]["input"]) for case in cases]
     token_output = [_safe_int(case["tokens"]["output"]) for case in cases]
     token_total = [_safe_int(case["tokens"]["total"]) for case in cases]
+    token_llm = [_safe_int(case["tokens"].get("llm", 0)) for case in cases]
+    token_decision = [_safe_int(case["tokens"].get("decision", 0)) for case in cases]
     strategy_counts = Counter(case["analyzer_strategy"] for case in cases)
     analyzer_decisions = strategy_counts["rule"] + strategy_counts["llm"]
     model_counts = Counter(
@@ -355,6 +365,8 @@ def aggregate_performance(cases: Sequence[Dict[str, Any]]) -> Dict[str, Any]:
             "average_input": _average(token_input),
             "average_output": _average(token_output),
             "average_total": _average(token_total),
+            "average_llm_total": _average(token_llm),
+            "average_decision_total": _average(token_decision),
         },
         "analyzer": {
             "rule_hit_rate": _ratio(strategy_counts["rule"], analyzer_decisions),
