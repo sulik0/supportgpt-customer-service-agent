@@ -42,6 +42,20 @@ def _resolution_messages(
     return messages
 
 
+def _json_object_text(content: str) -> str:
+    """兼容服务偶尔在 JSON 外包代码围栏或说明文字：取出其中的 JSON 对象。"""
+    try:
+        json.loads(content)
+        return content
+    except ValueError:
+        start, end = content.find("{"), content.rfind("}")
+        if start < 0 or end <= start:
+            raise
+        candidate = content[start : end + 1]
+        json.loads(candidate)
+        return candidate
+
+
 def _thinking_kwargs() -> Dict[str, Any]:
     """按配置给主模型和 Fast Model 传思考模式开关，备用模型不传。"""
     if not settings.LLM_THINKING:
@@ -101,7 +115,7 @@ async def _complete_chat(
             )
             continue
         if json_mode:
-            json.loads(content)
+            content = _json_object_text(content)
         return content, input_tokens, output_tokens
     raise RuntimeError("No completion returned")
 
@@ -548,12 +562,45 @@ class OpenAILLMProvider(BaseLLMProvider):
         )
         return result.unwrap()
 
+    async def _call_fast_or_main(
+        self,
+        messages: List[Dict[str, str]],
+        *,
+        max_tokens: int,
+        model: str,
+        client: Any,
+        operation: str,
+    ) -> Tuple[str, int, int]:
+        """Analyzer/QA 的 JSON 调用：独立的快速端点失败时退回主模型再试一次。
+
+        快速端点下线或配置失效不应让每次判断都落到“处理异常转人工”。
+        """
+        try:
+            return await self._call_gpt(
+                messages,
+                json_mode=True,
+                max_tokens=max_tokens,
+                model=model,
+                client=client,
+                operation=operation,
+            )
+        except Exception:
+            if client is self.client:
+                raise
+            return await self._call_gpt(
+                messages,
+                json_mode=True,
+                max_tokens=max_tokens,
+                model=self.model,
+                client=self.client,
+                operation=operation,
+            )
+
     @trace_operation(name="supportgpt.llm.analyze_ticket", component="llm")
     async def analyze_ticket(self, text: str) -> Tuple[Dict[str, Any], int, int]:
         messages = active_bundle().messages("analyzer", text=text)
-        content, in_tok, out_tok = await self._call_gpt(
+        content, in_tok, out_tok = await self._call_fast_or_main(
             messages,
-            json_mode=True,
             max_tokens=settings.LLM_ANALYZER_MAX_TOKENS,
             model=self.analyzer_model,
             client=self.analyzer_client,
@@ -580,9 +627,8 @@ class OpenAILLMProvider(BaseLLMProvider):
         messages = active_bundle().messages(
             "qa", query=query, context=json.dumps(context, ensure_ascii=False), response=response
         )
-        content, in_tok, out_tok = await self._call_gpt(
+        content, in_tok, out_tok = await self._call_fast_or_main(
             messages,
-            json_mode=True,
             max_tokens=settings.LLM_QA_MAX_TOKENS,
             model=self.qa_model,
             client=self.qa_client,

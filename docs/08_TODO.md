@@ -109,7 +109,9 @@
 - [x] 2026-11-14 线上模拟 32 条用户请求后修复：按 IP 限流改读代理写入的客户端地址；冒烟 Trace 回查失败不再重发问答；转人工文案按原因区分并跟随语言，QA 幻觉告警不再显示“服务不可用”；只读账务/故障咨询先答后审；保修记录查询和实体设备故障确定性路由到保修支持；辱骂和监管/媒体威胁按投诉转人工；写代码、翻译、写诗、数学题、纯问候确定性拦截；没查订单时证据标注“未查询”；RAG 间接注入改为逐篇检测。本地真实模型（deepseek-flash + Jev）28 条复测通过主要场景。
 - [x] 2026-11-14 Railway 已把 `TRUST_PROXY_HEADERS` 改为 `true`，线上复测通过：无 Cookie 的 40 次读请求被限到 30 次（10 次 429）；每次伪造不同的 `X-Forwarded-For` 或 `X-Real-IP` 结果相同，不能绕过。
 - [x] 2026-11-14 Workflow 层取消只读账务/故障咨询的人工审批（用户决定，本会话执行）：`src/agents/inquiry.py` 用确定性规则识别只读咨询，Analyzer 写入 `read_only_inquiry`，Risk Engine 不再按高风险业务域处理；Baseline 升到 v2.1，37 条期望改为不转人工、8 条保持转人工，SHA256 已更新。Mock 门禁 100/100。真实模型（deepseek-flash + Jev，rules）完整回放一次：45 条账务/故障用例的 HITL 和 Approval 全部符合新期望；整体 Case Pass 0.91，Release Gate 未通过，9 条失败见下一条。
-- [ ] 真实模型 Release Gate 未通过（2026-11-14，Case Pass 0.91，与 2026-10-27 的 0.91 持平）。9 条失败都不是只读咨询放行造成的：4 条故障咨询被 Jev 判成 `information_request`（规则本来能判对，Jev 覆盖了规则）；2 条无依据的保修政策问题没有转人工（回答改成了“请提供订单号”，`response_requires_human` 未触发）；2 条安全概念的无害提问被判为范围外，没有调必需 Tool；1 条 QA 模型输出解析失败。另外平均 Token 2274 远高于门禁的 550，这个阈值与当前 Prompt 体量不符，需要重新定。
+- [x] 2026-11-14 修复真实模型 100 条回放的 9 条失败（首轮 Case Pass 0.91）：规则命中账务/故障域时 Jev 不能降成 `information_request`；问保修期限时只有流程文档不算权威依据，恢复转人工；提示词、注入、客服系统安全类提问不走范围外短路；JSON 输出带代码围栏时取出对象；Analyzer/QA 的快速模型端点失败时退回主模型。修复后真实模型（deepseek-flash + Jev，rules）再回放一次：Case Pass 0.99，Intent/Department/Required Tool 均为 1.0，HITL 和 Approval 0.99，P95 3.05s。
+- [ ] 真实模型 Release Gate 仍未通过，剩两项：① 平均 Token 2212，高于门禁的 550，这个阈值与当前 Prompt 体量不符，需要重新定；② `baseline-security-benign-prompt-comparison`（解释 system prompt 和 user prompt 的区别）失败：知识库没有相关内容，回答来自模型常识，QA 判为无依据而转人工，期望是不转人工。“快速端点失败退回主模型”是在第二次回放之后加的，只对这一条单独验证过调用成功，没有再跑完整 100 条。
+- [ ] 本地 `.env` 的 `LLM_FAST_BASE_URL`（qwen-turbo）返回 404，端点已失效；Jev 的 QA 结论未被采纳时会走到这里。现在有主模型兜底，但 Railway 上的同名变量需要核对是否同样失效。
 - [ ] 真实模型回归脚本（`run_real_llm_regression.py`）的旧用例期望路径不含 `skill_selector`，13/17 条因此判失败，报告的通过率不可用；新增的 4 条线上用例已按当前路径写期望。
 - [ ] 保修状态查询在真实模型下路由和 Tool 正确，但 QA 评委偶尔把“仍在保修期内”判为幻觉而转人工（保守方向），未处理。
 - [ ] DeepSeek 价格按高峰价、cache miss 估算，未区分错峰与缓存命中，官方调价后需手动更新 `MODEL_PRICING`。

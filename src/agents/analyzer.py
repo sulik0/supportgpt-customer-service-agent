@@ -270,7 +270,11 @@ class TicketAnalyzerAgent:
                         fallback_reason=decision.fallback_reason,
                     )
                 )
-            if decision.accepted and decision.analysis is not None:
+            if (
+                decision.accepted
+                and decision.analysis is not None
+                and not self._rule_domain_wins(rule_analysis, decision.analysis)
+            ):
                 analysis = dict(decision.analysis)
                 strategy = "jev"
             elif rule_analysis is None:
@@ -425,6 +429,22 @@ class TicketAnalyzerAgent:
             ),
             "confidence_score": 0.95,
         }
+
+    @staticmethod
+    def _rule_domain_wins(
+        rule_analysis: Dict[str, Any] | None, decision_analysis: Dict[str, Any]
+    ) -> bool:
+        """规则明确命中账务或故障域时，模型不能把它降成通用咨询。
+
+        降成通用咨询会丢掉对应的 Skill 和只读 Tool；其他方向的改判仍听模型的。
+        """
+        return bool(
+            rule_analysis
+            and rule_analysis.get("intent")
+            in {IntentType.BILLING_DISPUTE, IntentType.OUTAGE_REPORT}
+            and normalize_intent(decision_analysis.get("intent"))
+            == IntentType.INFORMATION_REQUEST
+        )
 
     @staticmethod
     def _device_intent_override(text: str, intent: IntentType) -> IntentType:

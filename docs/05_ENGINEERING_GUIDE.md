@@ -211,6 +211,8 @@ Jev 采纳规则：意图是否采纳只看 `intent` 自身置信度（`JEV_INTE
 
 只读咨询（`src/agents/inquiry.py`，2026-11-14 起）：账务（`billing_dispute`）和故障（`outage_report`）域里只是在问信息的请求，不再按业务域默认规则强制转人工。判定只看用户原文，是确定性规则，不使用模型输出：必须是提问或查询；不含办理、争议、投诉、越权类说法（“我要退款”“多扣”“dispute”“do not execute”等）；故障类还不能带大面积影响的说法（“所有用户”“大面积”“all users”）。命中后 Analyzer 写入 `read_only_inquiry=true`，账务优先级降为 `medium`、故障降为 `high`（不再是 `urgent`），域默认的负面情绪改为 `neutral`，Risk Engine 不再加 `high_risk_business_intent`。用户原文带明确负面情绪时不算只读咨询。其余审批条件不变：分类置信度低、QA 分低、幻觉、`response_requires_human`、依赖降级、安全信号任何一项出现仍转人工审批。意图和部门不变，退款写 Tool 仍不在自动路径上。Baseline v2.1 相应把 37 条只读咨询的期望改为不转人工，8 条（要求退款、涉及争议、“不要执行”、信息不足的故障陈述、全量用户故障）保持转人工。
 
+分类和 QA 的几条确定性兜底（2026-11-14，来自真实模型 100 条回放）：规则明确命中账务或故障域时，Jev 不能把意图降成 `information_request`（其他方向的改判仍听 Jev）；问保修期限（多久、几个月）时，检索到的文档必须含具体期限才算权威依据，否则 `response_requires_human=true`；含提示词、注入、客服系统安全等说法的提问不走范围外短路；Analyzer 和 QA 使用独立快速端点时，该端点调用失败会退回主模型再试一次。
+
 用户侧处理说明（`src/agents/public_reply.py`，文案跟随用户输入语言）：
 
 | `handling_reason` | 触发条件 | 用户看到 |

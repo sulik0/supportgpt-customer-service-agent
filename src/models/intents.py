@@ -175,10 +175,27 @@ _AUTHORITATIVE_TOPIC_EVIDENCE = (
 )
 
 
+# 问保修期限（多久、几个月）时，只提到“保修”的流程文档不算依据，必须有具体期限。
+_WARRANTY_DURATION_QUERY = re.compile(
+    r"\b(?:period|how long|how many (?:months|years|days)|duration|length)\b|"
+    r"多久|多长|几年|几个月|期限|保修期(?:是|有|为)"
+)
+_WARRANTY_DURATION_EVIDENCE = re.compile(
+    r"(?:warranty|保修).{0,60}?\d+\s*-?\s*(?:months?|years?|days?|个月|年|天)|"
+    r"\d+\s*-?\s*(?:months?|years?|days?|个月|年|天).{0,60}?(?:warranty|保修)"
+)
+
+
 def has_authoritative_business_evidence(query: str, evidence: str) -> bool:
     """验证检索证据是否真正覆盖当前高风险业务主题。"""
     normalized_query = str(query).lower()
     normalized_evidence = str(evidence).lower()
+    if (
+        re.search(r"\bwarranty\b|保修", normalized_query)
+        and _WARRANTY_DURATION_QUERY.search(normalized_query)
+        and not _WARRANTY_DURATION_EVIDENCE.search(normalized_evidence)
+    ):
+        return False
     matched_topic = False
     for query_pattern, evidence_pattern in _AUTHORITATIVE_TOPIC_EVIDENCE:
         if not query_pattern.search(normalized_query):

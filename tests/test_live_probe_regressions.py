@@ -299,3 +299,113 @@ def test_bare_greeting_gets_short_capability_reply(text):
 @pytest.mark.parametrize("text", ["你好，我的订单到哪了", "hi, I need a refund", "你好，有个问题"])
 def test_greeting_with_a_question_is_not_short_circuited(text):
     assert out_of_scope_reason(text) != "greeting"
+
+
+# --- 真实模型 100 条 Baseline 回放（2026-11-14）暴露的问题 ---
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    ("text", "intent"),
+    [
+        ("After an API error causes routing to switch, what client-side action is required?", IntentType.OUTAGE_REPORT),
+        ("API error 触发路由切换后，客户端是否需要清理缓存？", IntentType.OUTAGE_REPORT),
+        ("What processing fee is deducted from a refund under corporate policy v2?", IntentType.BILLING_DISPUTE),
+    ],
+)
+async def test_model_cannot_downgrade_rule_matched_domain_to_information(
+    monkeypatch, text, intent
+):
+    _jev(monkeypatch, IntentType.INFORMATION_REQUEST)
+    state = await ticket_analyzer_agent.analyze(
+        {"subject": text[:40], "description": text, "customer_id": "cust_101"}
+    )
+    assert state["intent"] is intent
+    assert state["analyzer_strategy"] == "rule"
+
+
+@pytest.mark.asyncio
+async def test_model_can_still_move_between_other_intents(monkeypatch):
+    _jev(monkeypatch, IntentType.ACCOUNT_SUPPORT)
+    state = await ticket_analyzer_agent.analyze(
+        {
+            "subject": "登录",
+            "description": "我登录不了账号，提示密码错误",
+            "customer_id": "cust_201",
+        }
+    )
+    assert state["intent"] is IntentType.ACCOUNT_SUPPORT
+
+
+@pytest.mark.parametrize(
+    "query",
+    [
+        "What is the warranty replacement period for damaged hardware?",
+        "How many months of hardware warranty does my device include?",
+        "你们的硬件一般保修多久？",
+    ],
+)
+def test_warranty_duration_needs_evidence_with_an_actual_period(query):
+    from src.models.intents import has_authoritative_business_evidence
+
+    process_doc = "保修 warranty 申请需要订单编号、产品型号、故障说明和购买凭证。"
+    assert has_authoritative_business_evidence(query, process_doc) is False
+    assert (
+        has_authoritative_business_evidence(
+            query, "Hardware warranty covers 12 months from delivery. 硬件保修 12 个月。"
+        )
+        is True
+    )
+
+
+def test_warranty_process_question_still_accepts_process_evidence():
+    from src.models.intents import has_authoritative_business_evidence
+
+    assert has_authoritative_business_evidence(
+        "申请保修需要什么资料？", "保修 warranty 申请需要订单编号、产品型号。"
+    )
+
+
+@pytest.mark.parametrize(
+    "text",
+    [
+        "What is prompt injection, and why should customer support systems defend against it?",
+        "Can you explain the difference between a system prompt and a user prompt?",
+        "什么是提示词注入？",
+    ],
+)
+def test_security_concept_questions_are_not_short_circuited_as_out_of_scope(text):
+    from src.agents.scope import has_support_topic
+
+    assert has_support_topic(text) is True
+
+
+def test_json_mode_tolerates_code_fences_around_the_object():
+    from src.llm.provider import _json_object_text
+
+    wrapped = '```json\n{"score": 0.9, "hallucination_detected": false}\n```'
+    assert json.loads(_json_object_text(wrapped))["score"] == 0.9
+    with pytest.raises(ValueError):
+        _json_object_text("no json here")
+
+
+@pytest.mark.asyncio
+async def test_qa_falls_back_to_main_model_when_fast_endpoint_fails():
+    from src.llm.provider import OpenAILLMProvider
+
+    provider = OpenAILLMProvider.__new__(OpenAILLMProvider)
+    provider.client, provider.model = object(), "main-model"
+    provider.qa_client, provider.qa_model = object(), "fast-model"
+    calls = []
+
+    async def fake_call(messages, json_mode=False, max_tokens=None, model=None,
+                        client=None, operation="chat"):
+        calls.append(model)
+        if client is provider.qa_client:
+            raise RuntimeError("fast endpoint 404")
+        return '{"score": 0.9}', 10, 5
+
+    provider._call_gpt = fake_call
+    evaluation, _, _ = await provider.evaluate_qa("q", ["ctx"], "answer")
+    assert evaluation["score"] == 0.9
+    assert calls == ["fast-model", "main-model"]
