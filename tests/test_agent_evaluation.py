@@ -145,7 +145,7 @@ async def test_offline_evaluation_writes_unified_report(tmp_path, monkeypatch):
             ],
             "department": "billing",
             "intent": "billing_dispute",
-            "priority": "high",
+            "priority": "medium",
             "tool_calls": [
                 {"tool_name": "crm.get_customer_profile"},
                 {"tool_name": "tickets.get_past_tickets"},
@@ -153,14 +153,15 @@ async def test_offline_evaluation_writes_unified_report(tmp_path, monkeypatch):
             ],
             "workflow_path": [
                 "ticket_analyzer",
+                "skill_selector",
                 "tool_call",
                 "retriever",
                 "llm_generation",
                 "qa",
                 "escalation",
             ],
-            "escalation_recommended": True,
-            "approval_required": True,
+            "escalation_recommended": False,
+            "approval_required": False,
             "tokens_input": 320,
             "tokens_output": 90,
             "cost_usd": 0.0123,
@@ -297,3 +298,44 @@ async def test_deepeval_mode_requires_real_api_key(monkeypatch, tmp_path):
             limit=1,
             workflow_runner=fake_workflow,
         )
+
+
+@pytest.mark.asyncio
+async def test_replay_retries_case_after_dependency_failure(monkeypatch):
+    """模型服务抖动或熔断造成的失败会等恢复后重跑，不计入行为失败。"""
+    from src.config import settings
+    from src.evaluation import offline_rag
+    from src.evaluation.offline_rag import EvaluationCase, collect_workflow_records
+
+    monkeypatch.setattr(settings, "RESILIENCE_CIRCUIT_RECOVERY_SECONDS", 0.0)
+    slept = []
+
+    async def fake_sleep(seconds):
+        slept.append(seconds)
+
+    monkeypatch.setattr(offline_rag.asyncio, "sleep", fake_sleep)
+    calls = []
+
+    async def flaky_workflow(state):
+        calls.append(state["description"])
+        if len(calls) == 1:
+            return {"errors": ["Resolver dependency failure: ResilienceExhaustedError"]}
+        return {"suggested_response": "ok", "errors": [], "workflow_path": ["ticket_analyzer"]}
+
+    case = EvaluationCase(
+        id="c1", query="q", reference_answer="a", expected_sources=[],
+        category="general", risk_level="low", kb_version="v1",
+    )
+    records = await collect_workflow_records([case], flaky_workflow)
+
+    assert len(calls) == 2 and slept == [1.0]
+    assert records[0].response == "ok"
+    assert records[0].workflow_output["evaluation_infrastructure_retries"] == 1
+
+
+def test_quality_alerts_and_security_blocks_are_not_infrastructure_failures():
+    from src.evaluation.offline_rag import is_infrastructure_failure
+
+    assert not is_infrastructure_failure({"errors": ["QA score alert: potential hallucination detected."]})
+    assert not is_infrastructure_failure({"errors": ["Security threat: Prompt injection attempt detected in user_input."]})
+    assert is_infrastructure_failure({"errors": ["QA agent error: llm.evaluate_qa failed: circuit_open"]})

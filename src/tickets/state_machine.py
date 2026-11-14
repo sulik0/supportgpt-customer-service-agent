@@ -26,6 +26,7 @@ class TicketAction:
     MODIFY_RESPONSE = "modify_response"
     REJECT_RESPONSE = "reject_response"
     CLOSE = "close"
+    WITHDRAW = "withdraw"
     REOPEN = "reopen"
 
 
@@ -42,21 +43,26 @@ class TicketStateMachine:
     """统一校验并执行客服工单的合法状态流转。"""
 
     transitions: Dict[str, Dict[str, str]] = {
+        # 提交人撤回：任何未关闭状态都可以直接关闭。
         TicketStatus.OPEN: {
             TicketAction.START_WORK: TicketStatus.IN_PROGRESS,
             TicketAction.REQUEST_APPROVAL: TicketStatus.PENDING_APPROVAL,
+            TicketAction.WITHDRAW: TicketStatus.CLOSED,
         },
         TicketStatus.IN_PROGRESS: {
             TicketAction.REQUEST_APPROVAL: TicketStatus.PENDING_APPROVAL,
+            TicketAction.WITHDRAW: TicketStatus.CLOSED,
         },
         TicketStatus.PENDING_APPROVAL: {
             TicketAction.APPROVE_RESPONSE: TicketStatus.RESOLVED,
             TicketAction.MODIFY_RESPONSE: TicketStatus.RESOLVED,
             TicketAction.REJECT_RESPONSE: TicketStatus.IN_PROGRESS,
+            TicketAction.WITHDRAW: TicketStatus.CLOSED,
         },
         TicketStatus.RESOLVED: {
             TicketAction.CLOSE: TicketStatus.CLOSED,
             TicketAction.REOPEN: TicketStatus.IN_PROGRESS,
+            TicketAction.WITHDRAW: TicketStatus.CLOSED,
         },
         TicketStatus.CLOSED: {
             TicketAction.REOPEN: TicketStatus.IN_PROGRESS,

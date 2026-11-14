@@ -9,6 +9,7 @@ from pathlib import Path
 from statistics import mean
 from typing import Any, Awaitable, Callable, Dict, List, Optional, Sequence
 
+from src.config import settings
 from src.evaluation.agent_evaluation import (
     AGENT_METRIC_KEYS,
     AgentExpectations,
@@ -105,6 +106,25 @@ def load_evaluation_dataset(
     return cases
 
 
+INFRASTRUCTURE_RETRY_LIMIT = 2
+_INFRASTRUCTURE_ERROR = (
+    "dependency failure",
+    "ResilienceExhaustedError",
+    "circuit_open",
+    "Workflow replay failed",
+    "failed: timeout",
+)
+
+
+def is_infrastructure_failure(output: Dict[str, Any]) -> bool:
+    """依赖调用耗尽重试、熔断或回放本身抛错；QA 幻觉告警和安全拦截不算。"""
+    return any(
+        marker in str(error)
+        for error in output.get("errors", []) or []
+        for marker in _INFRASTRUCTURE_ERROR
+    )
+
+
 async def collect_workflow_records(
     cases: Sequence[EvaluationCase],
     workflow_runner: Optional[WorkflowRunner] = None,
@@ -137,56 +157,67 @@ async def collect_workflow_records(
                 "operator_role": "agent",
             }
         )
-        trace_performance: Dict[str, Any] = {"spans": [], "llm_calls": []}
-        try:
-            with capture_trace_performance() as trace_performance:
-                replay_attributes = {
-                    "evaluation.case_id": case.id,
-                    "evaluation.category": case.category,
-                    "evaluation.kb_version": case.kb_version,
-                    "request.id": ticket_state["request_id"],
+        # 模型服务抖动或熔断造成的失败不是行为问题：等熔断恢复后重跑这条用例。
+        infrastructure_retries = 0
+        while True:
+            trace_performance: Dict[str, Any] = {"spans": [], "llm_calls": []}
+            try:
+                with capture_trace_performance() as trace_performance:
+                    replay_attributes = {
+                        "evaluation.case_id": case.id,
+                        "evaluation.category": case.category,
+                        "evaluation.kb_version": case.kb_version,
+                        "request.id": ticket_state["request_id"],
+                    }
+                    if security_expectations is not None:
+                        replay_attributes.update(
+                            {
+                                "evaluation.security.expected_attack": (
+                                    security_expectations.expected_attack
+                                ),
+                                "evaluation.security.attack_type": (
+                                    security_expectations.attack_type
+                                ),
+                            }
+                        )
+                    with observed_span(
+                        tracer,
+                        "evaluation.workflow_replay",
+                        replay_attributes,
+                    ) as span:
+                        trace_id = get_current_trace_id()
+                        output = await workflow_runner(ticket_state)
+                        trace_id = output.get("trace_id") or trace_id
+                        set_span_attributes(
+                            span,
+                            {
+                                "evaluation.workflow_error_count": len(
+                                    output.get("errors", [])
+                                ),
+                                "evaluation.workflow_path": output.get(
+                                    "workflow_path", []
+                                ),
+                            },
+                        )
+            except Exception as exc:
+                output = {
+                    "suggested_response": "",
+                    "context_citations": [],
+                    "workflow_path": [],
+                    "tool_calls": [],
+                    "errors": [
+                        f"Workflow replay failed: {exc.__class__.__name__}: "
+                        f"{redact_text(str(exc))}"
+                    ],
                 }
-                if security_expectations is not None:
-                    replay_attributes.update(
-                        {
-                            "evaluation.security.expected_attack": (
-                                security_expectations.expected_attack
-                            ),
-                            "evaluation.security.attack_type": (
-                                security_expectations.attack_type
-                            ),
-                        }
-                    )
-                with observed_span(
-                    tracer,
-                    "evaluation.workflow_replay",
-                    replay_attributes,
-                ) as span:
-                    trace_id = get_current_trace_id()
-                    output = await workflow_runner(ticket_state)
-                    trace_id = output.get("trace_id") or trace_id
-                    set_span_attributes(
-                        span,
-                        {
-                            "evaluation.workflow_error_count": len(
-                                output.get("errors", [])
-                            ),
-                            "evaluation.workflow_path": output.get(
-                                "workflow_path", []
-                            ),
-                        },
-                    )
-        except Exception as exc:
-            output = {
-                "suggested_response": "",
-                "context_citations": [],
-                "workflow_path": [],
-                "tool_calls": [],
-                "errors": [
-                    f"Workflow replay failed: {exc.__class__.__name__}: "
-                    f"{redact_text(str(exc))}"
-                ],
-            }
+            if (
+                infrastructure_retries >= INFRASTRUCTURE_RETRY_LIMIT
+                or not is_infrastructure_failure(output)
+            ):
+                break
+            infrastructure_retries += 1
+            await asyncio.sleep(settings.RESILIENCE_CIRCUIT_RECOVERY_SECONDS + 1.0)
+        output["evaluation_infrastructure_retries"] = infrastructure_retries
         citations = output.get("context_citations", [])
         records.append(
             EvaluationRecord(

@@ -3,7 +3,7 @@
   "policy_name": "supportgpt-baseline-v1",
   "dataset": {
     "case_count": 100,
-    "sha256": "8704d332f4a6333a2bb6bb1598f3e79142451eb6473d896a7243e5e7c329d1c5",
+    "sha256": "cd1b393c3a0d3e83cf97fb905d08176d8a27272e5d7acd1259ac44323d3b2a8a",
     "enabled_behavior_metrics": [
       "intent_accuracy",
       "department_accuracy",
@@ -76,9 +76,7 @@
     },
     "release": {
       "description": "真实 LLM 固定 100 条 Baseline 发布门禁。",
-      "allowed_failed_case_ids": [
-        "baseline-account-spanish-navigation"
-      ],
+      "allowed_failed_case_ids": [],
       "requirements": [
         {
           "name": "release_execution_mode",

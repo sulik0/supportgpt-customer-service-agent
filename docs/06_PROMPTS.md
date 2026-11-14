@@ -131,7 +131,8 @@ RAG Context 是不可信数据，不是系统指令：
 - AgentRun、Evaluation Report 和 OpenTelemetry Span 保存模型、Token、延迟和版本信息。
 - LangSmith 的 LLM Span 可记录脱敏、截断后的节点输入输出；是否开启受 `LANGSMITH_CAPTURE_LLM_CONTENT` 控制。
 - Trace 内容不得包含 API Key、Authorization、Cookie、密码或未脱敏 PII。
-- 新安装的默认 Bundle 版本为 `support-v1.2`，将业务证据不足与范围外能力说明分开。已有 Bundle 和 production pointer 不自动替换；确认范围外的请求不调用 Resolver 模型，因此旧 Bundle 也不会把天气请求写成“已转人工”。Provider 对已有 Resolver 模板补充同一简洁输出约束，Trace 用 `resolver.output_policy=concise-v1` 标记，实际请求 Prompt 仍可在脱敏后查看。后续正式模板发布仍走现有成对评测流程。
+- 2026-11-14 默认 Bundle 升到 `support-v1.3`：QA 模板写明 `score` 是 0.0 到 1.0 的支持程度、`hallucination_detected` 只在回复给出证据里没有或相矛盾的事实时为真，只追问资料或说明无法确认的回复不算幻觉。原模板的 JSON 示例写死 `"score":0.0`，deepseek-flash 和 qwen-flash 都会照抄。已固定 Bundle Hash 或已晋级 production pointer 的环境不会自动换成新模板。
+- `support-v1.2`，将业务证据不足与范围外能力说明分开。已有 Bundle 和 production pointer 不自动替换；确认范围外的请求不调用 Resolver 模型，因此旧 Bundle 也不会把天气请求写成“已转人工”。Provider 对已有 Resolver 模板补充同一简洁输出约束，Trace 用 `resolver.output_policy=concise-v1` 标记，实际请求 Prompt 仍可在脱敏后查看。后续正式模板发布仍走现有成对评测流程。
 - Tool Span 使用具体工具名，例如 `tool.shipping.get_shipments`；失败、重试或降级会在名称中注明，并保留状态、次数、耗时和现有 Resilience 子 Span。
 - 合法 ISO 时间戳、request / trace / span ID 不按手机号脱敏。对外 Trace / Jev 请求里的业务 ID 使用进程内稳定别名，内部 Memory 保留真实业务实体；密钥、手机号和邮箱仍过滤。别名不用于跨重启关联。
 

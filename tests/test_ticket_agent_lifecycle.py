@@ -333,3 +333,96 @@ async def test_preliminary_answer_is_not_fed_into_next_turn_prompt(
     await client.post("/support/requests", json={**body, "message": "金额是多少？"})
 
     assert "这是可直接展示给用户的回复。" not in seen[1]
+
+
+@pytest.mark.asyncio
+async def test_requester_can_withdraw_own_request_and_leave_staff_queue(
+    client: AsyncClient, monkeypatch
+):
+    """提交人凭反馈令牌撤回：工单关闭、待审批移出人工队列、记录不删除。"""
+
+    async def fake_workflow(state):
+        output = _public_workflow_output(state, approval_required=True)
+        output.update({"risk_level": "high", "risk_requires_human": True})
+        return output
+
+    from src.config import settings
+
+    monkeypatch.setattr(settings, "PUBLIC_DEMO_ISOLATION_ENABLED", True)
+    monkeypatch.setattr("src.main.run_agent_workflow", fake_workflow)
+    created = (
+        await client.post(
+            "/support/requests",
+            json={"customer_id": "cust_101", "message": "请处理高风险退款。"},
+        )
+    ).json()
+    run_id, token = created["agent_run_id"], created["feedback_token"]
+
+    # 令牌不对不能撤回别人的工单。
+    denied = await client.post(
+        f"/support/runs/{run_id}/withdraw", headers={"X-Feedback-Token": "wrong"}
+    )
+    assert denied.status_code == 403
+
+    withdrawn = await client.post(
+        f"/support/runs/{run_id}/withdraw", headers={"X-Feedback-Token": token}
+    )
+    assert withdrawn.status_code == 200
+    assert withdrawn.json() == {
+        "ticket_id": created["ticket_id"],
+        "status": "closed",
+        "withdrawn_approvals": 1,
+    }
+    # 重复撤回是幂等的。
+    again = await client.post(
+        f"/support/runs/{run_id}/withdraw", headers={"X-Feedback-Token": token}
+    )
+    assert again.status_code == 200
+    assert again.json()["withdrawn_approvals"] == 0
+
+    await client.post(
+        "/auth/register",
+        json={"username": "withdraw_agent", "password": "queue-pass", "role": "agent"},
+    )
+    login = await client.post(
+        "/auth/token", json={"username": "withdraw_agent", "password": "queue-pass"}
+    )
+    headers = {"Authorization": f"Bearer {login.json()['access_token']}"}
+    assert (await client.get("/staff/review-queue", headers=headers)).json() == []
+    assert (await client.get("/approvals/pending", headers=headers)).json() == []
+    # 工单记录仍在，只是状态为已关闭。
+    tickets = (await client.get("/tickets", headers=headers)).json()
+    assert [(t["id"], t["status"]) for t in tickets] == [
+        (created["ticket_id"], "closed")
+    ]
+
+
+@pytest.mark.asyncio
+async def test_withdrawn_execution_is_not_picked_up_for_resume(db_session: AsyncSession):
+    from src.agents.durable_execution import (
+        AgentExecutionStatus,
+        durable_execution_service,
+    )
+    from src.models.db_models import AgentExecution, ResponseApproval
+
+    ticket = Ticket(customer_id="cust_101", subject="s", description="d", status="pending_approval")
+    db_session.add(ticket)
+    await db_session.flush()
+    approval = ResponseApproval(ticket_id=ticket.id, drafted_response="x", status="pending")
+    db_session.add(approval)
+    await db_session.flush()
+    execution = AgentExecution(
+        id="exec-withdraw-1", ticket_id=ticket.id, approval_id=approval.id,
+        request_id="req-withdraw-1", checkpoint_namespace="ns",
+        checkpoint_backend="memory", workflow_version="test",
+        status=AgentExecutionStatus.INTERRUPTED,
+    )
+    db_session.add(execution)
+    await db_session.flush()
+
+    approval.status = "withdrawn"
+    assert await durable_execution_service.cancel_for_approval(db_session, approval.id)
+    await db_session.commit()
+
+    assert execution.status == AgentExecutionStatus.CANCELLED
+    assert await durable_execution_service.list_recoverable(db_session) == []

@@ -16,6 +16,7 @@ from src.observability.metrics import (
 from src.risk.engine import risk_engine
 from src.models.intents import (
     has_authoritative_business_evidence,
+    defers_unsupported_topic,
     requires_authoritative_business_answer,
 )
 
@@ -139,6 +140,8 @@ class QualityAssuranceAgent:
             )
             response_requires_human = bool(
                 qa_eval.get("response_requires_human", False)
+                # 规则已确认某个主题缺权威依据时，评判模型的结论不能取消人工跟进。
+                or (rule_result or {}).get("response_requires_human", False)
             )
 
             # Observe score distribution
@@ -242,6 +245,19 @@ class QualityAssuranceAgent:
         if requires_authoritative_business_answer(
             query
         ) and not has_authoritative_business_evidence(query, citation_evidence):
+            if defers_unsupported_topic(query, filtered_response):
+                # 回复没有就缺依据的主题下结论：不算幻觉，其余内容继续交给评判，
+                # 但该主题仍需要人工跟进。
+                return (
+                    {
+                        "score": 0.9,
+                        "hallucination_detected": False,
+                        "citation_verified": False,
+                        "response_grounded": True,
+                        "response_requires_human": True,
+                    },
+                    False,
+                )
             return (
                 {
                     "score": 0.5,
@@ -368,10 +384,6 @@ class QualityAssuranceAgent:
                 "cannot reveal",
                 "can't reveal",
                 "cannot provide the system prompt",
-                "revisión humana",
-                "revisión manual",
-                "no encuentro en la información disponible",
-                "no dispongo de información",
                 "需要人工",
                 "人工审核",
                 "人工复核",

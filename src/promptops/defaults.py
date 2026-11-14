@@ -24,7 +24,7 @@ def default_payload() -> dict:
     """冻结分类枚举和说明，确保 Hash 包含实际使用的静态上下文。"""
     return {
         "schema_version": "1.0",
-        "version": "support-v1.2",
+        "version": "support-v1.3",
         "templates": {
             "analyzer": {
                 "system": "Classify customer support tickets. Output compact JSON only.",
@@ -59,8 +59,14 @@ def default_payload() -> dict:
                 "system": "Verify answer grounding. Output only the requested compact JSON.",
                 "user": (
                     "Question: $query\nEvidence: $context\nAnswer: $response\n"
-                    'Return only JSON: {"score":0.0,"hallucination_detected":false,'
-                    '"citation_verified":false}. Judge whether the answer is supported by evidence.'
+                    "Judge whether the answer is supported by the evidence. Return only JSON "
+                    'with exactly these keys: "score" (a number from 0.0 to 1.0: 1.0 means every '
+                    "factual claim is supported, 0.0 means the main claims are unsupported), "
+                    '"hallucination_detected" (true only if the answer states a fact that the '
+                    'evidence contradicts or does not contain), "citation_verified" (true if the '
+                    "cited sources contain the claims). An answer that only asks for missing "
+                    "details, or says it cannot confirm something, makes no unsupported claim: "
+                    "score it 0.8 or higher with hallucination_detected false."
                 ),
             },
         },

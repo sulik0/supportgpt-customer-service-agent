@@ -24,6 +24,7 @@
         "expected_priority": "high",
         "expected_nodes": [
           "ticket_analyzer",
+          "skill_selector",
           "tool_call",
           "retriever",
           "llm_generation",
@@ -53,6 +54,7 @@
         "expected_intent": "account_support",
         "expected_nodes": [
           "ticket_analyzer",
+          "skill_selector",
           "tool_call",
           "retriever",
           "llm_generation",
@@ -123,6 +125,7 @@
         ],
         "expected_nodes": [
           "ticket_analyzer",
+          "skill_selector",
           "tool_call",
           "retriever",
           "llm_generation",
@@ -152,6 +155,7 @@
         "expected_priority": "urgent",
         "expected_nodes": [
           "ticket_analyzer",
+          "skill_selector",
           "tool_call",
           "retriever",
           "llm_generation",

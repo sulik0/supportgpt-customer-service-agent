@@ -182,6 +182,14 @@ class PublicInsightSkill(BaseModel):
     skill_version: str
 
 
+class PublicWithdrawResponse(BaseModel):
+    """提交人撤回自己的咨询后的结果。"""
+
+    ticket_id: int
+    status: str
+    withdrawn_approvals: int
+
+
 class PublicRunInsightResponse(BaseModel):
     """公开演示的运行摘要白名单，不包含输入、草稿或异常正文。"""
 

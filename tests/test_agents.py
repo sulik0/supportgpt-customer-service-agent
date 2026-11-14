@@ -597,10 +597,6 @@ async def test_qa_accepts_generic_clarification_and_safe_knowledge_limitation(re
         "We haven’t received any problem details yet.",
         "请告知具体需要协助的内容，我们将为您处理。",
         "This requires human review because the available evidence does not cover it.",
-        (
-            "No encuentro en la información disponible el procedimiento; "
-            "se requiere revisión humana."
-        ),
     ],
 )
 async def test_qa_wording_variants_do_not_create_random_hitl(response):

@@ -93,6 +93,7 @@ from src.models.schemas import (
     PublicSupportRequest,
     PublicSupportResponse,
     PublicRunInsightResponse,
+    PublicWithdrawResponse,
     ResponseApprovalRequest,
     ResponseApprovalResponse,
     SuggestResponseRequest,
@@ -138,7 +139,11 @@ from src.observability.tracing import (
 from src.security import public_access_service, public_rate_limiter
 from src.promptops.registry import PromptRegistry
 from src.rag.kb_versioning import kb_versioning_service
-from src.tickets.state_machine import TicketAction, ticket_state_machine
+from src.tickets.state_machine import (
+    TicketAction,
+    TicketStatus,
+    ticket_state_machine,
+)
 from src.tools.crm import crm_tool
 from src.tools.audit import tool_audit_repository
 from src.tools.audit_context import begin_tool_audit_scope, finish_tool_audit_scope
@@ -1740,6 +1745,58 @@ async def get_public_run_insight(
         db, agent_run_id, feedback_token
     )
     return build_public_run_insight(run)
+
+
+@app.post(
+    "/support/runs/{agent_run_id}/withdraw", response_model=PublicWithdrawResponse
+)
+async def withdraw_public_request(
+    agent_run_id: str,
+    request: Request,
+    response: Response,
+    feedback_token: str = Header(default="", alias="X-Feedback-Token"),
+    db: AsyncSession = Depends(get_db),
+):
+    """提交人凭本次反馈令牌撤回自己的咨询：关闭工单，待审批记录移出人工队列。
+
+    不删除任何记录；已决策的审批和已完成的执行不受影响。线上测试脚本用它清理测试数据。
+    """
+    if not settings.PUBLIC_DEMO_ISOLATION_ENABLED:
+        raise HTTPException(status_code=404, detail="Not found.")
+    visitor_id = public_access_service.visitor_id(request, response)
+    await public_rate_limiter.enforce(
+        scope="public-insight",
+        identities=public_access_service.rate_limit_identities(request, visitor_id),
+        limit=settings.PUBLIC_READ_RATE_LIMIT_PER_MINUTE,
+        window_seconds=60,
+    )
+    run = await feedback_service.get_token_authorized_run(
+        db, agent_run_id, feedback_token
+    )
+    ticket = None
+    if run.ticket_id is not None:
+        ticket = (
+            await db.execute(select(Ticket).filter(Ticket.id == run.ticket_id))
+        ).scalars().first()
+    if ticket is None:
+        raise HTTPException(status_code=404, detail="Ticket not found.")
+    pending = (
+        await db.execute(
+            select(ResponseApproval).where(
+                ResponseApproval.ticket_id == ticket.id,
+                ResponseApproval.status == "pending",
+            )
+        )
+    ).scalars().all()
+    for approval in pending:
+        approval.status = "withdrawn"
+        await durable_execution_service.cancel_for_approval(db, approval.id)
+    if ticket.status != TicketStatus.CLOSED:
+        ticket_state_machine.transition(ticket, TicketAction.WITHDRAW)
+    await db.commit()
+    return PublicWithdrawResponse(
+        ticket_id=ticket.id, status=ticket.status, withdrawn_approvals=len(pending)
+    )
 
 
 @app.get("/support/history", response_model=PublicConversationHistoryResponse)

@@ -276,6 +276,22 @@ def build_case_performance(record: EvaluationRecord) -> Dict[str, Any]:
         "analyzer_strategy": str(
             record.workflow_output.get("analyzer_strategy", "not_run")
         ),
+        "qa_strategy": str(record.workflow_output.get("qa_strategy", "not_run")),
+        "infrastructure_retries": _safe_int(
+            record.workflow_output.get("evaluation_infrastructure_retries", 0)
+        ),
+        # 决策模型每次调用是否被采纳、没采纳的原因和 Token：用于定位结果波动的来源。
+        "decisions": [
+            {
+                "operation": str(item.get("operation")),
+                "accepted": bool(item.get("accepted")),
+                "fallback_reason": item.get("fallback_reason"),
+                "tokens": _safe_int(item.get("input_tokens", 0))
+                + _safe_int(item.get("output_tokens", 0)),
+            }
+            for item in record.workflow_output.get("decision_records", []) or []
+            if isinstance(item, dict)
+        ],
         "llm_call_count": len(llm_calls),
         "llm_calls": sanitize_value(llm_calls),
         "trace_span_count": len(spans),
@@ -318,6 +334,31 @@ def aggregate_behavior(
             "hitl_cases": totals["hitl_checks"],
             "approval_cases": totals["approval_checks"],
         },
+    }
+
+
+def _decision_summary(cases: Sequence[Dict[str, Any]]) -> Dict[str, Any]:
+    """按操作汇总决策模型的调用数、采纳数、未采纳原因和平均 Token。"""
+    summary: Dict[str, Dict[str, Any]] = {}
+    for case in cases:
+        for item in case.get("decisions", []):
+            entry = summary.setdefault(
+                item["operation"],
+                {"calls": 0, "accepted": 0, "tokens": 0, "fallback_reasons": Counter()},
+            )
+            entry["calls"] += 1
+            entry["accepted"] += int(item["accepted"])
+            entry["tokens"] += _safe_int(item["tokens"])
+            if not item["accepted"]:
+                entry["fallback_reasons"][str(item.get("fallback_reason") or "unknown")] += 1
+    return {
+        operation: {
+            "calls": entry["calls"],
+            "accepted": entry["accepted"],
+            "average_tokens": _ratio(entry["tokens"], entry["calls"]),
+            "fallback_reasons": dict(sorted(entry["fallback_reasons"].items())),
+        }
+        for operation, entry in sorted(summary.items())
     }
 
 
@@ -372,6 +413,16 @@ def aggregate_performance(cases: Sequence[Dict[str, Any]]) -> Dict[str, Any]:
             "rule_hit_rate": _ratio(strategy_counts["rule"], analyzer_decisions),
             "strategy_counts": dict(sorted(strategy_counts.items())),
         },
+        "qa": {
+            "strategy_counts": dict(
+                sorted(Counter(case.get("qa_strategy", "not_run") for case in cases).items())
+            ),
+        },
+        "decision": _decision_summary(cases),
+        # 因模型服务故障或熔断而重跑的次数；不为 0 说明本次结果受过依赖抖动影响。
+        "infrastructure_retries": sum(
+            _safe_int(case.get("infrastructure_retries", 0)) for case in cases
+        ),
         "llm": {
             "call_count": llm_call_count,
             "average_calls_per_case": _ratio(llm_call_count, len(cases)),

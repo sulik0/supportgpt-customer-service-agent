@@ -18,6 +18,8 @@ class AgentExecutionStatus:
     RESUMING = "resuming"
     COMPLETED = "completed"
     FAILED = "failed"
+    # 提交人撤回工单：暂停的执行不再恢复。
+    CANCELLED = "cancelled"
 
 
 class DurableExecutionService:
@@ -60,6 +62,17 @@ class DurableExecutionService:
             select(AgentExecution).where(AgentExecution.approval_id == approval_id)
         )
         return result.scalars().first()
+
+    async def cancel_for_approval(self, db: AsyncSession, approval_id: int) -> bool:
+        """撤回时把等待审批的执行标为已取消，启动扫描和恢复租约都不会再选中它。"""
+        execution = await self.get_by_approval(db, approval_id)
+        if execution is None or execution.status not in {
+            AgentExecutionStatus.INTERRUPTED,
+            AgentExecutionStatus.RESUME_PENDING,
+        }:
+            return False
+        execution.status = AgentExecutionStatus.CANCELLED
+        return True
 
     async def mark_interrupted(
         self,

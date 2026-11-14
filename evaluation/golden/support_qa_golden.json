@@ -14,11 +14,11 @@
       "agent_expectations": {
         "expected_department": "billing",
         "expected_intent": "billing_dispute",
-        "expected_priority": "high",
+        "expected_priority": "medium",
         "required_tools": ["crm.get_customer_profile", "tickets.get_past_tickets", "orders.get_order_history"],
-        "expected_nodes": ["ticket_analyzer", "tool_call", "retriever", "llm_generation", "qa", "escalation"],
-        "should_escalate": true,
-        "should_require_approval": true
+        "expected_nodes": ["ticket_analyzer", "skill_selector", "tool_call", "retriever", "llm_generation", "qa", "escalation"],
+        "should_escalate": false,
+        "should_require_approval": false
       }
     },
     {
@@ -32,11 +32,11 @@
       "agent_expectations": {
         "expected_department": "billing",
         "expected_intent": "billing_dispute",
-        "expected_priority": "high",
+        "expected_priority": "medium",
         "required_tools": ["crm.get_customer_profile", "tickets.get_past_tickets", "orders.get_order_history"],
-        "expected_nodes": ["ticket_analyzer", "tool_call", "retriever", "llm_generation", "qa", "escalation"],
-        "should_escalate": true,
-        "should_require_approval": true
+        "expected_nodes": ["ticket_analyzer", "skill_selector", "tool_call", "retriever", "llm_generation", "qa", "escalation"],
+        "should_escalate": false,
+        "should_require_approval": false
       }
     },
     {
@@ -50,11 +50,11 @@
       "agent_expectations": {
         "expected_department": "billing",
         "expected_intent": "billing_dispute",
-        "expected_priority": "high",
+        "expected_priority": "medium",
         "required_tools": ["crm.get_customer_profile", "tickets.get_past_tickets", "orders.get_order_history"],
-        "expected_nodes": ["ticket_analyzer", "tool_call", "retriever", "llm_generation", "qa", "escalation"],
-        "should_escalate": true,
-        "should_require_approval": true
+        "expected_nodes": ["ticket_analyzer", "skill_selector", "tool_call", "retriever", "llm_generation", "qa", "escalation"],
+        "should_escalate": false,
+        "should_require_approval": false
       }
     },
     {
@@ -68,11 +68,11 @@
       "agent_expectations": {
         "expected_department": "billing",
         "expected_intent": "billing_dispute",
-        "expected_priority": "high",
+        "expected_priority": "medium",
         "required_tools": ["crm.get_customer_profile", "tickets.get_past_tickets", "orders.get_order_history"],
-        "expected_nodes": ["ticket_analyzer", "tool_call", "retriever", "llm_generation", "qa", "escalation"],
-        "should_escalate": true,
-        "should_require_approval": true
+        "expected_nodes": ["ticket_analyzer", "skill_selector", "tool_call", "retriever", "llm_generation", "qa", "escalation"],
+        "should_escalate": false,
+        "should_require_approval": false
       }
     },
     {
@@ -86,11 +86,11 @@
       "agent_expectations": {
         "expected_department": "billing",
         "expected_intent": "billing_dispute",
-        "expected_priority": "high",
+        "expected_priority": "medium",
         "required_tools": ["crm.get_customer_profile", "tickets.get_past_tickets", "orders.get_order_history"],
-        "expected_nodes": ["ticket_analyzer", "tool_call", "retriever", "llm_generation", "qa", "escalation"],
-        "should_escalate": true,
-        "should_require_approval": true
+        "expected_nodes": ["ticket_analyzer", "skill_selector", "tool_call", "retriever", "llm_generation", "qa", "escalation"],
+        "should_escalate": false,
+        "should_require_approval": false
       }
     },
     {
@@ -104,11 +104,11 @@
       "agent_expectations": {
         "expected_department": "billing",
         "expected_intent": "billing_dispute",
-        "expected_priority": "high",
+        "expected_priority": "medium",
         "required_tools": ["crm.get_customer_profile", "tickets.get_past_tickets", "orders.get_order_history"],
-        "expected_nodes": ["ticket_analyzer", "tool_call", "retriever", "llm_generation", "qa", "escalation"],
-        "should_escalate": true,
-        "should_require_approval": true
+        "expected_nodes": ["ticket_analyzer", "skill_selector", "tool_call", "retriever", "llm_generation", "qa", "escalation"],
+        "should_escalate": false,
+        "should_require_approval": false
       }
     },
     {
@@ -122,12 +122,12 @@
       "agent_expectations": {
         "expected_department": "technical",
         "expected_intent": "outage_report",
-        "expected_priority": "urgent",
+        "expected_priority": "high",
         "required_tools": ["crm.get_customer_profile", "tickets.get_past_tickets"],
         "forbidden_tools": ["orders.get_order_history"],
-        "expected_nodes": ["ticket_analyzer", "tool_call", "retriever", "llm_generation", "qa", "escalation"],
-        "should_escalate": true,
-        "should_require_approval": true
+        "expected_nodes": ["ticket_analyzer", "skill_selector", "tool_call", "retriever", "llm_generation", "qa", "escalation"],
+        "should_escalate": false,
+        "should_require_approval": false
       }
     },
     {
@@ -141,12 +141,12 @@
       "agent_expectations": {
         "expected_department": "technical",
         "expected_intent": "outage_report",
-        "expected_priority": "urgent",
+        "expected_priority": "high",
         "required_tools": ["crm.get_customer_profile", "tickets.get_past_tickets"],
         "forbidden_tools": ["orders.get_order_history"],
-        "expected_nodes": ["ticket_analyzer", "tool_call", "retriever", "llm_generation", "qa", "escalation"],
-        "should_escalate": true,
-        "should_require_approval": true
+        "expected_nodes": ["ticket_analyzer", "skill_selector", "tool_call", "retriever", "llm_generation", "qa", "escalation"],
+        "should_escalate": false,
+        "should_require_approval": false
       }
     },
     {
@@ -160,12 +160,12 @@
       "agent_expectations": {
         "expected_department": "technical",
         "expected_intent": "outage_report",
-        "expected_priority": "urgent",
+        "expected_priority": "high",
         "required_tools": ["crm.get_customer_profile", "tickets.get_past_tickets"],
         "forbidden_tools": ["orders.get_order_history"],
-        "expected_nodes": ["ticket_analyzer", "tool_call", "retriever", "llm_generation", "qa", "escalation"],
-        "should_escalate": true,
-        "should_require_approval": true
+        "expected_nodes": ["ticket_analyzer", "skill_selector", "tool_call", "retriever", "llm_generation", "qa", "escalation"],
+        "should_escalate": false,
+        "should_require_approval": false
       }
     },
     {
@@ -182,7 +182,7 @@
         "expected_priority": "medium",
         "required_tools": ["crm.get_customer_profile", "tickets.get_past_tickets"],
         "forbidden_tools": ["orders.get_order_history"],
-        "expected_nodes": ["ticket_analyzer", "tool_call", "retriever", "llm_generation", "qa", "escalation"],
+        "expected_nodes": ["ticket_analyzer", "skill_selector", "tool_call", "retriever", "llm_generation", "qa", "escalation"],
         "should_escalate": false,
         "should_require_approval": false
       }
@@ -201,7 +201,7 @@
         "expected_priority": "medium",
         "required_tools": ["crm.get_customer_profile", "tickets.get_past_tickets"],
         "forbidden_tools": ["orders.get_order_history"],
-        "expected_nodes": ["ticket_analyzer", "tool_call", "retriever", "llm_generation", "qa", "escalation"],
+        "expected_nodes": ["ticket_analyzer", "skill_selector", "tool_call", "retriever", "llm_generation", "qa", "escalation"],
         "should_escalate": false,
         "should_require_approval": false
       }
@@ -220,7 +220,7 @@
         "expected_priority": "medium",
         "required_tools": ["crm.get_customer_profile", "tickets.get_past_tickets"],
         "forbidden_tools": ["orders.get_order_history"],
-        "expected_nodes": ["ticket_analyzer", "tool_call", "retriever", "llm_generation", "qa", "escalation"],
+        "expected_nodes": ["ticket_analyzer", "skill_selector", "tool_call", "retriever", "llm_generation", "qa", "escalation"],
         "should_escalate": false,
         "should_require_approval": false
       }

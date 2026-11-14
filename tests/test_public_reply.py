@@ -124,3 +124,79 @@ def test_review_message_follows_customer_language():
     )
     assert "support specialist" in response
     assert not any("一" <= ch <= "鿿" for ch in response + message)
+
+
+# --- 多意图：能答的部分照常回答，缺依据的主题只说明“无法确认”时不算幻觉 ---
+
+
+def test_multi_intent_draft_that_defers_unsupported_topic_is_not_hallucination():
+    from src.agents.quality_assurance import quality_assurance_agent as qa_agent
+    from src.models.intents import defers_unsupported_topic
+
+    query = "我想查一下 ORD-12002 的发票，顺便问下网关设备保修多久，另外退货怎么操作？"
+    draft = (
+        "ORD-12002 已付款，发票已开具，发票号为 INV-DEMO-CN-12002。"
+        "网关设备的保修期限本次未查询到，需要另行核实。"
+        "退货操作流程建议联系人工客服核实后再办理。"
+    )
+    assert defers_unsupported_topic(query, draft) is True
+    result, terminal = qa_agent._rule_evaluation(
+        query=query,
+        raw_response=draft,
+        filtered_response=draft,
+        citations=[{"text": "支付与发票查询：已付款不代表已开票。"}],
+        tool_context={},
+        context_texts=["[S1] 支付与发票查询：已付款不代表已开票。"],
+    )
+    assert terminal is False
+    assert result["hallucination_detected"] is False
+    # 缺依据的主题仍然需要人工跟进。
+    assert result["response_requires_human"] is True
+
+
+@pytest.mark.parametrize(
+    "draft",
+    [
+        "发票已开具。网关设备保修期为 12 个月。",
+        "发票已开具。网关设备享受整机保修服务，放心使用。",
+        "The invoice is issued. Your gateway has a 24-month warranty.",
+    ],
+)
+def test_draft_that_asserts_unsupported_warranty_fact_is_still_hallucination(draft):
+    from src.agents.quality_assurance import quality_assurance_agent as qa_agent
+
+    query = "查一下发票，顺便问下网关设备保修多久？"
+    result, terminal = qa_agent._rule_evaluation(
+        query=query,
+        raw_response=draft,
+        filtered_response=draft,
+        citations=[{"text": "支付与发票查询。"}],
+        tool_context={},
+        context_texts=["[S1] 支付与发票查询。"],
+    )
+    assert terminal is True
+    assert result["hallucination_detected"] is True
+
+
+def test_deferred_topic_draft_is_shown_as_preliminary_answer():
+    output = {
+        "intent": "billing_dispute",
+        "suggested_response": "发票已开具。保修期限无法确认，需人工核实。",
+        "qa_score": 0.9,
+        "hallucination_detected": False,
+        "response_requires_human": True,
+        "risk_reasons": ["authoritative_answer_unavailable"],
+        "errors": [],
+        "degradation_level": "none",
+    }
+    text = "我想查一下发票，顺便问下网关设备保修多久？"
+    assert preliminary_answer_allowed(output, text) is True
+    # 有幻觉或其他风险原因时不展示草稿。
+    assert preliminary_answer_allowed({**output, "hallucination_detected": True}, text) is False
+    assert (
+        preliminary_answer_allowed(
+            {**output, "risk_reasons": ["authoritative_answer_unavailable", "low_analyzer_confidence"]},
+            text,
+        )
+        is False
+    )

@@ -24,6 +24,7 @@ _DOMAIN_ONLY_REASONS = frozenset(
         "negative_high_priority",
     }
 )
+_DEFERRAL_REASON = "authoritative_answer_unavailable"
 _PRELIMINARY_INTENTS = frozenset(
     {IntentType.BILLING_DISPUTE, IntentType.OUTAGE_REPORT}
 )
@@ -57,7 +58,16 @@ def preliminary_answer_allowed(
     if not str(agent_output.get("suggested_response") or "").strip():
         return False
     intent = normalize_intent(agent_output.get("intent"))
-    if intent not in _PRELIMINARY_INTENTS:
+    reasons = {str(item) for item in agent_output.get("risk_reasons", []) or []}
+    # 第二种情况：部分主题缺权威依据，但草稿只说明了“无法确认、需人工”，没有下结论。
+    deferral = bool(
+        agent_output.get("response_requires_human")
+        and _DEFERRAL_REASON in reasons
+    )
+    if not deferral and (
+        intent not in _PRELIMINARY_INTENTS
+        or agent_output.get("response_requires_human")
+    ):
         return False
     if (
         agent_output.get("security_threat_detected")
@@ -65,7 +75,6 @@ def preliminary_answer_allowed(
         or agent_output.get("errors")
         or str(agent_output.get("degradation_level", "none")).lower() != "none"
         or agent_output.get("hallucination_detected")
-        or agent_output.get("response_requires_human")
         or agent_output.get("semantic_guard_degraded")
         or str(agent_output.get("semantic_guard_label", "not_run")).lower()
         in {"unsafe", "controversial"}
@@ -77,8 +86,8 @@ def preliminary_answer_allowed(
         return False
     if qa_score < settings.PUBLIC_PRELIMINARY_ANSWER_MIN_QA_SCORE:
         return False
-    reasons = {str(item) for item in agent_output.get("risk_reasons", []) or []}
-    if not reasons or not reasons <= _DOMAIN_ONLY_REASONS:
+    allowed = _DOMAIN_ONLY_REASONS | ({_DEFERRAL_REASON} if deferral else set())
+    if not reasons or not reasons <= allowed:
         return False
     text = " ".join(str(customer_text or "").split())
     if not text or ACTION_OR_DISPUTE.search(text):
