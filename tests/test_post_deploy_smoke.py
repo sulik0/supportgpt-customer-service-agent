@@ -69,7 +69,12 @@ def make_api(*, cors_origin, chat_status=201, tokens=120, reason=None):
 
         def do_POST(self):
             self.rfile.read(int(self.headers.get("Content-Length", 0)))
+            if self.path.endswith("/withdraw"):
+                SEEN["withdrawn"] = self.headers.get("X-Feedback-Token")
+                self._send(200, {"ticket_id": 1, "status": "closed", "withdrawn_approvals": 0})
+                return
             SEEN["request_id"] = self.headers.get("X-Request-Id")
+            SEEN["test_header"] = self.headers.get("X-SupportGPT-Test")
             if chat_status != 201:
                 self._send(chat_status, {"detail": "boom"})
                 return
@@ -369,3 +374,18 @@ def test_chat_failure_keeps_retryable_exit_code(monkeypatch):
     finally:
         api.shutdown()
     assert code == 1
+
+
+def test_smoke_chat_marks_ticket_as_test_and_withdraws_it():
+    """冒烟工单必须带测试标记，并在检查后撤回。"""
+    SEEN.clear()
+    server, api = start(make_api(cors_origin="*"))
+    try:
+        results = smoke.check_chat(
+            smoke.Http(), api, profile="cust_201", message="你好", timeout=10
+        )
+    finally:
+        server.shutdown()
+    assert SEEN["test_header"] == "smoke"
+    assert SEEN["withdrawn"] == "tok-1"
+    assert [r.status for r in results if r.name == "撤回冒烟工单"] == [smoke.PASS]

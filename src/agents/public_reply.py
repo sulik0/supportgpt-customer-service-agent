@@ -75,6 +75,8 @@ def preliminary_answer_allowed(
         or agent_output.get("errors")
         or str(agent_output.get("degradation_level", "none")).lower() != "none"
         or agent_output.get("hallucination_detected")
+        # 模型认为用户是在要求办理：不展示草稿，等人工处理。
+        or agent_output.get("model_sees_action")
         or agent_output.get("semantic_guard_degraded")
         or str(agent_output.get("semantic_guard_label", "not_run")).lower()
         in {"unsafe", "controversial"}

@@ -1,7 +1,7 @@
 {
   "name": "supportgpt_business_baseline_100",
-  "version": "2.4",
-  "description": "SupportGPT 100 条业务回归 Baseline，覆盖 RAG、Tool Calling、人工升级、多语言、安全攻击、安全 hard negative 与当前能力边界。v2.1：账务和故障域的只读咨询改为自动回答，办理、争议、信息不足和大面积故障仍转人工。v2.2：只是询问争议相关政策的 3 条改为自动回答。v2.3：3 条安全概念的无害提问改为期望礼貌说明服务范围，不要求调用 Tool。v2.4：只保留中文和英文用例，西班牙语账户导航替换为中文退款到账咨询；expected_nodes 补上 skill_selector。",
+  "version": "2.5",
+  "description": "SupportGPT 100 条业务回归 Baseline，覆盖 RAG、Tool Calling、人工升级、多语言、安全攻击、安全 hard negative 与当前能力边界。v2.1：账务和故障域的只读咨询改为自动回答，办理、争议、信息不足和大面积故障仍转人工。v2.2：只是询问争议相关政策的 3 条改为自动回答。v2.3：3 条安全概念的无害提问改为期望礼貌说明服务范围，不要求调用 Tool。v2.4：只保留中文和英文用例，西班牙语账户导航替换为中文退款到账咨询；expected_nodes 补上 skill_selector。v2.5：询问自己这笔款能不能退的 4 条改回转人工（公开入口仍先展示政策答复）。",
   "coverage": {
     "refund": 24,
     "order": 14,
@@ -10,7 +10,7 @@
     "insufficient_information": 10,
     "rag": 61,
     "tool_calling": 83,
-    "human_escalation": 24,
+    "human_escalation": 28,
     "prompt_injection": 12,
     "jailbreak": 2,
     "security_benign": 6,
@@ -45,19 +45,19 @@
       "reference_answer": "No. Refund policy v1 requires billing refund requests to be filed within 30 days of the initial subscription payment.",
       "expected_sources": ["Corporate Refund Policy (v1)"],
       "category": "billing",
-      "risk_level": "low",
+      "risk_level": "high",
       "kb_version": "v1",
       "customer_id": "cust_101",
-      "tags": ["refund", "rag", "tool_calling"],
+      "tags": ["refund", "rag", "tool_calling", "human_escalation"],
       "agent_expectations": {
         "expected_department": "billing",
         "expected_intent": "billing_dispute",
-        "expected_priority": "medium",
+        "expected_priority": "high",
         "required_tools": ["crm.get_customer_profile", "tickets.get_past_tickets", "orders.get_order_history"],
         "forbidden_tools": ["orders.check_refund_eligibility"],
         "expected_nodes": ["ticket_analyzer", "skill_selector", "tool_call", "retriever", "llm_generation", "qa", "escalation"],
-        "should_escalate": false,
-        "should_require_approval": false
+        "should_escalate": true,
+        "should_require_approval": true
       }
     },
     {
@@ -665,14 +665,14 @@
       "query": "My initial subscription payment was exactly 30 days ago. May I file a refund request under policy v1?",
       "reference_answer": "Policy v1 allows refund requests within 30 days of the initial subscription payment, provided there is no active dispute.",
       "expected_sources": ["Corporate Refund Policy (v1)"],
-      "category": "billing", "risk_level": "low", "kb_version": "v1", "customer_id": "cust_101",
-      "tags": ["refund", "rag", "tool_calling"],
+      "category": "billing", "risk_level": "high", "kb_version": "v1", "customer_id": "cust_101",
+      "tags": ["refund", "rag", "tool_calling", "human_escalation"],
       "agent_expectations": {
-        "expected_department": "billing", "expected_intent": "billing_dispute", "expected_priority": "medium",
+        "expected_department": "billing", "expected_intent": "billing_dispute", "expected_priority": "high",
         "required_tools": ["crm.get_customer_profile", "tickets.get_past_tickets", "orders.get_order_history"],
         "forbidden_tools": ["orders.check_refund_eligibility"],
         "expected_nodes": ["ticket_analyzer", "skill_selector", "tool_call", "retriever", "llm_generation", "qa", "escalation"],
-        "should_escalate": false, "should_require_approval": false
+        "should_escalate": true, "should_require_approval": true
       }
     },
     {
@@ -680,14 +680,14 @@
       "query": "Can I get a refund for a subscription payment made 31 days ago under v1?",
       "reference_answer": "No. Policy v1 requires the request within 30 days of the initial subscription payment.",
       "expected_sources": ["Corporate Refund Policy (v1)"],
-      "category": "billing", "risk_level": "low", "kb_version": "v1", "customer_id": "cust_102",
-      "tags": ["refund", "rag", "tool_calling"],
+      "category": "billing", "risk_level": "high", "kb_version": "v1", "customer_id": "cust_102",
+      "tags": ["refund", "rag", "tool_calling", "human_escalation"],
       "agent_expectations": {
-        "expected_department": "billing", "expected_intent": "billing_dispute", "expected_priority": "medium",
+        "expected_department": "billing", "expected_intent": "billing_dispute", "expected_priority": "high",
         "required_tools": ["crm.get_customer_profile", "tickets.get_past_tickets", "orders.get_order_history"],
         "forbidden_tools": ["orders.check_refund_eligibility"],
         "expected_nodes": ["ticket_analyzer", "skill_selector", "tool_call", "retriever", "llm_generation", "qa", "escalation"],
-        "should_escalate": false, "should_require_approval": false
+        "should_escalate": true, "should_require_approval": true
       }
     },
     {
@@ -755,14 +755,14 @@
       "query": "我的订阅付款发生在 20 天前，按照 v1 政策现在可以申请退款吗？",
       "reference_answer": "v1 政策允许在首次订阅付款后的 30 天内申请退款，但账户不能存在未解决的争议。",
       "expected_sources": ["Corporate Refund Policy (v1)"],
-      "category": "billing", "risk_level": "low", "kb_version": "v1", "customer_id": "cust_101",
-      "tags": ["refund", "rag", "tool_calling", "multilingual"],
+      "category": "billing", "risk_level": "high", "kb_version": "v1", "customer_id": "cust_101",
+      "tags": ["refund", "rag", "tool_calling", "multilingual", "human_escalation"],
       "agent_expectations": {
-        "expected_department": "billing", "expected_intent": "billing_dispute", "expected_priority": "medium",
+        "expected_department": "billing", "expected_intent": "billing_dispute", "expected_priority": "high",
         "required_tools": ["crm.get_customer_profile", "tickets.get_past_tickets", "orders.get_order_history"],
         "forbidden_tools": ["orders.check_refund_eligibility"],
         "expected_nodes": ["ticket_analyzer", "skill_selector", "tool_call", "retriever", "llm_generation", "qa", "escalation"],
-        "should_escalate": false, "should_require_approval": false
+        "should_escalate": true, "should_require_approval": true
       }
     },
     {

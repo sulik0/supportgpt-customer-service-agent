@@ -270,6 +270,12 @@ class TicketAnalyzerAgent:
                         fallback_reason=decision.fallback_reason,
                     )
                 )
+            # Jev 认为用户是在要求办理时，后面否决只读咨询判定；即使意图用的是规则结论也生效。
+            model_sees_action = bool(
+                decision.accepted
+                and decision.analysis is not None
+                and decision.analysis.get("operation_mode") == "action"
+            )
             if (
                 decision.accepted
                 and decision.analysis is not None
@@ -329,8 +335,13 @@ class TicketAnalyzerAgent:
                 sentiment,
             )
             # 只读的账务/故障咨询不按业务域默认规则强制转人工；负面情绪除外。
-            read_only_inquiry = sentiment != "negative" and is_read_only_inquiry(
-                normalized_intent, clean_description or clean_subject
+            # 关键词规则和模型判断都不认为是办理要求才算只读；模型只能否决，不能放行。
+            read_only_inquiry = (
+                sentiment != "negative"
+                and not model_sees_action
+                and is_read_only_inquiry(
+                    normalized_intent, clean_description or clean_subject
+                )
             )
             if read_only_inquiry:
                 priority = _READ_ONLY_PRIORITY.get(normalized_intent, priority)
@@ -341,6 +352,7 @@ class TicketAnalyzerAgent:
                 "sentiment": sentiment,
                 "priority": priority,
                 "read_only_inquiry": read_only_inquiry,
+                "model_sees_action": model_sees_action,
                 "intent": normalized_intent,
                 "department": defaults.department,
                 "analyzer_confidence": analyzer_confidence,

@@ -16,9 +16,7 @@ B, O = IntentType.BILLING_DISPUTE, IntentType.OUTAGE_REPORT
     [
         (B, "我的发票开了吗？发票号是多少"),
         (B, "按照 v2 退款政策，处理手续费是多少？"),
-        (B, "我的订阅付款发生在 20 天前，按照 v1 政策现在可以申请退款吗？"),
         (B, "What processing fee is deducted from a refund under corporate policy v2?"),
-        (B, "Can I still request a refund under policy v1?"),
         (B, "Check the payment amount for order ORD-8002."),
         # 询问争议相关政策不等于表达争议
         (B, "Can a refund be approved while my account still has an active dispute?"),
@@ -130,3 +128,146 @@ async def test_quality_and_confidence_gates_still_apply_to_read_only_inquiry(ove
     assert state["read_only_inquiry"] is True
     final = await escalation_agent.evaluate({**state, "qa_score": 0.95, **overrides})
     assert _requires_approval(final) is True
+
+
+# --- 以提问口气提出的办理要求：关键词规则不能把它们当成只读咨询 ---
+
+
+@pytest.mark.parametrize(
+    "text",
+    [
+        "Can you refund my order ORD-7001?",
+        "Could you please refund me?",
+        "Refund me now, okay?",
+        "I'd like my money back, is that possible?",
+        "Would you reverse the charge on my card?",
+        "Can you credit my account for the outage?",
+        "Please make it right and return my payment, can you?",
+        "Is it possible to get a refund? I want one.",
+        "Can I get a refund? Please process it today.",
+        "How do I dispute this charge?",
+        "能帮我把钱退回来吗？",
+        "这单不要了，钱能退给我吗？",
+        "麻烦处理一下退款可以吗？",
+        "能不能给我退了？",
+        "帮我办一下退货退款好吗？",
+        "什么时候把钱退给我？",
+        "可以安排退款吗？",
+        "把这笔订单退掉可以吗？",
+        "能把扣的钱还给我吗？",
+        "这笔扣款我不认，怎么办？",
+        "请尽快退款，多久能到？",
+        "我要求全额退款，可以吗？",
+        "帮我撤销这笔支付行吗？",
+        "订单 ORD-12001 可以退款吗？帮我操作一下",
+    ],
+)
+def test_action_requests_phrased_as_questions_are_not_read_only(text):
+    assert is_read_only_inquiry(B, text) is False
+
+
+@pytest.mark.parametrize(
+    "text",
+    [
+        "可以申请退款吗？",
+        "有未结争议的账户可以申请退款吗？",
+        "帮我查一下退款进度到哪了？",
+        "请问退款手续费是多少？",
+        "请查询订单 ORD-12003 的付款记录和发票进度，告诉我是否已付款、发票是否已开好。",
+        "麻烦帮我看一下发票开了没有？",
+        "Please check the card payment and current record for order ORD-7001.",
+        "Could you tell me how long a refund takes?",
+    ],
+)
+def test_lookups_and_policy_questions_stay_read_only(text):
+    assert is_read_only_inquiry(B, text) is True
+
+
+def _jev_says(monkeypatch, intent, operation_mode):
+    from src.decision.models import DecisionResult, TicketIntentDecision
+
+    async def decide(_text):
+        return TicketIntentDecision(
+            result=DecisionResult(
+                enabled=False, available=False, provider="x", operation="o",
+                question_set_version="v", model="m",
+            ),
+            accepted=True,
+            analysis={
+                "intent": intent, "priority": "high", "department": "billing",
+                "sentiment": "neutral", "confidence_score": 0.95,
+                "operation_mode": operation_mode,
+            },
+        )
+
+    monkeypatch.setattr("src.agents.analyzer.decision_service.classify_ticket", decide)
+
+
+@pytest.mark.asyncio
+async def test_model_can_veto_read_only_but_cannot_grant_it(monkeypatch):
+    # 关键词规则没认出来的说法：模型判断是办理要求，就不算只读，照常转人工。
+    text = "这笔订单的钱什么时候能回到我卡上？我等着用。"
+    _jev_says(monkeypatch, B, "information")
+    assert (await _final_state(text))["read_only_inquiry"] is True
+    _jev_says(monkeypatch, B, "action")
+    vetoed = await _final_state(text)
+    assert vetoed["read_only_inquiry"] is False
+    assert vetoed["escalation_recommended"] is True
+
+    # 反过来不行：规则认定是办理要求时，模型说“只是咨询”也不能放行。
+    _jev_says(monkeypatch, B, "information")
+    kept = await _final_state("我要退款 1299 元，请直接帮我退，可以吗？")
+    assert kept["read_only_inquiry"] is False
+    assert kept["escalation_recommended"] is True
+
+
+@pytest.mark.asyncio
+async def test_model_veto_applies_even_when_rule_intent_wins(monkeypatch):
+    # Jev 把账务问题判成通用咨询时意图用规则结论，但它对“办理要求”的判断仍然生效。
+    _jev_says(monkeypatch, IntentType.INFORMATION_REQUEST, "action")
+    state = await _final_state("发票上的金额什么时候能改过来？")
+    assert state["intent"] is B
+    assert state["read_only_inquiry"] is False
+
+
+# --- 问“我这笔款能不能退”：转人工，但不算办理要求，用户仍先看到政策答复 ---
+
+
+@pytest.mark.parametrize(
+    "text",
+    [
+        "我的订阅付款发生在 20 天前，按照 v1 政策现在可以申请退款吗？",
+        "我买了 20 天了，还能退款吗？",
+        "Can I still request a refund under policy v1?",
+        "Can I get a refund for a subscription payment made 31 days ago under v1?",
+        "My initial subscription payment was exactly 30 days ago. May I file a refund request under policy v1?",
+    ],
+)
+def test_asking_about_own_refund_eligibility_is_not_read_only(text):
+    from src.agents.inquiry import ACTION_OR_DISPUTE
+
+    assert is_read_only_inquiry(B, text) is False
+    # 不算办理要求：公开入口可以先展示政策答复。
+    assert not ACTION_OR_DISPUTE.search(text)
+
+
+@pytest.mark.parametrize(
+    "text",
+    ["可以申请退款吗？", "有未结争议的账户可以申请退款吗？", "Can my v2 refund be sent to a different card?"],
+)
+def test_generic_policy_questions_are_still_read_only(text):
+    assert is_read_only_inquiry(B, text) is True
+
+
+@pytest.mark.asyncio
+async def test_own_eligibility_question_escalates_and_allows_preliminary_answer():
+    from src.agents.public_reply import preliminary_answer_allowed
+
+    text = "我买了 20 天了，还能退款吗？"
+    state = await _final_state(text)
+    assert state["read_only_inquiry"] is False
+    assert state["escalation_recommended"] is True
+    output = {**state, "suggested_response": "按政策，付款后 30 天内可以申请退款。", "qa_score": 0.95}
+    assert preliminary_answer_allowed(output, text) is True
+    # 模型判断是办理要求时不展示草稿。
+    assert preliminary_answer_allowed({**output, "model_sees_action": True}, text) is False

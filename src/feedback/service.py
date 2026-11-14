@@ -399,9 +399,16 @@ class FeedbackService:
         limit: int,
         offset: int,
         ticket_id: int | None = None,
+        exclude_ticket_ids: Any = None,
     ) -> tuple[List[AgentRun], int]:
         """按工单精确筛选，并按最新优先分页返回 Agent Run。"""
         filters = [AgentRun.ticket_id == ticket_id] if ticket_id is not None else []
+        if exclude_ticket_ids is not None:
+            # 没有关联工单的 Run 保留；NOT IN 对 NULL 不成立，需要单独放行。
+            filters.append(
+                AgentRun.ticket_id.is_(None)
+                | AgentRun.ticket_id.notin_(exclude_ticket_ids)
+            )
         total_result = await db.execute(
             select(func.count()).select_from(AgentRun).where(*filters)
         )

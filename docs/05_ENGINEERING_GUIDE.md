@@ -209,7 +209,7 @@ Jev 采纳规则：意图是否采纳只看 `intent` 自身置信度（`JEV_INTE
 
 回复语言兜底：Prompt 虽已要求跟随当前 Description 的语言，`deepseek-flash` 在工具结果和 RAG 多为中文时仍可能用中文回答。`src/llm/provider.py` 的 `resolution_language_directive` 按 CJK 字符占比（≥30% 判中文）或英文常用词（且无非 ASCII 字母）判断主要语言，在发给 Resolver 的用户消息末尾追加 `Respond in English.` / `Respond in Chinese.`。用户明确指定回复语言、或无法可靠判断（如法语）时不追加，交给 Prompt 规则。QA 和范围外固定回复本来就按 Description 的 CJK 判断语言，未改动。
 
-只读咨询（`src/agents/inquiry.py`，2026-11-14 起）：账务（`billing_dispute`）和故障（`outage_report`）域里只是在问信息的请求，不再按业务域默认规则强制转人工。判定只看用户原文，是确定性规则，不使用模型输出：必须是提问或查询；不含办理、争议、投诉、越权类说法（“我要退款”“多扣”“dispute”“do not execute”等）；故障类还不能带大面积影响的说法（“所有用户”“大面积”“all users”）。命中后 Analyzer 写入 `read_only_inquiry=true`，账务优先级降为 `medium`、故障降为 `high`（不再是 `urgent`），域默认的负面情绪改为 `neutral`，Risk Engine 不再加 `high_risk_business_intent`。用户原文带明确负面情绪时不算只读咨询。其余审批条件不变：分类置信度低、QA 分低、幻觉、`response_requires_human`、依赖降级、安全信号任何一项出现仍转人工审批。意图和部门不变，退款写 Tool 仍不在自动路径上。只是询问争议相关政策（“有未结争议的账户能退款吗”）算只读咨询；“我有异议”“发起争议”“dispute this charge”才算表达争议。Baseline v2.2 相应把 40 条只读咨询的期望改为不转人工，5 条（要求退款、“不要执行”、信息不足的故障陈述、全量用户故障）保持转人工。
+只读咨询（`src/agents/inquiry.py`，2026-11-14 起）：账务（`billing_dispute`）和故障（`outage_report`）域里只是在问信息的请求，不再按业务域默认规则强制转人工。判定只看用户原文，是确定性规则，不使用模型输出：必须是提问或查询；不含办理、争议、投诉、越权类说法（“我要退款”“多扣”“dispute”“do not execute”等）；故障类还不能带大面积影响的说法（“所有用户”“大面积”“all users”）。命中后 Analyzer 写入 `read_only_inquiry=true`，账务优先级降为 `medium`、故障降为 `high`（不再是 `urgent`），域默认的负面情绪改为 `neutral`，Risk Engine 不再加 `high_risk_business_intent`。用户原文带明确负面情绪时不算只读咨询。以提问口气提出的办理要求（“能帮我把钱退回来吗”“Can you refund my order?”“麻烦处理一下退款可以吗”）按办理处理，“帮我查一下退款进度”这类查询仍算只读。询问自己这笔款能不能退（“我买了 20 天了，还能退款吗”“Can I get a refund for…”）也不算只读咨询：机器人直接回答“超期不能退”等于自动拒绝，所以转人工；它不属于办理要求，公开入口仍先展示政策答复。泛泛的政策提问（“可以申请退款吗”“有争议的账户能退款吗”）仍算只读。另有第二层保护：Jev 对 `operation_mode` 有把握地判为 `action` 时否决只读判定，即使意图用的是规则结论也生效；Jev 只能否决，不能把规则认定的办理要求放行。被 Jev 否决的请求不展示草稿（`model_sees_action`）。实测 Jev 对 16 条办理要求全部判为 `action`，对 40 条只读用例只有 2 条判为 `action`，正是上面“问自己能不能退”的那类。其余审批条件不变：分类置信度低、QA 分低、幻觉、`response_requires_human`、依赖降级、安全信号任何一项出现仍转人工审批。意图和部门不变，退款写 Tool 仍不在自动路径上。只是询问争议相关政策（“有未结争议的账户能退款吗”）算只读咨询；“我有异议”“发起争议”“dispute this charge”才算表达争议。Baseline v2.5 里 45 条账务/故障用例有 36 条期望不转人工，9 条转人工（要求退款、询问自己能不能退、“不要执行”、信息不足的故障陈述、全量用户故障）。
 
 分类和 QA 的几条确定性兜底（2026-11-14，来自真实模型 100 条回放）：规则明确命中账务或故障域时，Jev 不能把意图降成 `information_request`（其他方向的改判仍听 Jev）；问保修期限（多久、几个月）时，检索到的文档必须含具体期限才算权威依据，否则 `response_requires_human=true`；QA 评判 Prompt 明确了分值含义（之前的 JSON 示例写死 `"score":0.0`，模型经常照抄 0 分，导致凡是走到模型评判的回复都被判低分转人工）；请求解释 AI/提示词概念或询问客服如何应对绕过控制的无害提问，按范围外 `ai_security_concepts` 礼貌说明服务范围（真正的攻击在此之前已被 Guardrail 拦截；“先问概念、再接越权指令”不享受知识性讨论豁免）；Analyzer 和 QA 使用独立快速端点时，该端点调用失败会退回主模型再试一次。
 
@@ -481,10 +481,14 @@ python scripts/run_real_llm_regression.py --suite regression --confirm-live
 
 ```bash
 python scripts/run_online_reply_check.py --api-url <Railway 域名> --dry-run        # 只看用例数和预计调用
-python scripts/run_online_reply_check.py --api-url <Railway 域名> --confirm-live   # 19 条，约 5 分钟
+python scripts/run_online_reply_check.py --api-url <Railway 域名> --confirm-live   # 22 条，约 5 分钟
 ```
 
 用例在 `evaluation/online_checks/reply_checks.json`（只含中文和英文）。每条检查状态、转人工原因、意图、Tool、回复语言、必须出现和禁止出现的内容、长度，以及回复里有没有残留 `[S1]` 这类内部引用。每条会新建 1 张线上工单并调用真实模型；检查完脚本凭本次反馈令牌调用撤回接口清理，结尾列出没清理掉的工单号。任何一条不通过或有工单没清理，退出码为 1。报告写到 `evaluation/reports/online_reply_check/`（不进 Git）。
+
+测试工单标记（2026-11-14 起，测试、冒烟、线上检查必须遵守）：请求公开咨询入口时带请求头 `X-SupportGPT-Test: <标签>`（标签只保留字母、数字和 `_.:-`），创建的工单会写入 `ticket_test_marks` 表。员工后台的 `/tickets`、`/staff/review-queue`、`/approvals/pending`、`/observability/runs` 默认不返回带标记的工单，所以即使撤回失败，测试工单也不会出现在后台；需要排查时加 `include_test=true`，返回的工单带 `is_test` 字段，按 `ticket_id` 查 Run 时不过滤。`run_post_deploy_smoke.py --with-chat`（标签 `smoke`，结束后撤回）和 `run_online_reply_check.py`（标签 `reply-check`）都已带上。临时手工探测也必须带这个请求头并保留 `feedback_token` 用于撤回。标记用独立的表而不是给 `tickets` 加列，因为线上没有迁移工具，新表由启动期 `create_all` 自动创建。
+
+旧测试工单的一次性处理：`src/tickets/test_marks.py` 的 `cleanup_legacy_test_tickets` 在启动时执行，给 2026-11-12 至 11-14 探测脚本留下的 57 张工单（`src/tickets/legacy_test_tickets.py`，按 id 加首行文本哈希比对）和 2026-11-15 之前的冒烟工单（固定问句）打标记并撤回。幂等，处理过的不会再处理；确认线上已清理后可以删除这段代码。
 
 多意图问题的 QA 处理：问题里某个主题缺权威依据（例如“保修多久”，知识库没有具体期限）时，如果草稿只对该主题说明“无法确认、需人工”而没有下结论，规则不再把整条回复判为幻觉，其余内容继续交给评判；`response_requires_human` 保持为真，人工仍会跟进该主题。公开入口对这种情况走先答后审：用户先看到能答的部分。草稿就该主题给出了具体结论（例如保修期限的数字）时，仍判幻觉并扣下。
 

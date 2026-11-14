@@ -23,11 +23,23 @@ ACTION_OR_DISPUTE = re.compile(
     r"(?:我|我们)(?:要|想|需要)?(?:对|就)?.{0,12}(?:有|提出|发起|申请)(?:争议|异议)|"
     r"(?:发起|提出|提交)(?:争议|异议|申诉)|"
     r"多扣|乱扣|错扣|重复扣|扣错|盗刷|被骗|欺骗|骗子|"
-    r"金额不对|金额有误|金额错|扣款有误|"
+    r"金额不对|金额有误|金额错|扣款有误|不认(?!识)|"
+    # 以提问口气提出的办理要求：“能帮我把钱退回来吗”“麻烦处理一下退款可以吗”。
+    # 请求对象（帮我/麻烦/请…）后面紧跟办理动作才算；“帮我查一下退款进度”是查询。
+    r"(?:帮我|给我|替我|麻烦|(?<!申)请(?!问)|尽快|马上|立即|立刻|安排)"
+    r"(?:(?!查|问|看|确认|核实|告诉|说明|解释).){0,12}?(?:退|撤销|取消|赔|补偿|返还|还给)|"
+    r"(?:帮我|给我|替我|麻烦|(?<!申)请(?!问))(?:(?!查|问|看|确认|核实|告诉|说明|解释).){0,6}"
+    r"(?:操作|办理|处理|办一下)|"
+    r"要求.{0,6}退|退掉|退回来|退回给|还给我|把.{0,12}(?:退|还)(?:掉|了|回|给)|"
     r"\b(?:i (?:want|need|demand|would like)|give me|issue|process|"
     r"please (?:refund|cancel|reverse|credit))\b.{0,30}"
     r"\b(?:refund|money back|chargeback|credit|compensation)\b|"
     r"\b(?:want|need|demand) (?:a |my |the |full )*refund\b|"
+    r"\b(?:can|could|will|would) you (?:please |kindly |just )*"
+    r"(?:refund|cancel|reverse|credit|compensate|reimburse|return my|give .{0,12} back)\b|"
+    r"\brefund me\b|\bmoney back\b|\breturn my (?:payment|money)\b|\bcredit my account\b|"
+    r"\bi (?:want|need|would like|'d like) (?:one|it|that|this)\b|"
+    r"\bplease (?:process|handle|issue|make|do|return|refund)\b|\bjust do it\b|\bprocess it\b|"
     r"\bi(?:'m| am)? request(?:ing)? (?:a |my |the |full )*refund\b|"
     r"\bi (?:want to |need to |will |would like to |am going to )?dispute\b|"
     r"\b(?:file|open|raise|start|submit)(?:ing)? (?:a |my )?dispute\b|"
@@ -36,6 +48,16 @@ ACTION_OR_DISPUTE = re.compile(
     r"cancel|reverse|overcharged|charged twice|double charged|wrong(?:ly)? charged?|"
     r"incorrect(?:ly)? charged?|without approval|skip approval|do not execute|"
     r"don't execute)\b",
+    re.IGNORECASE,
+)
+# 问“我这笔款能不能退”：不是泛泛问政策，而是在确认自己的退款资格。
+# 机器人直接回答“超期不能退”等于自动拒绝，所以转人工；它不算办理要求，
+# 公开入口仍可先展示政策答复（先答后审）。
+ELIGIBILITY_REQUEST = re.compile(
+    r"\b(?:can|may|could) i\b.{0,40}\b(?:refund|money back|reimburse\w*)\b|"
+    r"\bam i (?:eligible|entitled)\b.{0,30}\brefund\b|"
+    r"(?:我|我们)(?:的)?.{0,40}(?:可以|可不可以|能不能|能否|可否|能)"
+    r".{0,6}(?:申请|办理|要求)?退(?:款|费|货|订)",
     re.IGNORECASE,
 )
 # 明确的提问或查询。英文助动词只在句首才算提问，避免把陈述句当成问题。
@@ -64,6 +86,8 @@ def is_read_only_inquiry(intent: IntentType, text: str) -> bool:
     if not normalized or ACTION_OR_DISPUTE.search(normalized):
         return False
     if not QUESTION.search(normalized):
+        return False
+    if intent == IntentType.BILLING_DISPUTE and ELIGIBILITY_REQUEST.search(normalized):
         return False
     if intent == IntentType.OUTAGE_REPORT and WIDE_IMPACT.search(normalized):
         return False

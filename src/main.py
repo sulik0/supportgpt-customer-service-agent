@@ -144,6 +144,14 @@ from src.tickets.state_machine import (
     TicketStatus,
     ticket_state_machine,
 )
+from src.tickets.test_marks import (
+    TEST_HEADER,
+    cleanup_legacy_test_tickets,
+    mark_test_ticket,
+    normalize_label,
+    test_ticket_ids,
+    withdraw_ticket,
+)
 from src.tools.crm import crm_tool
 from src.tools.audit import tool_audit_repository
 from src.tools.audit_context import begin_tool_audit_scope, finish_tool_audit_scope
@@ -534,6 +542,13 @@ async def lifespan(app: FastAPI):
     async with AsyncSessionLocal() as db:
         await tool_governance_service.backfill_reviews(db)
         await db.commit()
+    # 一次性处理测试标记上线前留下的线上测试工单；幂等，失败不影响启动。
+    try:
+        async with AsyncSessionLocal() as db:
+            await cleanup_legacy_test_tickets(db)
+            await db.commit()
+    except Exception:
+        logger.exception("Legacy test ticket cleanup failed; startup continues.")
     await _load_tool_runtime_settings()
     await initialize_agent_checkpointing()
     await _recover_resumable_workflows()
@@ -1353,15 +1368,20 @@ async def list_observability_runs(
     limit: int = Query(default=30, ge=1, le=100),
     offset: int = Query(default=0, ge=0),
     ticket_id: int | None = Query(default=None, ge=1),
+    include_test: bool = Query(default=False),
     current_user: User = Depends(require_manager),
     db: AsyncSession = Depends(get_db),
 ):
-    """供主管按工单筛选并分页查看可关联 Trace 的 Agent Run。"""
+    """供主管按工单筛选并分页查看可关联 Trace 的 Agent Run；默认不含测试工单。"""
     runs, total = await feedback_service.list_agent_runs(
         db,
         limit=limit,
         offset=offset,
         ticket_id=ticket_id,
+        # 按工单号精确查询时不过滤，方便排查某张测试工单。
+        exclude_ticket_ids=(
+            None if include_test or ticket_id is not None else test_ticket_ids()
+        ),
     )
     return AgentRunPageResponse(
         items=runs,
@@ -1374,10 +1394,16 @@ async def list_observability_runs(
 # --- HUMAN IN THE LOOP APPROVAL APIS ---
 @app.get("/approvals/pending", response_model=list[ResponseApprovalResponse])
 async def list_pending_approvals(
-    current_user: User = Depends(require_agent), db: AsyncSession = Depends(get_db)
+    include_test: bool = Query(default=False),
+    current_user: User = Depends(require_agent),
+    db: AsyncSession = Depends(get_db),
 ):
     """Secure endpoint: list all response drafts needing validation."""
     records = await human_it_loop_service.get_pending_approvals(db)
+    if not include_test:
+        # 测试工单的待审批不进入员工的审批列表。
+        marked = set((await db.execute(test_ticket_ids())).scalars().all())
+        records = [record for record in records if record.ticket_id not in marked]
 
     # Map to schema
     output = []
@@ -1780,22 +1806,10 @@ async def withdraw_public_request(
         ).scalars().first()
     if ticket is None:
         raise HTTPException(status_code=404, detail="Ticket not found.")
-    pending = (
-        await db.execute(
-            select(ResponseApproval).where(
-                ResponseApproval.ticket_id == ticket.id,
-                ResponseApproval.status == "pending",
-            )
-        )
-    ).scalars().all()
-    for approval in pending:
-        approval.status = "withdrawn"
-        await durable_execution_service.cancel_for_approval(db, approval.id)
-    if ticket.status != TicketStatus.CLOSED:
-        ticket_state_machine.transition(ticket, TicketAction.WITHDRAW)
+    withdrawn = await withdraw_ticket(db, ticket)
     await db.commit()
     return PublicWithdrawResponse(
-        ticket_id=ticket.id, status=ticket.status, withdrawn_approvals=len(pending)
+        ticket_id=ticket.id, status=ticket.status, withdrawn_approvals=withdrawn
     )
 
 
@@ -1901,6 +1915,11 @@ async def create_public_support_request(
         priority="medium",
     )
     db.add(ticket)
+    await db.flush()
+    # 测试、冒烟和线上检查的请求带测试请求头：工单打标记，员工后台默认不显示。
+    test_label = normalize_label(request.headers.get(TEST_HEADER))
+    if test_label:
+        await mark_test_ticket(db, ticket.id, label=test_label, source="header")
     await db.commit()
     await db.refresh(ticket)
     memory_context = await memory_service.begin_turn(
@@ -2116,32 +2135,51 @@ async def close_ticket(
     return ticket
 
 
+async def _with_test_flag(db: AsyncSession, tickets: list[Ticket]) -> list[TicketResponse]:
+    marked = set((await db.execute(test_ticket_ids())).scalars().all())
+    return [
+        TicketResponse.model_validate(ticket).model_copy(
+            update={"is_test": ticket.id in marked}
+        )
+        for ticket in tickets
+    ]
+
+
 @app.get("/tickets", response_model=list[TicketResponse])
 async def list_tickets(
-    current_user: User = Depends(require_agent), db: AsyncSession = Depends(get_db)
+    include_test: bool = Query(default=False),
+    current_user: User = Depends(require_agent),
+    db: AsyncSession = Depends(get_db),
 ):
-    result = await db.execute(select(Ticket))
-    return result.scalars().all()
+    """默认不返回测试工单；include_test=true 时一并返回并带 is_test 标记。"""
+    query = select(Ticket)
+    if not include_test:
+        query = query.where(Ticket.id.notin_(test_ticket_ids()))
+    result = await db.execute(query)
+    return await _with_test_flag(db, list(result.scalars().all()))
 
 
 @app.get("/staff/review-queue", response_model=list[TicketResponse])
 async def list_staff_review_queue(
-    current_user: User = Depends(require_agent), db: AsyncSession = Depends(get_db)
+    include_test: bool = Query(default=False),
+    current_user: User = Depends(require_agent),
+    db: AsyncSession = Depends(get_db),
 ):
-    """返回待回复审批或存在待核实业务操作的工单。"""
+    """返回待回复审批或存在待核实业务操作的工单；默认不含测试工单。"""
     review_tickets = select(ToolActionReview.ticket_id).where(
         ToolActionReview.status == "pending"
     )
-    result = await db.execute(
-        select(Ticket)
-        .where((Ticket.status == "pending_approval") | Ticket.id.in_(review_tickets))
-        .order_by(Ticket.updated_at.desc(), Ticket.id.desc())
+    query = select(Ticket).where(
+        (Ticket.status == "pending_approval") | Ticket.id.in_(review_tickets)
     )
-    tickets = result.scalars().all()
+    if not include_test:
+        query = query.where(Ticket.id.notin_(test_ticket_ids()))
+    result = await db.execute(
+        query.order_by(Ticket.updated_at.desc(), Ticket.id.desc())
+    )
+    tickets = list(result.scalars().all())
     pending_ids = set((await db.execute(review_tickets)).scalars().all())
     return [
-        TicketResponse.model_validate(ticket).model_copy(
-            update={"requires_tool_review": ticket.id in pending_ids}
-        )
-        for ticket in tickets
+        item.model_copy(update={"requires_tool_review": item.id in pending_ids})
+        for item in await _with_test_flag(db, tickets)
     ]

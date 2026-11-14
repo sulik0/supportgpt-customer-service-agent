@@ -729,7 +729,7 @@ async def test_compiled_langgraph_flow():
         "ticket_id": 99,
         "customer_id": "cust_101",
         "subject": "Billing refund request",
-        "description": "Can I get a refund for my payment done 5 days ago?",
+        "description": "How long does an approved refund take to reach my bank account?",
         "kb_version": "v1",
     }
 

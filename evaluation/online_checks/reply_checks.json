@@ -1,6 +1,6 @@
 {
   "name": "supportgpt_online_reply_checks",
-  "version": "1.0",
+  "version": "1.2",
   "description": "线上回复质量检查用例：只含中文和英文。每条检查状态、转人工原因、意图、Tool、语言和关键内容。",
   "cases": [
     {"id": "order-status-zh", "customer": "cust_201", "message": "帮我查一下订单 ORD-12001 到哪了",
@@ -27,6 +27,13 @@
      "must_not_match": ["保修.{0,8}\\d+\\s*(?:个月|年|天)"]},
     {"id": "refund-action-zh", "customer": "cust_202", "message": "网关设备用着不满意，我要退款 1299 元，请直接帮我退",
      "status": ["pending_human"], "handling_reason": ["business_review"], "language": "zh", "must_not_match": ["已(?:经)?(?:为您)?退款", "退款已(?:完成|到账)"]},
+    {"id": "own-refund-eligibility-zh", "customer": "cust_202", "message": "我买了 20 天了，还能退款吗？",
+     "status": ["answered"], "handling_reason": ["preliminary_answer"], "intent": ["billing_dispute"], "language": "zh",
+     "must_not_match": ["已(?:经)?(?:为您)?退款", "退款已(?:完成|到账)"]},
+    {"id": "refund-as-question-zh", "customer": "cust_202", "message": "能帮我把钱退回来吗？",
+     "status": ["pending_human"], "handling_reason": ["business_review"], "must_not_match": ["已(?:经)?(?:为您)?退款", "退款已(?:完成|到账)"]},
+    {"id": "refund-as-question-en", "customer": "cust_101", "message": "Can you refund my order ORD-7001?",
+     "status": ["pending_human"], "handling_reason": ["business_review"], "language": "en", "must_not_match": ["(?i)has been refunded", "(?i)refund (?:is|was) (?:complete|processed)"]},
     {"id": "cancel-order-zh", "customer": "cust_201", "message": "订单 ORD-12001 我不想要了，帮我取消",
      "status": ["pending_human"], "handling_reason": ["business_review"], "must_not_match": ["已(?:经)?(?:为您)?取消"]},
     {"id": "complaint-threat-zh", "customer": "cust_201", "message": "你们这群骗子，垃圾公司，再不处理我就去消协和媒体曝光你们",

@@ -31,6 +31,7 @@ PASS, FAIL, WARN, SKIP = "PASS", "FAIL", "WARN", "SKIP"
 DEFAULT_PROFILE = "cust_101"
 DEFAULT_MESSAGE = "你们的退货政策是什么？"
 TRACE_CHECK_NAME = "LangSmith Trace 回查"
+TEST_HEADER = "X-SupportGPT-Test"
 EXIT_TRACE_ONLY = 3
 
 
@@ -185,51 +186,14 @@ def check_cors(client: Http, api: str, frontend_origin: str) -> Result:
     return Result(name, PASS, "预检通过")
 
 
-def check_chat(
-    client: Http,
-    api: str,
-    *,
-    profile: str,
-    message: str,
-    timeout: float,
-    request_id: str | None = None,
+def _check_insight(
+    client: Http, api: str, run_id: str | None, token: str | None
 ) -> list[Result]:
-    """走一遍公开咨询入口：写库 → Workflow → 模型 → 公开运行摘要。"""
-    name = "公开咨询 POST /support/requests"
-    resp = client.request(
-        "POST",
-        api + "/support/requests",
-        headers={"X-Request-Id": request_id} if request_id else None,
-        body={"customer_id": profile, "message": message},
-        timeout=timeout,
-    )
-    if resp.status != 201:
-        return [Result(name, FAIL, f"HTTP {resp.status}: {resp.text()[:200]}")]
-    data = resp.json()
-    results = []
-    reply = data.get("response") or data.get("message")
-    if data.get("status") not in {"answered", "pending_human"} or not reply:
-        return [Result(name, FAIL, f"返回内容异常: {json.dumps(data, ensure_ascii=False)[:200]}")]
-    if data.get("handling_reason") == "processing_exception":
-        # 工单被保留并转人工，说明某个下游（模型/RAG/数据库）当时不可用。
-        results.append(
-            Result(name, FAIL, "返回 processing_exception：Workflow 内有下游服务失败")
-        )
-    else:
-        results.append(
-            Result(
-                name,
-                PASS,
-                f"status={data['status']}, handling_reason={data.get('handling_reason')}",
-            )
-        )
-
-    run_id = data.get("agent_run_id")
+    results: list[Result] = []
     iname = "公开运行摘要 /support/runs/{id}/insight"
     if not run_id:
         results.append(Result(iname, FAIL, "响应没有 agent_run_id，AgentRun 未落库"))
         return results
-    token = data.get("feedback_token")
     if not token:
         results.append(Result(iname, FAIL, "响应没有 feedback_token，无法读取运行摘要"))
         return results
@@ -258,6 +222,69 @@ def check_chat(
                 iname,
                 PASS,
                 f"节点 {len(path)} 个, tokens={tokens}, qa_score={info.get('qa_score')}",
+            )
+        )
+    return results
+
+
+def check_chat(
+    client: Http,
+    api: str,
+    *,
+    profile: str,
+    message: str,
+    timeout: float,
+    request_id: str | None = None,
+) -> list[Result]:
+    """走一遍公开咨询入口：写库 → Workflow → 模型 → 公开运行摘要。"""
+    name = "公开咨询 POST /support/requests"
+    resp = client.request(
+        "POST",
+        api + "/support/requests",
+        # 测试请求头：冒烟工单打上测试标记，员工后台默认不显示。
+        headers={
+            TEST_HEADER: "smoke",
+            **({"X-Request-Id": request_id} if request_id else {}),
+        },
+        body={"customer_id": profile, "message": message},
+        timeout=timeout,
+    )
+    if resp.status != 201:
+        return [Result(name, FAIL, f"HTTP {resp.status}: {resp.text()[:200]}")]
+    data = resp.json()
+    results = []
+    reply = data.get("response") or data.get("message")
+    if data.get("status") not in {"answered", "pending_human"} or not reply:
+        return [Result(name, FAIL, f"返回内容异常: {json.dumps(data, ensure_ascii=False)[:200]}")]
+    if data.get("handling_reason") == "processing_exception":
+        # 工单被保留并转人工，说明某个下游（模型/RAG/数据库）当时不可用。
+        results.append(
+            Result(name, FAIL, "返回 processing_exception：Workflow 内有下游服务失败")
+        )
+    else:
+        results.append(
+            Result(
+                name,
+                PASS,
+                f"status={data['status']}, handling_reason={data.get('handling_reason')}",
+            )
+        )
+
+    run_id = data.get("agent_run_id")
+    token = data.get("feedback_token")
+    results.extend(_check_insight(client, api, run_id, token))
+    if run_id and token:
+        # 冒烟结束后撤回工单：关闭并移出人工队列。失败只告警，工单仍有测试标记。
+        wd = client.request(
+            "POST",
+            f"{api}/support/runs/{run_id}/withdraw",
+            headers={"X-Feedback-Token": token},
+        )
+        results.append(
+            Result(
+                "撤回冒烟工单",
+                PASS if wd.status == 200 else WARN,
+                "已关闭并移出人工队列" if wd.status == 200 else f"HTTP {wd.status}",
             )
         )
     return results

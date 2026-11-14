@@ -127,6 +127,10 @@ class DecisionService:
                     else "positive" if intent is IntentType.FEEDBACK else "neutral"
                 ),
                 "confidence_score": confidence,
+                # 只在有把握时带出：Analyzer 用它否决“只读咨询”判定，不用它放行。
+                "operation_mode": (
+                    str(operation_mode.value) if mode_confident else None
+                ),
                 **(
                     {
                         "request_scope": "out_of_scope",

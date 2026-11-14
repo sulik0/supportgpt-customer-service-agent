@@ -249,6 +249,7 @@ class TicketResponse(BaseModel):
     department: Optional[str]
     sla_hours: Optional[float]
     requires_tool_review: bool = False
+    is_test: bool = False
     created_at: datetime
     updated_at: datetime
 

@@ -669,3 +669,17 @@ class ToolInvocationAudit(Base):
     created_at = Column(
         DateTime, default=datetime.datetime.utcnow, nullable=False, index=True
     )
+
+
+class TicketTestMark(Base):
+    """标记测试、冒烟、线上检查产生的工单；员工后台默认不显示这些工单。
+
+    用独立的表而不是给 tickets 加列：线上没有迁移工具，新表由 create_all 自动创建。
+    """
+
+    __tablename__ = "ticket_test_marks"
+
+    ticket_id = Column(Integer, ForeignKey("tickets.id"), primary_key=True)
+    label = Column(String(60), nullable=False)
+    source = Column(String(20), nullable=False)  # header, legacy
+    created_at = Column(DateTime, default=datetime.datetime.utcnow, nullable=False)

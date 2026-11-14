@@ -111,7 +111,8 @@ def run(args: argparse.Namespace) -> int:
             "POST", "/support/requests",
             {"customer_id": case["customer"], "message": case["message"],
              "session_id": f"{session}-{case['id']}"},
-            {"X-Request-Id": uuid.uuid4().hex},
+            # 测试请求头：工单打上测试标记，即使撤回失败也不会出现在员工后台。
+            {"X-Request-Id": uuid.uuid4().hex, "X-SupportGPT-Test": "reply-check"},
         )
         insight: dict = {}
         run_id, token = data.get("agent_run_id"), data.get("feedback_token")

@@ -14,11 +14,11 @@
       "agent_expectations": {
         "expected_department": "billing",
         "expected_intent": "billing_dispute",
-        "expected_priority": "medium",
+        "expected_priority": "high",
         "required_tools": ["crm.get_customer_profile", "tickets.get_past_tickets", "orders.get_order_history"],
         "expected_nodes": ["ticket_analyzer", "skill_selector", "tool_call", "retriever", "llm_generation", "qa", "escalation"],
-        "should_escalate": false,
-        "should_require_approval": false
+        "should_escalate": true,
+        "should_require_approval": true
       }
     },
     {

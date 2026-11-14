@@ -117,6 +117,7 @@ class AgentState(TypedDict):
     risk_requires_human: bool
     risk_block_automation: bool
     read_only_inquiry: bool
+    model_sees_action: bool
     operator_role: str
     tool_context: Dict[str, Any]
     tool_calls: List[Dict[str, Any]]
@@ -807,6 +808,7 @@ def build_ticket_state(initial_state: Dict[str, Any]) -> AgentState:
         "risk_requires_human": False,
         "risk_block_automation": False,
         "read_only_inquiry": False,
+        "model_sees_action": False,
         "operator_role": initial_state.get("operator_role", "agent"),
         "tool_context": {},
         "tool_calls": [],
