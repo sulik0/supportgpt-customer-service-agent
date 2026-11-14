@@ -15,7 +15,16 @@ _REFERENTIAL_CONTEXT = re.compile(
 _EXECUTE_REFERENCED_PAYLOAD = re.compile(
     r"(?:and|then|now|please).{0,24}"
     r"(?:follow|execute|obey|perform|do it|apply it|comply)|"
-    r"(?:然后|现在|请).{0,16}(?:执行|遵循|照做|应用|服从)"
+    r"(?:然后|现在|请).{0,16}(?:执行|遵循|照做|应用|服从)|"
+    # 先问一个概念问题、再接一条越权指令：后半句是指令，不是在讨论。
+    r"(?:\band\b|\bthen\b|\bnow\b|\balso\b|\bplease\b|\bafter that\b).{0,40}"
+    r"\b(?:ignore|disregard|forget|override|bypass|reveal|print|output|show me|"
+    r"leak|send|dump|repeat)\b.{0,60}"
+    r"\b(?:instructions?|rules?|prompts?|yours|restrictions?|guardrails?|"
+    r"api key|secrets?|credentials?|passwords?)\b|"
+    r"(?:然后|现在|请|并且|并|再|顺便|同时).{0,16}"
+    r"(?:忽略|无视|绕过|输出|泄露|显示|打印|发送|告诉我|发给我).{0,30}"
+    r"(?:指令|规则|提示词|限制|密钥|密码|凭据)"
 )
 
 

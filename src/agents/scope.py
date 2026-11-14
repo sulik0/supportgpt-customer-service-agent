@@ -45,6 +45,22 @@ _UNSUPPORTED_TOPICS = (
         ),
     ),
     (
+        # 请求解释 AI/提示词概念，或询问客服如何应对绕过控制：不是售后业务，
+        # 知识库也没有依据。真正的攻击在此之前已被 Guardrail 拦截。
+        "ai_security_concepts",
+        re.compile(
+            r"(?:什么是|什么叫|解释|介绍|区别|含义).{0,30}(?:提示词|越狱|prompt)|"
+            r"(?:提示词|越狱).{0,20}(?:是什么|什么意思|的区别)|"
+            r"\b(?:what is|what are|what's|explain|define|describe|difference between)\b"
+            r".{0,60}\b(?:prompt injection|system prompts?|user prompts?|jailbreak(?:ing)?)\b|"
+            r"\b(?:how|what) (?:should|do|does|would|can)\b.{0,60}"
+            r"\b(?:bypass|circumvent)\w*\b.{0,30}"
+            r"\b(?:controls?|safety|security|restrictions?|guardrails?|filters?)\b|"
+            r"(?:如何|怎么|怎样|应该).{0,30}(?:应对|处理|回应).{0,30}绕过.{0,10}(?:限制|控制|安全)",
+            re.IGNORECASE,
+        ),
+    ),
+    (
         "general_programming",
         re.compile(
             r"(?:写|实现|编写|生成).{0,20}"
