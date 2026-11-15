@@ -28,6 +28,7 @@ configure_logging(settings.LOG_LEVEL)
 
 from src.agents.checkpointing import checkpoint_manager
 from src.agents.public_reply import (
+    answered_note,
     preliminary_answer_allowed,
     preliminary_answer_note,
     public_review_feedback,
@@ -1982,7 +1983,7 @@ async def create_public_support_request(
         session_id=session_id,
         status="answered",
         response=agent_output.get("suggested_response", ""),
-        message="智能客服已完成处理。",
+        message=answered_note(message),
         handling_reason=None,
         created_at=ticket.created_at,
         agent_run_id=agent_run.id if agent_run else None,

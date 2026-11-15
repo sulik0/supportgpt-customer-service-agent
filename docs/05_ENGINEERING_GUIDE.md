@@ -481,10 +481,12 @@ python scripts/run_real_llm_regression.py --suite regression --confirm-live
 
 ```bash
 python scripts/run_online_reply_check.py --api-url <Railway 域名> --dry-run        # 只看用例数和预计调用
-python scripts/run_online_reply_check.py --api-url <Railway 域名> --confirm-live   # 22 条，约 5 分钟
+python scripts/run_online_reply_check.py --api-url <Railway 域名> --confirm-live   # 24 条，约 6 分钟
 ```
 
 用例在 `evaluation/online_checks/reply_checks.json`（只含中文和英文）。每条检查状态、转人工原因、意图、Tool、回复语言、必须出现和禁止出现的内容、长度，以及回复里有没有残留 `[S1]` 这类内部引用。每条会新建 1 张线上工单并调用真实模型；检查完脚本凭本次反馈令牌调用撤回接口清理，结尾列出没清理掉的工单号。任何一条不通过或有工单没清理，退出码为 1。报告写到 `evaluation/reports/online_reply_check/`（不进 Git）。
+
+Prompt Injection 规则层的变体覆盖（`tests/test_injection_variants.py`）：26 条攻击（指令在开头、客套或业务问题后接指令、以讨论/举报/举例/培训为名义、指令夹在业务问题中间、角色扮演）必须被拦截，14 条相近的无害说法（知识性讨论、转述、否定句、含“忽略/规则/API key/限制”的普通业务问题）不能误拦。线上没有启用语义安全模型：Railway 上只有 `QWEN3_GUARD_ENABLED`，没有 Guard 的地址、密钥和模型变量，所以线上的输入安全检测只有规则层这一层。
 
 测试工单标记（2026-11-14 起，测试、冒烟、线上检查必须遵守）：请求公开咨询入口时带请求头 `X-SupportGPT-Test: <标签>`（标签只保留字母、数字和 `_.:-`），创建的工单会写入 `ticket_test_marks` 表。员工后台的 `/tickets`、`/staff/review-queue`、`/approvals/pending`、`/observability/runs` 默认不返回带标记的工单，所以即使撤回失败，测试工单也不会出现在后台；需要排查时加 `include_test=true`，返回的工单带 `is_test` 字段，按 `ticket_id` 查 Run 时不过滤。`run_post_deploy_smoke.py --with-chat`（标签 `smoke`，结束后撤回）和 `run_online_reply_check.py`（标签 `reply-check`）都已带上。临时手工探测也必须带这个请求头并保留 `feedback_token` 用于撤回。标记用独立的表而不是给 `tickets` 加列，因为线上没有迁移工具，新表由启动期 `create_all` 自动创建。
 

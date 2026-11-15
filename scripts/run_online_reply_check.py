@@ -52,6 +52,12 @@ def evaluate_case(case: dict, data: dict, insight: dict) -> list[str]:
         failures.append("回复不是中文")
     if language == "en" and _CJK.search(reply):
         failures.append("回复不是英文")
+    # 回复下方的状态说明也要跟随用户语言。
+    note = str(data.get("message") or "")
+    if language == "en" and _CJK.search(note):
+        failures.append("状态说明不是英文")
+    if language == "zh" and note and not _CJK.search(note):
+        failures.append("状态说明不是中文")
     includes = case.get("must_include_any") or []
     if includes and not any(item.lower() in reply.lower() for item in includes):
         failures.append(f"回复不含任一关键内容 {includes}")

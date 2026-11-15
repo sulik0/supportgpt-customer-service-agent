@@ -48,3 +48,10 @@ def test_case_file_only_has_chinese_or_english_and_valid_patterns():
         assert not re.search(r"[¿¡áéíóúñüàèçâêôöäßЀ-ӿ぀-ヿ가-힯]", case["message"])
         for pattern in case.get("must_not_match", []):
             re.compile(pattern)
+
+
+def test_status_note_language_is_checked_too():
+    data = {"status": "answered", "response": "We handle orders.", "message": "智能客服已完成处理。"}
+    assert "状态说明不是英文" in check.evaluate_case({"language": "en"}, data, {})
+    data["message"] = "The assistant has answered your question."
+    assert check.evaluate_case({"language": "en"}, data, {}) == []

@@ -756,18 +756,20 @@ async def test_heartbeat_keeps_slow_handler_owned(monkeypatch, tmp_path):
         await db.commit()
     definition = tool_registry.get_definition("orders.create_refund_request")
 
+    # 租约 1 秒、心跳约每 0.33 秒一次：留出 0.6 秒以上的余量，CI 慢机器上不会因调度延迟误判。
     def slow_handler(**kwargs):
-        time.sleep(0.7)
+        time.sleep(2.0)
         return refund_gateway.create_refund_request(**kwargs)
 
     monkeypatch.setitem(
-        tool_registry._tools, definition.name, replace(definition, handler=slow_handler)
+        tool_registry._tools, definition.name, replace(definition, handler=slow_handler, timeout_seconds=5.0)
     )
-    monkeypatch.setattr(settings, "TOOL_OUTBOX_LEASE_SECONDS", 0.3)
+    monkeypatch.setattr(settings, "TOOL_OUTBOX_LEASE_SECONDS", 1.0)
     first, second = ToolOutboxWorker(), ToolOutboxWorker()
     try:
         task = asyncio.create_task(first.run_once(factory))
-        await asyncio.sleep(0.5)
+        # 1.5 秒时原租约（1 秒）已过期，只有心跳续租成功，第二个 Worker 才抢不到。
+        await asyncio.sleep(1.5)
         assert await second._claim_batch(factory) == []
         await task
         async with factory() as db:

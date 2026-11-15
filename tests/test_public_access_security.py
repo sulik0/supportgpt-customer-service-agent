@@ -234,6 +234,8 @@ async def test_public_support_endpoint_returns_429_when_flooded(client, monkeypa
     monkeypatch.setattr(settings, "PUBLIC_CHAT_RATE_LIMIT_PER_MINUTE", 1)
     monkeypatch.setattr(settings, "PUBLIC_CHAT_RATE_LIMIT_PER_DAY", 100)
     monkeypatch.setattr(settings, "REDIS_URL", None)
+    # 限流按固定的自然分钟分窗：冻结时钟，避免两次请求恰好跨分钟而偶发失败。
+    monkeypatch.setattr("src.security.rate_limit.time.time", lambda: 1_800_000_010.0)
     await public_rate_limiter.reset_for_tests()
 
     first = await client.post(

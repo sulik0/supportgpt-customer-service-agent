@@ -58,14 +58,20 @@ _DIRECT_SIGNATURES = {
 }
 
 _OVERRIDE_ACTIONS = re.compile(
-    r"\b(ignore|forget|discard|override|bypass|disable|replace)\b|"
-    r"忽略|无视|忘记|覆盖|绕过|关闭|替换"
+    r"\b(ignore|forget|discard|disregard|override|bypass|disable|replace)\b|"
+    r"忽略|无视|忘记|覆盖|绕过|关闭|替换|不用管|别管"
 )
 _INSTRUCTION_TARGETS = re.compile(
     r"\b(previous|prior|system|developer|safety|hidden)\s+"
     r"(instruction|instructions|prompt|prompts|rule|rules|policy|policies)\b|"
     r"之前.{0,6}(指令|提示词|规则)|系统.{0,6}(指令|提示词|规则)|"
-    r"安全.{0,6}(指令|规则|限制)|隐藏.{0,6}(指令|提示词|规则)"
+    r"安全.{0,6}(指令|规则|限制)|隐藏.{0,6}(指令|提示词|规则)|"
+    # “your instructions / the rules above / everything you were told”这类指代。
+    r"\byour\s+(?:own\s+|current\s+|original\s+)?"
+    r"(?:instructions|rules|guidelines|restrictions|guardrails|programming)\b|"
+    r"\b(?:instructions|rules|guidelines)\s+(?:above|you were (?:given|told))\b|"
+    r"\beverything you were told\b|\bguardrails\b|"
+    r"(?:上面|以上|前面|你的).{0,6}(指令|规则|限制|设定)"
 )
 _EXTRACTION_ACTIONS = re.compile(
     r"\b(reveal|show|print|output|expose|leak|repeat)\b|"
@@ -73,13 +79,17 @@ _EXTRACTION_ACTIONS = re.compile(
 )
 _SENSITIVE_TARGETS = re.compile(
     r"\b(system prompt|system instructions|developer message|hidden rules|"
-    r"secret key|api key|chain of thought)\b|"
-    r"系统提示词|系统指令|开发者消息|隐藏规则|密钥|思维链"
+    r"secret key|api key|chain of thought|hidden instructions|internal instructions|"
+    r"initial prompt|your instructions|your prompt)\b|"
+    r"系统提示词|系统指令|开发者消息|隐藏规则|隐藏指令|内部指令|初始提示词|密钥|思维链"
 )
 _ROLE_MANIPULATION = re.compile(
     r"\byou are now\b.{0,40}\b(developer|admin|root|unfiltered|unlocked)\b|"
     r"现在你是.{0,20}(开发者|管理员|超级用户|无限制模型)|"
-    r"进入.{0,12}(开发者|管理员|无限制)模式"
+    r"进入.{0,12}(开发者|管理员|无限制)模式|"
+    r"\b(?:act|behave|respond) as (?:an? )?(?:unrestricted|unfiltered|uncensored|jailbroken)\b|"
+    r"\bpretend (?:to be|you are|you have)\b.{0,40}\b(?:no|without) (?:restrictions|rules|limits|filters)\b|"
+    r"(?:扮演|假装).{0,16}(?:不受限制|无限制|没有限制|没有规则)"
 )
 _NEGATED_SECURITY_ACTION = re.compile(
     r"\b(?:do\s+not|don't|never)\s+"

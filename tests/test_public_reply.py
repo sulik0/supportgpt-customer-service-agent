@@ -200,3 +200,11 @@ def test_deferred_topic_draft_is_shown_as_preliminary_answer():
         )
         is False
     )
+
+
+def test_answered_note_follows_customer_language():
+    from src.agents.public_reply import answered_note
+
+    assert answered_note("我的发票开了吗？") == "智能客服已完成处理。"
+    english = answered_note("Where is my invoice?")
+    assert english and not any("\u4e00" <= ch <= "\u9fff" for ch in english)

@@ -99,6 +99,13 @@ def preliminary_answer_allowed(
     return True
 
 
+def answered_note(customer_text: str) -> str:
+    """自动回答时附带的状态说明，跟随用户输入语言。"""
+    if _is_chinese(customer_text):
+        return "智能客服已完成处理。"
+    return "The assistant has answered your question."
+
+
 def preliminary_answer_note(customer_text: str) -> str:
     """初步答复下方的说明：人工复核仍在进行。"""
     if _is_chinese(customer_text):
