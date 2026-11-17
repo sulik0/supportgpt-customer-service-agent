@@ -41,7 +41,7 @@ class Settings(BaseSettings):
     PUBLIC_PRELIMINARY_ANSWER_MIN_QA_SCORE: float = Field(default=0.8, ge=0.0, le=1.0)
     PUBLIC_RATE_LIMIT_ENABLED: bool = Field(default=True)
     PUBLIC_CHAT_RATE_LIMIT_PER_MINUTE: int = Field(default=5, ge=1, le=1000)
-    PUBLIC_CHAT_RATE_LIMIT_PER_DAY: int = Field(default=50, ge=1, le=100000)
+    PUBLIC_CHAT_RATE_LIMIT_PER_DAY: int = Field(default=100, ge=1, le=100000)
     PUBLIC_READ_RATE_LIMIT_PER_MINUTE: int = Field(default=30, ge=1, le=5000)
     PUBLIC_FEEDBACK_RATE_LIMIT_PER_MINUTE: int = Field(default=10, ge=1, le=1000)
     AUTH_RATE_LIMIT_PER_MINUTE: int = Field(default=10, ge=1, le=1000)
