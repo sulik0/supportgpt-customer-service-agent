@@ -1881,17 +1881,37 @@ async def create_public_support_request(
     """接收用户咨询，只返回可公开的回复或转人工状态。"""
     public_access_service.validate_profile(req.customer_id)
     visitor_id = public_access_service.visitor_id(request, response)
-    identities = public_access_service.rate_limit_identities(request, visitor_id)
+    if public_access_service.is_online_check(request):
+        # 线上检查使用单独额度，不占公开访客额度。
+        identities = ("online-check",)
+        minute_scope, minute_limit = (
+            "online-check-minute",
+            settings.ONLINE_CHECK_RATE_LIMIT_PER_MINUTE,
+        )
+        day_scope, day_limit = (
+            "online-check-day",
+            settings.ONLINE_CHECK_RATE_LIMIT_PER_DAY,
+        )
+    else:
+        identities = public_access_service.rate_limit_identities(request, visitor_id)
+        minute_scope, minute_limit = (
+            "public-chat-minute",
+            settings.PUBLIC_CHAT_RATE_LIMIT_PER_MINUTE,
+        )
+        day_scope, day_limit = (
+            "public-chat-day",
+            settings.PUBLIC_CHAT_RATE_LIMIT_PER_DAY,
+        )
     await public_rate_limiter.enforce(
-        scope="public-chat-minute",
+        scope=minute_scope,
         identities=identities,
-        limit=settings.PUBLIC_CHAT_RATE_LIMIT_PER_MINUTE,
+        limit=minute_limit,
         window_seconds=60,
     )
     await public_rate_limiter.enforce(
-        scope="public-chat-day",
+        scope=day_scope,
         identities=identities,
-        limit=settings.PUBLIC_CHAT_RATE_LIMIT_PER_DAY,
+        limit=day_limit,
         window_seconds=86400,
     )
     message = req.message.strip()

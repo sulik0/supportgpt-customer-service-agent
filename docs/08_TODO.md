@@ -128,6 +128,7 @@
 - [x] 2026-11-14 本地 `.env` 的快速模型改为有效配置（路径 `/compatible-mode/v1`，模型 `qwen-flash`）。线上没有配置快速模型，Analyzer 和 QA 用主模型。
 - [ ] 回复评判里 Jev 有一半以上（30/57）因置信度不足没被采纳，等于这部分调用只花了 Token。可以考虑规则已有明确结论时不再调 Jev 评判，预计每条省 600 到 700 Token；未做。
 - [x] 2026-11-14 测试工单标记：公开入口带 `X-SupportGPT-Test` 请求头的工单写入 `ticket_test_marks`，员工后台四个列表默认隐藏；冒烟和线上检查脚本都已带标记并在结束后撤回。旧测试工单由启动时的一次性清理打标记并撤回（57 张探测工单 + 2026-11-15 前的冒烟工单）。线上已执行：Railway 部署日志显示 2026-11-14 14:07 UTC 处理了 73 张（`Marked and withdrew 73 legacy test tickets.`）。id 小于 81 的更早的测试工单不在清单里，没有处理。
+- [x] 2026-11-18 线上检查改用单独额度：Railway 设 `ONLINE_CHECK_KEY` 后，`run_online_reply_check.py` 带 `X-SupportGPT-Check-Key` 请求头，不再和公开访客共用每日限额（此前被拒请求也计数，两轮检查即把当天额度用完）。CI 的 `--with-chat` 冒烟仍走公开额度。
 - [ ] 前端没有“撤回咨询”的入口，目前只有脚本使用撤回接口。
 - [ ] `tests/test_public_access_security.py::test_public_support_endpoint_returns_429_when_flooded` 在全量测试里偶发失败一次（单独运行通过），疑似固定时间窗跨分钟，未处理。
 - [x] 2026-11-14 QA 评判新 Prompt 批量验证（deepseek-flash，83 条 Baseline 真实回复）：插入虚构内容的 83 条全部被判幻觉；Workflow 认定有依据的 81 条里评判认可 75 条，另 6 条被判有问题，都是账户邮箱类回复里多写了证据中没有的建议（如“重新登录账户”），属于从严；2 条“只说明无法确认”的回复评判给 0.9 和 1.0，没有误判。

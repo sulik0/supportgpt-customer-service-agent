@@ -12,6 +12,7 @@ from fastapi import HTTPException, Request, Response, status
 from src.config import settings
 
 
+ONLINE_CHECK_HEADER = "X-SupportGPT-Check-Key"
 _VISITOR_PATTERN = re.compile(r"^[A-Za-z0-9_-]{20,80}$")
 
 
@@ -87,6 +88,15 @@ class PublicAccessService:
             self._opaque_identifier("ip", client_ip),
             self._opaque_identifier("visitor", visitor_id),
         )
+
+    @staticmethod
+    def is_online_check(request: Request) -> bool:
+        """线上检查脚本带的密钥与配置一致时使用单独额度；未配置密钥时一律按公开访客处理。"""
+        expected = settings.ONLINE_CHECK_KEY
+        provided = request.headers.get(ONLINE_CHECK_HEADER, "")
+        if not expected or not provided:
+            return False
+        return hmac.compare_digest(provided.encode("utf-8"), expected.encode("utf-8"))
 
     def login_identity(self, request: Request, username: str) -> tuple[str, ...]:
         """登录失败限额按 IP 和用户名分别约束。"""

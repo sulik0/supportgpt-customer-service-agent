@@ -500,8 +500,10 @@ python scripts/run_real_llm_regression.py --suite regression --confirm-live
 
 ```bash
 python scripts/run_online_reply_check.py --api-url <Railway 域名> --dry-run        # 只看用例数和预计调用
-python scripts/run_online_reply_check.py --api-url <Railway 域名> --confirm-live   # 24 条，约 6 分钟
+python scripts/run_online_reply_check.py --api-url <Railway 域名> --confirm-live   # 25 条，带密钥约 3 分钟
 ```
+
+检查专用额度（2026-11-18 起）：公开入口按 IP 和访客限额（每分钟 `PUBLIC_CHAT_RATE_LIMIT_PER_MINUTE`、每天 `PUBLIC_CHAT_RATE_LIMIT_PER_DAY`），被拒的请求也计数，检查脚本和真实访客共用会互相挤占。Railway 上设置 `ONLINE_CHECK_KEY`（至少 32 个字符，生产环境启动时校验），本地 `.env` 放同一个值，脚本就带请求头 `X-SupportGPT-Check-Key` 走单独额度（`ONLINE_CHECK_RATE_LIMIT_PER_MINUTE` 默认 10、`ONLINE_CHECK_RATE_LIMIT_PER_DAY` 默认 300），不占公开额度。后端用恒定时间比较；密钥为空时不启用，错误密钥按公开访客处理。`X-SupportGPT-Test` 只是测试标记，不是凭证，任何人都能带，不能用来放行。密钥不进仓库，`.env.example` 只留空值。
 
 用例在 `evaluation/online_checks/reply_checks.json`（只含中文和英文）。每条检查状态、转人工原因、意图、Tool、回复语言、必须出现和禁止出现的内容、长度，以及回复里有没有残留 `[S1]` 这类内部引用。每条会新建 1 张线上工单并调用真实模型；检查完脚本凭本次反馈令牌调用撤回接口清理，结尾列出没清理掉的工单号。任何一条不通过或有工单没清理，退出码为 1。报告写到 `evaluation/reports/online_reply_check/`（不进 Git）。
 

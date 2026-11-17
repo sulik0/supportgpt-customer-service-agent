@@ -410,3 +410,69 @@ def test_rate_limit_ip_identity_is_stable_across_proxy_nodes(monkeypatch):
         public_access_service.rate_limit_identities(first, "visitor-a")[0]
         == public_access_service.rate_limit_identities(second, "visitor-b")[0]
     )
+
+
+_CHECK_KEY = "k" * 40
+
+
+def test_online_check_key_must_match_configured_value(monkeypatch):
+    header = "X-SupportGPT-Check-Key"
+    monkeypatch.setattr(settings, "ONLINE_CHECK_KEY", "")
+    # 未配置密钥时，任何请求头都按公开访客处理。
+    assert not public_access_service.is_online_check(_request_with({header: ""}))
+    assert not public_access_service.is_online_check(_request_with({header: "x"}))
+    monkeypatch.setattr(settings, "ONLINE_CHECK_KEY", _CHECK_KEY)
+    assert public_access_service.is_online_check(_request_with({header: _CHECK_KEY}))
+    assert not public_access_service.is_online_check(_request_with({header: "k" * 39}))
+    assert not public_access_service.is_online_check(_request_with({}))
+    # 测试标记头不是凭证。
+    assert not public_access_service.is_online_check(
+        _request_with({"X-SupportGPT-Test": _CHECK_KEY})
+    )
+
+
+@pytest.mark.asyncio
+async def test_online_check_uses_separate_quota(client, monkeypatch):
+    monkeypatch.setattr(settings, "PUBLIC_RATE_LIMIT_ENABLED", True)
+    monkeypatch.setattr(settings, "PUBLIC_CHAT_RATE_LIMIT_PER_MINUTE", 1)
+    monkeypatch.setattr(settings, "ONLINE_CHECK_KEY", _CHECK_KEY)
+    monkeypatch.setattr(settings, "ONLINE_CHECK_RATE_LIMIT_PER_MINUTE", 2)
+    monkeypatch.setattr(settings, "REDIS_URL", None)
+    monkeypatch.setattr("src.security.rate_limit.time.time", lambda: 1_800_000_010.0)
+    await public_rate_limiter.reset_for_tests()
+    body = {"customer_id": "cust_101", "message": "How do I update settings?"}
+    keyed = {"X-SupportGPT-Check-Key": _CHECK_KEY}
+
+    # 公开额度用完后，带密钥的请求仍走自己的额度。
+    assert (await client.post("/support/requests", json=body)).status_code == 201
+    assert (await client.post("/support/requests", json=body)).status_code == 429
+    assert (
+        await client.post("/support/requests", json=body, headers=keyed)
+    ).status_code == 201
+    assert (
+        await client.post("/support/requests", json=body, headers=keyed)
+    ).status_code == 201
+    # 单独额度也有上限；错误密钥按公开额度处理。
+    assert (
+        await client.post("/support/requests", json=body, headers=keyed)
+    ).status_code == 429
+    wrong = {"X-SupportGPT-Check-Key": "w" * 40}
+    assert (
+        await client.post("/support/requests", json=body, headers=wrong)
+    ).status_code == 429
+
+
+def test_production_rejects_short_online_check_key():
+    with pytest.raises(ValueError, match="ONLINE_CHECK_KEY"):
+        Settings(
+            APP_ENV="production",
+            DEBUG=False,
+            JWT_SECRET="j" * 48,
+            TOOL_ACTION_ENCRYPTION_KEY=Fernet.generate_key().decode("ascii"),
+            PUBLIC_VISITOR_SECRET="p" * 48,
+            CORS_ALLOWED_ORIGINS="https://support.example.com",
+            STAFF_SELF_REGISTRATION_ENABLED=False,
+            PUBLIC_DEMO_ISOLATION_ENABLED=True,
+            PUBLIC_RATE_LIMIT_ENABLED=True,
+            ONLINE_CHECK_KEY="short",
+        )

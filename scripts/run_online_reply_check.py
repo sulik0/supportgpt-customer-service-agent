@@ -6,13 +6,15 @@
 
 每条用例会新建 1 张线上工单并调用真实模型（约 2-3 次）。检查完成后脚本凭本次
 反馈令牌调用撤回接口关闭工单、移出人工队列；--keep 才会保留。
-公开入口限流为每分钟 5 次，脚本默认每 13 秒发一条。
+公开入口限流为每分钟 5 次，脚本默认每 13 秒发一条。设置了 ONLINE_CHECK_KEY（环境变量或
+本地 .env，与 Railway 上的值一致）时，请求带密钥头走单独额度，默认每 7 秒发一条。
 """
 from __future__ import annotations
 
 import argparse
 import http.cookiejar
 import json
+import os
 import re
 import sys
 import time
@@ -25,6 +27,21 @@ ROOT = Path(__file__).resolve().parents[1]
 DEFAULT_CASES = ROOT / "evaluation" / "online_checks" / "reply_checks.json"
 DEFAULT_OUTPUT = ROOT / "evaluation" / "reports" / "online_reply_check"
 _CJK = re.compile(r"[一-鿿]")
+CHECK_KEY_HEADER = "X-SupportGPT-Check-Key"
+
+
+def online_check_key() -> str:
+    """优先读环境变量，其次读本地 .env；不打印密钥。"""
+    value = os.environ.get("ONLINE_CHECK_KEY", "").strip()
+    if value:
+        return value
+    env_file = ROOT / ".env"
+    if env_file.exists():
+        for line in env_file.read_text(encoding="utf-8").splitlines():
+            key, sep, raw = line.partition("=")
+            if sep and key.strip() == "ONLINE_CHECK_KEY":
+                return raw.strip().strip('"').strip("'")
+    return ""
 
 
 def evaluate_case(case: dict, data: dict, insight: dict) -> list[str]:
@@ -102,8 +119,11 @@ class Client:
 def run(args: argparse.Namespace) -> int:
     dataset = json.loads(Path(args.cases).read_text(encoding="utf-8"))
     cases = [c for c in dataset["cases"] if not args.only or c["id"] in args.only]
+    check_key = online_check_key()
+    interval = args.interval if args.interval is not None else (7 if check_key else 13)
     print(f"用例 {len(cases)} 条，预计新建 {len(cases)} 张线上工单、约 {len(cases) * 3} 次模型调用，"
-          f"耗时约 {len(cases) * args.interval // 60 + 1} 分钟。")
+          f"耗时约 {len(cases) * interval // 60 + 1} 分钟。")
+    print("额度：" + ("单独额度（已带检查密钥）" if check_key else "公开访客额度（未设置 ONLINE_CHECK_KEY）"))
     if args.dry_run or not args.confirm_live:
         print("未发送任何请求（需要 --confirm-live）。")
         return 0
@@ -111,14 +131,15 @@ def run(args: argparse.Namespace) -> int:
     session = f"reply-check-{uuid.uuid4().hex[:12]}"
     rows, last, leftovers = [], 0.0, []
     for case in cases:
-        time.sleep(max(0.0, args.interval - (time.time() - last)))
+        time.sleep(max(0.0, interval - (time.time() - last)))
         last = time.time()
         code, data = client.call(
             "POST", "/support/requests",
             {"customer_id": case["customer"], "message": case["message"],
              "session_id": f"{session}-{case['id']}"},
             # 测试请求头：工单打上测试标记，即使撤回失败也不会出现在员工后台。
-            {"X-Request-Id": uuid.uuid4().hex, "X-SupportGPT-Test": "reply-check"},
+            {"X-Request-Id": uuid.uuid4().hex, "X-SupportGPT-Test": "reply-check",
+             **({CHECK_KEY_HEADER: check_key} if check_key else {})},
         )
         insight: dict = {}
         run_id, token = data.get("agent_run_id"), data.get("feedback_token")
@@ -170,7 +191,8 @@ def main() -> int:
     parser.add_argument("--cases", default=str(DEFAULT_CASES))
     parser.add_argument("--output-dir", default=str(DEFAULT_OUTPUT))
     parser.add_argument("--only", nargs="*", default=[], help="只跑这些用例 id")
-    parser.add_argument("--interval", type=int, default=13, help="每条间隔秒数（公开入口每分钟限 5 次）")
+    parser.add_argument("--interval", type=int, default=None,
+                        help="每条间隔秒数；默认带密钥 7 秒，不带 13 秒（公开入口每分钟限 5 次）")
     parser.add_argument("--keep", action="store_true", help="保留测试工单，不撤回")
     parser.add_argument("--dry-run", action="store_true")
     parser.add_argument("--confirm-live", action="store_true", help="确认会新建线上工单并调用真实模型")

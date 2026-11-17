@@ -43,6 +43,10 @@ class Settings(BaseSettings):
     PUBLIC_CHAT_RATE_LIMIT_PER_MINUTE: int = Field(default=5, ge=1, le=1000)
     PUBLIC_CHAT_RATE_LIMIT_PER_DAY: int = Field(default=100, ge=1, le=100000)
     PUBLIC_READ_RATE_LIMIT_PER_MINUTE: int = Field(default=30, ge=1, le=5000)
+    # 线上检查脚本带此密钥时使用单独额度，不占公开访客额度；为空则不启用。
+    ONLINE_CHECK_KEY: str = Field(default="")
+    ONLINE_CHECK_RATE_LIMIT_PER_MINUTE: int = Field(default=10, ge=1, le=1000)
+    ONLINE_CHECK_RATE_LIMIT_PER_DAY: int = Field(default=300, ge=1, le=100000)
     PUBLIC_FEEDBACK_RATE_LIMIT_PER_MINUTE: int = Field(default=10, ge=1, le=1000)
     AUTH_RATE_LIMIT_PER_MINUTE: int = Field(default=10, ge=1, le=1000)
     RATE_LIMIT_REDIS_PREFIX: str = Field(default="supportgpt:rate-limit")
@@ -320,6 +324,8 @@ class Settings(BaseSettings):
             errors.append("PUBLIC_DEMO_ISOLATION_ENABLED must remain enabled")
         if not self.PUBLIC_RATE_LIMIT_ENABLED:
             errors.append("PUBLIC_RATE_LIMIT_ENABLED must remain enabled")
+        if self.ONLINE_CHECK_KEY and len(self.ONLINE_CHECK_KEY) < 32:
+            errors.append("ONLINE_CHECK_KEY must contain at least 32 characters")
         if self.STAFF_SELF_REGISTRATION_ENABLED:
             errors.append("STAFF_SELF_REGISTRATION_ENABLED must remain disabled")
         if not self.cors_allowed_origins or "*" in self.cors_allowed_origins:
