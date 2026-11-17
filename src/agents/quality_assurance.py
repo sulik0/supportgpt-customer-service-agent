@@ -2,6 +2,7 @@ import logging
 import json
 import re
 import time
+from decimal import Decimal, InvalidOperation
 from typing import Dict, Any
 
 from src.agents.evidence import build_resolution_evidence
@@ -21,6 +22,43 @@ from src.models.intents import (
 )
 
 logger = logging.getLogger("supportgpt.agents.quality_assurance")
+
+_NUMBER_TEXT = r"\d[\d,]*(?:\.\d+)?"
+_NUMBER_PATTERN = re.compile(rf"(?<![\d.]){_NUMBER_TEXT}")
+# 带币种标记的金额：符号或币种代码在前，或币种在后。
+_AMOUNT_PATTERN = re.compile(
+    rf"(?:US\$|\$|¥|￥|€|£|(?<![A-Za-z])(?:USD|CNY|RMB|EUR)\s?)\s?"
+    rf"(?P<pre>{_NUMBER_TEXT})"
+    # 中文紧邻数字时 \w 会命中汉字，这里只排除 ASCII 字符。
+    rf"|(?<![A-Za-z0-9_.-])(?P<post>{_NUMBER_TEXT})\s?"
+    rf"(?:USD|CNY|RMB|EUR|美元|人民币|元)",
+    re.IGNORECASE,
+)
+# 大写前缀加连字符、含数字的编号，例如 ORD-7001、INV-DEMO-7001、DEMO-CN-12001。
+_BUSINESS_ID_PATTERN = re.compile(
+    r"(?<![A-Za-z0-9-])[A-Z]{2,6}(?:-[A-Z0-9]+)+(?![A-Za-z0-9])"
+)
+# 常见技术名词，不是业务单号。
+_NON_BUSINESS_ID_PREFIXES = {
+    "AES",
+    "COVID",
+    "GB",
+    "HTTP",
+    "HTTPS",
+    "IPV",
+    "ISO",
+    "MD",
+    "RFC",
+    "RSA",
+    "SHA",
+    "SSL",
+    "TLS",
+    "UTF",
+}
+_DATE_PATTERNS = (
+    re.compile(r"(?<!\d)(\d{4})[-/.](\d{1,2})[-/.](\d{1,2})(?!\d)"),
+    re.compile(r"(\d{4})\s?年\s?(\d{1,2})\s?月\s?(\d{1,2})\s?日"),
+)
 
 
 class QualityAssuranceAgent:
@@ -232,6 +270,23 @@ class QualityAssuranceAgent:
                 },
                 True,
             )
+        # 金额、业务单号、日期必须能在证据或用户原文里找到，找不到即判编造。
+        unsupported = cls._unsupported_facts(filtered_response, query, context_texts)
+        if unsupported:
+            logger.warning(
+                "QA rule found unsupported facts in response",
+                extra={"unsupported_fact_kinds": sorted(unsupported)},
+            )
+            return (
+                {
+                    "score": 0.4,
+                    "hallucination_detected": True,
+                    "citation_verified": False,
+                    "response_grounded": False,
+                    "response_requires_human": True,
+                },
+                True,
+            )
         citation_evidence = " ".join(
             str(
                 citation.get("text", "")
@@ -329,6 +384,61 @@ class QualityAssuranceAgent:
                 True,
             )
         return None, False
+
+    @classmethod
+    def _unsupported_facts(
+        cls, response: str, query: str, context_texts: list[str]
+    ) -> set[str]:
+        """返回回复中无法在证据或用户原文中找到的事实类别。
+
+        只核对可精确比对的三类：带币种的金额、业务单号、完整日期。
+        经计算得出的金额（如扣除手续费后）也找不到出处，按保守方向转人工。
+        """
+        corpus = "\n".join([query, *context_texts])
+        found: set[str] = set()
+
+        corpus_numbers = {
+            cls._to_decimal(value) for value in _NUMBER_PATTERN.findall(corpus)
+        }
+        for match in _AMOUNT_PATTERN.finditer(response):
+            value = cls._to_decimal(match.group("pre") or match.group("post"))
+            if value is not None and value != 0 and value not in corpus_numbers:
+                found.add("amount")
+                break
+
+        corpus_upper = corpus.upper()
+        for match in _BUSINESS_ID_PATTERN.finditer(response):
+            identifier = match.group(0).rstrip("-")
+            prefix = identifier.split("-", 1)[0]
+            if prefix in _NON_BUSINESS_ID_PREFIXES:
+                continue
+            if sum(char.isdigit() for char in identifier) < 3:
+                continue
+            if identifier.upper() not in corpus_upper:
+                found.add("business_id")
+                break
+
+        corpus_dates = cls._dates(corpus)
+        if any(date not in corpus_dates for date in cls._dates(response)):
+            found.add("date")
+        return found
+
+    @staticmethod
+    def _to_decimal(text: str | None) -> Decimal | None:
+        if not text:
+            return None
+        try:
+            return Decimal(text.replace(",", ""))
+        except InvalidOperation:
+            return None
+
+    @staticmethod
+    def _dates(text: str) -> set[tuple[int, int, int]]:
+        output = set()
+        for pattern in _DATE_PATTERNS:
+            for year, month, day in pattern.findall(text):
+                output.add((int(year), int(month), int(day)))
+        return output
 
     @staticmethod
     def _is_clarification(response: str) -> bool:

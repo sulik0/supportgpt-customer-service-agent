@@ -590,7 +590,7 @@ async def test_qa_rechecks_tool_grounded_response_with_llm_when_jev_off(monkeypa
 
 @pytest.mark.asyncio
 async def test_qa_catches_fabricated_amount_next_to_matching_order_id(monkeypatch):
-    calls = _record_qa_judge(monkeypatch, _HALLUCINATION_JUDGE)
+    calls = _record_qa_judge(monkeypatch, _PASSING_JUDGE)
     result = await quality_assurance_agent.verify(
         {
             "description": "What is the status of order ORD-7001?",
@@ -606,9 +606,100 @@ async def test_qa_catches_fabricated_amount_next_to_matching_order_id(monkeypatc
         }
     )
 
-    assert len(calls) == 1
+    # 金额在证据里找不到，规则直接判失败，评判模型放行也不起作用。
+    assert len(calls) == 0
+    assert result["qa_strategy"] == "rule"
     assert result["hallucination_detected"] is True
     assert result["risk_requires_human"] is True
+
+
+def _order_state(response, description="订单 ORD-7001 的情况？"):
+    return {
+        "description": description,
+        "suggested_response": response,
+        "context_citations": [],
+        "tool_context": {
+            "recent_orders": [
+                {
+                    "order_id": "ORD-7001",
+                    "status": "delivered",
+                    "total_amount": 1299.0,
+                    "currency": "CNY",
+                    "order_date": "2026-11-03 08:00:00",
+                }
+            ]
+        },
+        "errors": [],
+    }
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    "response",
+    [
+        "订单 ORD-7001 金额1299元，已签收。",
+        "订单 ORD-7001 的金额为 ¥1,299.00，下单日期 2026-11-03。",
+        "Order ORD-7001 (CNY 1299) was placed on 2026年11月3日 and delivered.",
+    ],
+)
+async def test_qa_rule_accepts_facts_that_match_evidence(monkeypatch, response):
+    calls = _record_qa_judge(monkeypatch, _PASSING_JUDGE)
+    result = await quality_assurance_agent.verify(_order_state(response))
+
+    # 事实都对得上时不由规则判失败，照常交给评判模型复核。
+    assert len(calls) == 1
+    assert result["hallucination_detected"] is False
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    "response",
+    [
+        "订单 ORD-7001 金额1399元，已签收。",
+        "Order ORD-7001 was refunded $1299; refund reference RF-88231.",
+        "订单 ORD-7009 已签收。",
+        "订单 ORD-7001 已于 2026-11-05 签收。",
+        "订单 ORD-7001 已于 2026年11月5日 签收。",
+    ],
+)
+async def test_qa_rule_rejects_amount_id_or_date_missing_from_evidence(
+    monkeypatch, response
+):
+    calls = _record_qa_judge(monkeypatch, _PASSING_JUDGE)
+    result = await quality_assurance_agent.verify(_order_state(response))
+
+    assert len(calls) == 0
+    assert result["qa_strategy"] == "rule"
+    assert result["hallucination_detected"] is True
+    assert result["response_requires_human"] is True
+    assert result["risk_requires_human"] is True
+
+
+@pytest.mark.asyncio
+async def test_qa_rule_ignores_technical_terms_and_zero_amount(monkeypatch):
+    calls = _record_qa_judge(monkeypatch, _PASSING_JUDGE)
+    result = await quality_assurance_agent.verify(
+        _order_state(
+            "订单 ORD-7001 已签收，取消无需费用（$0）。接口使用 SHA-256 和 UTF-8 校验。"
+        )
+    )
+
+    assert len(calls) == 1
+    assert result["hallucination_detected"] is False
+
+
+@pytest.mark.asyncio
+async def test_qa_rule_allows_identifier_echoed_from_user_query(monkeypatch):
+    calls = _record_qa_judge(monkeypatch, _PASSING_JUDGE)
+    result = await quality_assurance_agent.verify(
+        _order_state(
+            "发票 INV-DEMO-9003 不在本次查询结果中，请核对编号。",
+            description="帮我查发票 INV-DEMO-9003",
+        )
+    )
+
+    assert len(calls) == 1
+    assert result["hallucination_detected"] is False
 
 
 @pytest.mark.asyncio

@@ -146,7 +146,12 @@ def test_multi_intent_draft_that_defers_unsupported_topic_is_not_hallucination()
         filtered_response=draft,
         citations=[{"text": "支付与发票查询：已付款不代表已开票。"}],
         tool_context={},
-        context_texts=["[S1] 支付与发票查询：已付款不代表已开票。"],
+        # 发票号来自账务 Tool；证据里没有它时，规则会判单号编造。
+        context_texts=[
+            '[TOOL] {"service_query":{"data":{"records":[{"order_id":"ORD-12002",'
+            '"invoice_id":"INV-DEMO-CN-12002","invoice_status":"issued"}]}}}',
+            "[S1] 支付与发票查询：已付款不代表已开票。",
+        ],
     )
     assert terminal is False
     assert result["hallucination_detected"] is False
