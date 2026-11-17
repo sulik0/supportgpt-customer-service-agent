@@ -2,6 +2,7 @@ import logging
 import json
 import re
 import time
+from dataclasses import dataclass
 from decimal import Decimal, InvalidOperation
 from typing import Dict, Any
 
@@ -108,13 +109,8 @@ class QualityAssuranceAgent:
                 state, raw_response
             ):
                 # 能力说明没有外部事实，不要求天气证据，也不免除真实业务断言校验。
-                rule_result, rule_terminal = {
-                    "score": 0.95,
-                    "hallucination_detected": False,
-                    "citation_verified": False,
-                    "response_grounded": True,
-                    "response_requires_human": False,
-                }, True
+                verdict = _VERDICTS["capability_statement"]
+                rule_result, rule_terminal = verdict.fields(), verdict.terminal
             else:
                 rule_result, rule_terminal = self._rule_evaluation(
                     query=query,
@@ -247,142 +243,27 @@ class QualityAssuranceAgent:
         tool_context: Dict[str, Any],
         context_texts: list[str],
     ) -> tuple[Dict[str, Any] | None, bool]:
-        """返回规则结论及是否必须短路语义 Judge。"""
-        if not raw_response.strip():
-            return (
-                {
-                    "score": 0.0,
-                    "hallucination_detected": True,
-                    "citation_verified": False,
-                    "response_grounded": False,
-                    "response_requires_human": False,
-                },
-                True,
-            )
-        if filtered_response != raw_response:
-            return (
-                {
-                    "score": 0.5,
-                    "hallucination_detected": True,
-                    "citation_verified": False,
-                    "response_grounded": False,
-                    "response_requires_human": True,
-                },
-                True,
-            )
-        # 金额、业务单号、日期必须能在证据或用户原文里找到，找不到即判编造。
-        unsupported = cls._unsupported_facts(filtered_response, query, context_texts)
-        if unsupported:
-            logger.warning(
-                "QA rule found unsupported facts in response",
-                extra={"unsupported_fact_kinds": sorted(unsupported)},
-            )
-            return (
-                {
-                    "score": 0.4,
-                    "hallucination_detected": True,
-                    "citation_verified": False,
-                    "response_grounded": False,
-                    "response_requires_human": True,
-                },
-                True,
-            )
-        citation_evidence = " ".join(
-            str(
-                citation.get("text", "")
-                if isinstance(citation, dict)
-                else getattr(citation, "text", "")
-            )
-            for citation in citations
+        """按 `_QA_RULES` 顺序检查，第一条命中的规则给出结论；都不命中交给评判。
+
+        返回规则结论及是否必须短路语义 Judge。
+        """
+        check = _RuleInput(
+            query=query,
+            raw_response=raw_response,
+            response=filtered_response,
+            citations=citations,
+            tool_context=tool_context,
+            context_texts=context_texts,
         )
-        if requires_authoritative_business_answer(
-            query
-        ) and not has_authoritative_business_evidence(query, citation_evidence):
-            if defers_unsupported_topic(query, filtered_response):
-                # 回复没有就缺依据的主题下结论：不算幻觉，其余内容继续交给评判，
-                # 但该主题仍需要人工跟进。
-                return (
-                    {
-                        "score": 0.9,
-                        "hallucination_detected": False,
-                        "citation_verified": False,
-                        "response_grounded": True,
-                        "response_requires_human": True,
-                    },
-                    False,
-                )
-            return (
-                {
-                    "score": 0.5,
-                    "hallucination_detected": True,
-                    "citation_verified": False,
-                    "response_grounded": False,
-                    "response_requires_human": True,
-                },
-                True,
-            )
-        if cls._is_clarification(filtered_response):
-            return (
-                {
-                    "score": 0.95,
-                    "hallucination_detected": False,
-                    "citation_verified": False,
-                    "response_grounded": True,
-                    "response_requires_human": False,
-                },
-                True,
-            )
-        if cls._is_safe_limitation(filtered_response):
-            # 纯限制说明可直接定；带数字（金额、时限、日期、单号）的可能夹带编造，交给评判复核。
-            return (
-                {
-                    "score": 0.9,
-                    "hallucination_detected": False,
-                    "citation_verified": False,
-                    "response_grounded": True,
-                    "response_requires_human": requires_authoritative_business_answer(
-                        query
-                    ),
-                },
-                not re.search(r"\d", filtered_response),
-            )
-        if cls._missing_requested_order_supported(
-            query, filtered_response, tool_context
-        ):
-            return (
-                {
-                    "score": 0.95,
-                    "hallucination_detected": False,
-                    "citation_verified": False,
-                    "response_grounded": True,
-                    "response_requires_human": False,
-                },
-                True,
-            )
-        if cls._has_grounding_support(filtered_response, citations, tool_context):
-            return (
-                {
-                    "score": 0.95,
-                    "hallucination_detected": False,
-                    "citation_verified": cls._has_valid_citation_reference(
-                        filtered_response, citations
-                    ),
-                    "response_grounded": True,
-                    "response_requires_human": False,
-                },
-                False,
-            )
-        if not context_texts:
-            return (
-                {
-                    "score": 0.45,
-                    "hallucination_detected": True,
-                    "citation_verified": False,
-                    "response_grounded": False,
-                    "response_requires_human": False,
-                },
-                True,
-            )
+        for name, verdict_name, matches in _QA_RULES:
+            overrides = matches(cls, check)
+            if overrides is None:
+                continue
+            verdict = _VERDICTS[verdict_name]
+            result = {**verdict.fields(), **overrides.get("fields", {})}
+            terminal = overrides.get("terminal", verdict.terminal)
+            logger.debug("QA rule matched", extra={"qa_rule": name})
+            return result, terminal
         return None, False
 
     @classmethod
@@ -645,6 +526,162 @@ class QualityAssuranceAgent:
             if len(text) >= 2 and text.lower() != "none":
                 output.add(text)
         return output
+
+
+@dataclass(frozen=True)
+class _Verdict:
+    """规则结论：分数和各项标记固定，不在分支里各写一遍。"""
+
+    score: float
+    hallucination: bool
+    grounded: bool
+    requires_human: bool
+    # True：规则直接定结论；False：结论只是候选，仍交给 Jev / LLM 评判。
+    terminal: bool
+
+    def fields(self) -> Dict[str, Any]:
+        return {
+            "score": self.score,
+            "hallucination_detected": self.hallucination,
+            "citation_verified": False,
+            "response_grounded": self.grounded,
+            "response_requires_human": self.requires_human,
+        }
+
+
+# 结论类型。分数含义：0.95 有依据，0.9 有依据但需人工跟进或复核，
+# 0.5 / 0.45 / 0.4 判定不可信，0.0 空回复。
+_VERDICTS: Dict[str, _Verdict] = {
+    "empty_response": _Verdict(0.0, True, False, False, True),
+    "leak_filtered": _Verdict(0.5, True, False, True, True),
+    "unsupported_facts": _Verdict(0.4, True, False, True, True),
+    "authority_deferred": _Verdict(0.9, False, True, True, False),
+    "authority_missing": _Verdict(0.5, True, False, True, True),
+    "clarification": _Verdict(0.95, False, True, False, True),
+    "safe_limitation": _Verdict(0.9, False, True, False, True),
+    "missing_order_confirmed": _Verdict(0.95, False, True, False, True),
+    "grounding_candidate": _Verdict(0.95, False, True, False, False),
+    "no_evidence": _Verdict(0.45, True, False, False, True),
+    "capability_statement": _Verdict(0.95, False, True, False, True),
+}
+
+
+@dataclass(frozen=True)
+class _RuleInput:
+    query: str
+    raw_response: str
+    response: str
+    citations: list[Any]
+    tool_context: Dict[str, Any]
+    context_texts: list[str]
+
+    @property
+    def citation_evidence(self) -> str:
+        return " ".join(
+            str(
+                citation.get("text", "")
+                if isinstance(citation, dict)
+                else getattr(citation, "text", "")
+            )
+            for citation in self.citations
+        )
+
+    @property
+    def lacks_authority(self) -> bool:
+        """问的是需要权威依据的主题，而知识库片段里没有对应依据。"""
+        return requires_authoritative_business_answer(
+            self.query
+        ) and not has_authoritative_business_evidence(
+            self.query, self.citation_evidence
+        )
+
+
+_Overrides = Dict[str, Any] | None
+_HIT: Dict[str, Any] = {}
+
+
+def _empty_response(qa: type[QualityAssuranceAgent], c: _RuleInput) -> _Overrides:
+    return _HIT if not c.raw_response.strip() else None
+
+
+def _leak_filtered(qa: type[QualityAssuranceAgent], c: _RuleInput) -> _Overrides:
+    return _HIT if c.response != c.raw_response else None
+
+
+def _unsupported(qa: type[QualityAssuranceAgent], c: _RuleInput) -> _Overrides:
+    # 金额、业务单号、日期必须能在证据或用户原文里找到（原则第 19 条）。
+    found = qa._unsupported_facts(c.response, c.query, c.context_texts)
+    if not found:
+        return None
+    logger.warning(
+        "QA rule found unsupported facts in response",
+        extra={"unsupported_fact_kinds": sorted(found)},
+    )
+    return _HIT
+
+
+def _authority_deferred(qa: type[QualityAssuranceAgent], c: _RuleInput) -> _Overrides:
+    # 缺依据的主题只说明了无法确认：不算幻觉，其余内容交给评判，该主题仍需人工跟进（第 18 条）。
+    if c.lacks_authority and defers_unsupported_topic(c.query, c.response):
+        return _HIT
+    return None
+
+
+def _authority_missing(qa: type[QualityAssuranceAgent], c: _RuleInput) -> _Overrides:
+    return _HIT if c.lacks_authority else None
+
+
+def _clarification(qa: type[QualityAssuranceAgent], c: _RuleInput) -> _Overrides:
+    return _HIT if qa._is_clarification(c.response) else None
+
+
+def _safe_limitation(qa: type[QualityAssuranceAgent], c: _RuleInput) -> _Overrides:
+    if not qa._is_safe_limitation(c.response):
+        return None
+    # 纯限制说明直接定；带数字的可能夹带编造，交给评判复核。
+    return {
+        "fields": {
+            "response_requires_human": requires_authoritative_business_answer(c.query)
+        },
+        "terminal": not re.search(r"\d", c.response),
+    }
+
+
+def _missing_order(qa: type[QualityAssuranceAgent], c: _RuleInput) -> _Overrides:
+    if qa._missing_requested_order_supported(c.query, c.response, c.tool_context):
+        return _HIT
+    return None
+
+
+def _grounding(qa: type[QualityAssuranceAgent], c: _RuleInput) -> _Overrides:
+    if not qa._has_grounding_support(c.response, c.citations, c.tool_context):
+        return None
+    return {
+        "fields": {
+            "citation_verified": qa._has_valid_citation_reference(
+                c.response, c.citations
+            )
+        }
+    }
+
+
+def _no_evidence(qa: type[QualityAssuranceAgent], c: _RuleInput) -> _Overrides:
+    return _HIT if not c.context_texts else None
+
+
+# 规则表：按顺序检查，第一条命中即用对应结论；顺序本身是规则的一部分。
+_QA_RULES = (
+    ("空回复", "empty_response", _empty_response),
+    ("输出过滤命中", "leak_filtered", _leak_filtered),
+    ("金额/单号/日期找不到出处", "unsupported_facts", _unsupported),
+    ("缺权威依据但只说明无法确认", "authority_deferred", _authority_deferred),
+    ("缺权威依据却下了结论", "authority_missing", _authority_missing),
+    ("澄清追问", "clarification", _clarification),
+    ("安全的限制说明", "safe_limitation", _safe_limitation),
+    ("确认订单不存在", "missing_order_confirmed", _missing_order),
+    ("词面有依据", "grounding_candidate", _grounding),
+    ("没有任何证据", "no_evidence", _no_evidence),
+)
 
 
 quality_assurance_agent = QualityAssuranceAgent()
