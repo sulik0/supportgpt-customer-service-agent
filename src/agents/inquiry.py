@@ -12,7 +12,10 @@ ACTION_OR_DISPUTE = re.compile(
     r"想退|想要退|(?:我要|我想|帮我|给我|请|麻烦)(?:立即|现在|马上|直接)?(?:申请|办理)退|"
     r"退\s*\d|退款工具|无需审批|不用审批|跳过审批|免审批|"
     r"赔偿|赔付|补偿|投诉|举报|曝光|起诉|律师|消协|12315|"
-    r"取消|撤销|撤回|拒付|不认可|不承认|"
+    # 只出现“取消/撤销/撤回”可能是在问政策（第 11 条），要有办理说法才算。
+    r"(?:我|我们)?(?:要|想|想要|需要|要求|决定)(?:立即|现在|马上|直接)?(?:取消|撤销|撤回)|"
+    r"(?:取消|撤销|撤回)(?:掉|它|吧|了吧)|"
+    r"拒付|不认可|不承认|"
     # “有争议的账户能退款吗”是在问政策；“我有异议/要发起争议”才是在表达争议。
     r"(?:我|我们)(?:要|想|需要)?(?:对|就)?.{0,12}(?:有|提出|发起|申请)(?:争议|异议)|"
     r"(?:发起|提出|提交)(?:争议|异议|申诉)|"
@@ -33,13 +36,15 @@ ACTION_OR_DISPUTE = re.compile(
     r"(?:refund|cancel|reverse|credit|compensate|reimburse|return my|give .{0,12} back)\b|"
     r"\brefund me\b|\bmoney back\b|\breturn my (?:payment|money)\b|\bcredit my account\b|"
     r"\bi (?:want|need|would like|'d like) (?:one|it|that|this)\b|"
+    r"\bi(?:'d| would)? (?:want|need|like|wish|have) to (?:cancel|reverse)\b|"
+    r"(?:^|[.!?。！？]\s*)(?:please\s+)?(?:cancel|reverse)\s+(?:my|the|this|that|order|it)\b|"
     r"\bplease (?:process|handle|issue|make|do|return|refund)\b|\bjust do it\b|\bprocess it\b|"
     r"\bi(?:'m| am)? request(?:ing)? (?:a |my |the |full )*refund\b|"
     r"\bi (?:want to |need to |will |would like to |am going to )?dispute\b|"
     r"\b(?:file|open|raise|start|submit)(?:ing)? (?:a |my )?dispute\b|"
     r"\bdisput(?:e|ing) (?:this|the|that|my) (?:charge|payment|invoice|bill|transaction)\b|"
     r"\b(?:chargeback|compensat\w+|complain\w*|lawsuit|lawyer|sue|fraud|scam|"
-    r"cancel|reverse|overcharged|charged twice|double charged|wrong(?:ly)? charged?|"
+    r"overcharged|charged twice|double charged|wrong(?:ly)? charged?|"
     r"incorrect(?:ly)? charged?|without approval|skip approval|do not execute|"
     r"don't execute)\b",
     re.IGNORECASE,
@@ -56,6 +61,6 @@ ELIGIBILITY_REQUEST = re.compile(
 WIDE_IMPACT = re.compile(
     r"\b(?:all|every) (?:users?|customers?|clients?|tenants?|regions?)\b|"
     r"\b(?:everyone|everybody|entire|global outage|company[- ]wide)\b|"
-    r"全部用户|所有用户|所有人|所有客户|大面积|全站|全线|全挂|全部挂|全都挂|整个",
+    r"全部用户|所有用户|所有人|所有客户|大面积|全站|全线|全挂|全部挂|全都挂|整个(?:系统|服务|平台|集群|网站|生产环境)",
     re.IGNORECASE,
 )

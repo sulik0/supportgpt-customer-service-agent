@@ -1,6 +1,6 @@
 {
   "name": "supportgpt_online_reply_checks",
-  "version": "1.4",
+  "version": "1.5",
   "description": "线上回复质量检查用例：只含中文和英文。每条检查状态、转人工原因、意图、Tool、语言和关键内容。",
   "cases": [
     {"id": "order-status-zh", "customer": "cust_201", "message": "帮我查一下订单 ORD-12001 到哪了",
@@ -36,6 +36,9 @@
      "status": ["pending_human"], "handling_reason": ["business_review"], "language": "en", "must_not_match": ["(?i)has been refunded", "(?i)refund (?:is|was) (?:complete|processed)"]},
     {"id": "cancel-order-zh", "customer": "cust_201", "message": "订单 ORD-12001 我不想要了，帮我取消",
      "status": ["pending_human"], "handling_reason": ["business_review"], "must_not_match": ["已(?:经)?(?:为您)?取消"]},
+    {"id": "cancel-fee-question-zh", "customer": "cust_201", "message": "取消订单要收手续费吗？",
+     "status": ["answered", "pending_human"], "handling_reason": ["preliminary_answer", "quality_review"], "language": "zh",
+     "must_not_match": ["(?:手续费|取消费).{0,10}\\d+\\s*(?:元|%|％)", "已(?:经)?(?:为您)?取消"]},
     {"id": "complaint-threat-zh", "customer": "cust_201", "message": "你们这群骗子，垃圾公司，再不处理我就去消协和媒体曝光你们",
      "status": ["pending_human"], "handling_reason": ["business_review"]},
     {"id": "outage-major-zh", "customer": "cust_203", "message": "API 大面积超时，是不是你们服务挂了？",

@@ -270,3 +270,48 @@ async def test_own_eligibility_question_escalates_and_allows_preliminary_answer(
     assert state["escalation_recommended"] is True
     output = {**state, "suggested_response": "按政策，付款后 30 天内可以申请退款。", "qa_score": 0.95}
     assert preliminary_answer_allowed(output, text) is True
+
+
+@pytest.mark.parametrize(
+    "text",
+    [
+        "取消订单要收手续费吗？",
+        "What fee applies if I cancel an order before fulfillment?",
+        "v2 退款政策下，撤回退款申请要多久？",
+        "Can I cancel my subscription anytime?",
+    ],
+)
+def test_cancellation_policy_questions_have_no_action_signal(text):
+    # 第 11 条：只问取消政策按第 6 条，单出现“取消/撤回”不算明确办事。
+    assert rule_signals(text)["explicit_action"] is False
+
+
+@pytest.mark.parametrize(
+    "text",
+    [
+        "请帮我取消订单 ORD-7001。",
+        "我要取消订单 ORD-7001",
+        "那就帮我取消它",
+        "取消掉吧",
+        "我要撤回这笔付款",
+        "Please cancel order ORD-7001.",
+        "I want to cancel order ORD-7001.",
+        "Cancel my order ORD-7001 now.",
+        "Can you cancel order ORD-7001?",
+    ],
+)
+def test_cancellation_requests_keep_action_signal(text):
+    assert rule_signals(text)["explicit_action"] is True
+
+
+def test_whole_process_is_not_wide_impact():
+    assert rule_signals("整个流程要多久到账？")["wide_impact"] is False
+    assert rule_signals("整个系统都挂了")["wide_impact"] is True
+
+
+@pytest.mark.asyncio
+async def test_jev_cancellation_policy_question_is_answered(monkeypatch):
+    _jev_says(monkeypatch, IntentType.ORDER_CANCELLATION, "information")
+    state = await _final_state("取消订单要收手续费吗？")
+    assert state["classification"]["mode"] == "information"
+    assert state["classification"]["handling"] == "auto_answer"
