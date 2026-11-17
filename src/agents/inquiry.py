@@ -1,16 +1,10 @@
-"""只读咨询判定：账务和故障域里，哪些请求只是在问信息。
+"""对用户原文的确定性规则信号，只在 classification.rule_signals 里用一次。
 
-判定全部是对用户原文的确定性规则，不使用模型输出。命中后 Analyzer 不再按
-业务域默认规则强制转人工；质量、置信度、安全等其他审批条件不受影响。
+ACTION_OR_DISPUTE 是原则第 20 条里规则说了算的“明确办事说法”；ELIGIBILITY_REQUEST
+只在 Jev 对“办事还是问”没有结论时使用（第 21 条）。
 """
 
 import re
-
-from src.models.intents import IntentType
-
-READ_ONLY_INQUIRY_INTENTS = frozenset(
-    {IntentType.BILLING_DISPUTE, IntentType.OUTAGE_REPORT}
-)
 
 # 要求实际办理、表达争议或越权的说法：这些必须等人工。
 ACTION_OR_DISPUTE = re.compile(
@@ -50,23 +44,12 @@ ACTION_OR_DISPUTE = re.compile(
     r"don't execute)\b",
     re.IGNORECASE,
 )
-# 问“我这笔款能不能退”：不是泛泛问政策，而是在确认自己的退款资格。
-# 机器人直接回答“超期不能退”等于自动拒绝，所以转人工；它不算办理要求，
-# 公开入口仍可先展示政策答复（先答后审）。
+# 问“我这笔款能不能退”：确认自己的退款资格，先答后审（第 7 条）。
 ELIGIBILITY_REQUEST = re.compile(
     r"\b(?:can|may|could) i\b.{0,40}\b(?:refund|money back|reimburse\w*)\b|"
     r"\bam i (?:eligible|entitled)\b.{0,30}\brefund\b|"
     r"(?:我|我们)(?:的)?.{0,40}(?:可以|可不可以|能不能|能否|可否|能)"
     r".{0,6}(?:申请|办理|要求)?退(?:款|费|货|订)",
-    re.IGNORECASE,
-)
-# 明确的提问或查询。英文助动词只在句首才算提问，避免把陈述句当成问题。
-QUESTION = re.compile(
-    r"[?？]|吗|么|多少|多久|什么|怎么|如何|是否|能否|可否|哪|几|查|确认|核实|"
-    r"\b(?:what|when|where|which|how|why|whether)\b|"
-    r"(?:^|[.!;]\s+)(?:is|are|was|were|does|do|did|can|could|may|will|would|should)\b|"
-    r"\b(?:check|confirm|verify|look up|tell me|show me|summari[sz]e|explain|list)\b|"
-    r"\bi need (?:the|my)\b.{0,40}\b(?:amount|status|total|number|details)\b",
     re.IGNORECASE,
 )
 # 影响面大的故障：即使是提问也按紧急事件通知人工。
@@ -76,19 +59,3 @@ WIDE_IMPACT = re.compile(
     r"全部用户|所有用户|所有人|所有客户|大面积|全站|全线|全挂|全部挂|全都挂|整个",
     re.IGNORECASE,
 )
-
-
-def is_read_only_inquiry(intent: IntentType, text: str) -> bool:
-    """账务或故障域的只读咨询：是提问，且没有办理、争议或大面积故障的说法。"""
-    if intent not in READ_ONLY_INQUIRY_INTENTS:
-        return False
-    normalized = " ".join(str(text or "").split())
-    if not normalized or ACTION_OR_DISPUTE.search(normalized):
-        return False
-    if not QUESTION.search(normalized):
-        return False
-    if intent == IntentType.BILLING_DISPUTE and ELIGIBILITY_REQUEST.search(normalized):
-        return False
-    if intent == IntentType.OUTAGE_REPORT and WIDE_IMPACT.search(normalized):
-        return False
-    return True

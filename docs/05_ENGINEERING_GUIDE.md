@@ -190,6 +190,9 @@ JEV_MAX_RETRIES=0
 JEV_INTENT_CONFIDENCE_THRESHOLD=0.75
 JEV_QA_CONFIDENCE_THRESHOLD=0.75
 JEV_NOUL_THRESHOLD=0.7
+# 只供 PR 门禁和测试：读录好的 Jev 分类，生产环境禁止
+# DECISION_PROVIDER=jev_replay
+# DECISION_REPLAY_PATH=evaluation/decision_recordings/jev_baseline.json
 ```
 
 <details>
@@ -199,17 +202,24 @@ JEV_NOUL_THRESHOLD=0.7
 
 </details>
 
-当前路由已调整为：Analyzer 对正常请求优先用 Jev 复核规则候选；QA 保留空回复、泄露、无权威证据等硬规则，将正向 Grounding 候选和其余非确定结论交给 Jev。Jev 不可用或置信度不足时：Analyzer 有规则候选则回退规则，关键词零命中或多意图冲突时回退原 LLM；QA 的正向 Grounding 候选和带数字的限制性回复一律回退 LLM Judge，只有失败类结论、澄清、纯限制说明（不含数字）和订单不存在说明由规则直接定。
+分类判断（2026-11-17 起，`src/agents/classification.py`）：每条消息只判一次，结论存进 State 的 `classification`（`category`、`mode`、`scope`、`record_tool`、`complaint`、`negative`、`mixed_request`、`wide_impact`、`account_compromised`，每项结论的来源，以及 `handling` / `principle` / `priority`）。Graph 路由（是否范围外）、Resolver（要查的记录）、公开回复（能否先答后审）、Risk Engine（是否转人工）都只读它，不再对原文重跑规则。优先级表写在该文件顶部（原则第 20、21 条）：
 
-Jev 只用于线上封闭决策；当前不作为 Baseline、Ragas 或 DeepEval 的离线 Judge。`Skill Selector`、Tool Allowlist / RBAC / Risk Policy 和 Approval Gate 仍为确定性代码。
+- 业务类别：Jev 有把握时听 Jev；Jev 不可用或对类别没把握时，规则有明确结论用规则，否则 LLM（LLM 兜底时才做设备故障纠正）。
+- 用户意图：Jev 有把握时听 Jev（`action` / `information` / `eligibility` / `unclear`）；原话命中 `ACTION_OR_DISPUTE`（明确办事、争议、越权说法）时规则改判为 `action`；Jev 没把握时，命中 `ELIGIBILITY_REQUEST` 按“问自己能不能办”，否则按“说不清”。
+- 范围外：规则命中明确范围外主题即范围外；否则 Jev 判 `benign_out_of_scope` 且原话不含售后词。
+- 投诉 / 负面情绪：规则或 Jev（`customer_tone`）任一命中即算。
+- “没把握”逐项算：`intent` 置信度不足只让类别兜底，`operation_mode`、`customer_tone` 有把握的照常采用。
 
-Jev 采纳规则：意图是否采纳只看 `intent` 自身置信度（`JEV_INTENT_CONFIDENCE_THRESHOLD`）；`operation_mode` 是辅助问题，只约束依赖它的判断。`operation_mode` 置信度不足时：① 范围外（`outside_support`）判定不成立，按保守方向处理；② 写入 analysis 的 `confidence_score` 被限制在 0.79 以内，Risk Engine 记为 `medium_analyzer_confidence`（不单独触发人工）。置信度足够时仍取两者最小值，风险判断不比原先宽松。线上曾因 `min(intent, operation_mode)` 把 `outage_report`（1.00）、`account_support`（0.92）整体丢弃，退回规则后落到 `information_request`。
+处理结果（`decide_handling`，按顺序取第一条命中）：范围外 → 能力说明（3）；投诉 → 转人工（16）；账户被盗 → 转人工（14）；大面积或影响业务的故障 → 转人工（12）；账务/取消/保修类要办事 → 转人工（5/11/13），同时有可回答的提问时先答后审（8）；账务/取消类问自己能不能办 → 先答后审（7）；负面情绪 → 先答后审（17）；“办事还是问”没有结论且属于账务/取消/故障 → 先答后审（21）；其余自动回答。Risk Engine 对 `human` / `answer_then_review` 记 `handling_human` / `handling_answer_then_review`（0.78，high），不再按优先级、情绪、业务域或 Analyzer 置信度打分；没有 `classification` 的旧 State 沿用旧打分。Escalation 只读 Risk Engine 的结论，优先级只换算 SLA。
 
-投诉路径：项目没有独立的投诉 Intent。明确的投诉诉求（“我要投诉 / file a complaint”，不含“怎么投诉”这类流程咨询）在 Analyzer 中确定性处理：意图为 `feedback` 或 `information_request` 时，统一提为 `priority=high`、`sentiment=negative`，由 Risk Engine 的 `negative_high_priority` 转人工审批。该逻辑不依赖模型输出，Jev 判成 `feedback` 时同样生效。规则兜底另补充了“集群 / 网关 / 生产环境 + 无法访问 / 挂了”（`outage_report`）和“登录不了 / 登不上 / 密码错误”（`account_support`）。
+Jev 问题集 `supportgpt-jev-intent-v1.2`：`operation_mode` 增加 `eligibility`；新增 `customer_tone`（neutral / negative_emotion / complaint）和 `mixed_request`（既问又办）；`outage_report`、`warranty_claim` 的说明与原则文档的类别对齐（报错后的恢复步骤算故障；网关、路由器等实体设备故障和查自己设备的保修状态算保修与设备）。改问题集后要重录门禁录音。
+
+QA 路由不变：保留空回复、泄露、无权威证据等硬规则，将正向 Grounding 候选和其余非确定结论交给 Jev；Jev 不可用或置信度不足时回退 LLM Judge。
+
+Jev 只用于线上封闭决策；当前不作为 Baseline、Ragas 或 DeepEval 的离线 Judge。`Skill Selector`、Tool Allowlist / RBAC / Risk Policy 和 Approval Gate 仍为确定性代码，Jev 输出不是授权。
 
 回复语言兜底：Prompt 虽已要求跟随当前 Description 的语言，`deepseek-flash` 在工具结果和 RAG 多为中文时仍可能用中文回答。`src/llm/provider.py` 的 `resolution_language_directive` 按 CJK 字符占比（≥30% 判中文）或英文常用词（且无非 ASCII 字母）判断主要语言，在发给 Resolver 的用户消息末尾追加 `Respond in English.` / `Respond in Chinese.`。用户明确指定回复语言、或无法可靠判断（如法语）时不追加，交给 Prompt 规则。QA 和范围外固定回复本来就按 Description 的 CJK 判断语言，未改动。
 
-只读咨询（`src/agents/inquiry.py`，2026-11-14 起）：账务（`billing_dispute`）和故障（`outage_report`）域里只是在问信息的请求，不再按业务域默认规则强制转人工。判定只看用户原文，是确定性规则，不使用模型输出：必须是提问或查询；不含办理、争议、投诉、越权类说法（“我要退款”“多扣”“dispute”“do not execute”等）；故障类还不能带大面积影响的说法（“所有用户”“大面积”“all users”）。命中后 Analyzer 写入 `read_only_inquiry=true`，账务优先级降为 `medium`、故障降为 `high`（不再是 `urgent`），域默认的负面情绪改为 `neutral`，Risk Engine 不再加 `high_risk_business_intent`。用户原文带明确负面情绪时不算只读咨询。以提问口气提出的办理要求（“能帮我把钱退回来吗”“Can you refund my order?”“麻烦处理一下退款可以吗”）按办理处理，“帮我查一下退款进度”这类查询仍算只读。询问自己这笔款能不能退（“我买了 20 天了，还能退款吗”“Can I get a refund for…”）也不算只读咨询：机器人直接回答“超期不能退”等于自动拒绝，所以转人工；它不属于办理要求，公开入口仍先展示政策答复。泛泛的政策提问（“可以申请退款吗”“有争议的账户能退款吗”）仍算只读。另有第二层保护：Jev 对 `operation_mode` 有把握地判为 `action` 时否决只读判定，即使意图用的是规则结论也生效；Jev 只能否决，不能把规则认定的办理要求放行。被 Jev 否决的请求不展示草稿（`model_sees_action`）。实测 Jev 对 16 条办理要求全部判为 `action`，对 40 条只读用例只有 2 条判为 `action`，正是上面“问自己能不能退”的那类。其余审批条件不变：分类置信度低、QA 分低、幻觉、`response_requires_human`、依赖降级、安全信号任何一项出现仍转人工审批。意图和部门不变，退款写 Tool 仍不在自动路径上。只是询问争议相关政策（“有未结争议的账户能退款吗”）算只读咨询；“我有异议”“发起争议”“dispute this charge”才算表达争议。Baseline v2.5 里 45 条账务/故障用例有 36 条期望不转人工，9 条转人工（要求退款、询问自己能不能退、“不要执行”、信息不足的故障陈述、全量用户故障）。
 
 分类和 QA 的几条确定性兜底（2026-11-14，来自真实模型 100 条回放）：规则明确命中账务或故障域时，Jev 不能把意图降成 `information_request`（其他方向的改判仍听 Jev）；问保修期限（多久、几个月）时，检索到的文档必须含具体期限才算权威依据，否则 `response_requires_human=true`；QA 评判 Prompt 明确了分值含义（之前的 JSON 示例写死 `"score":0.0`，模型经常照抄 0 分，导致凡是走到模型评判的回复都被判低分转人工）；请求解释 AI/提示词概念或询问客服如何应对绕过控制的无害提问，按范围外 `ai_security_concepts` 礼貌说明服务范围（真正的攻击在此之前已被 Guardrail 拦截；“先问概念、再接越权指令”不享受知识性讨论豁免）；Analyzer 和 QA 使用独立快速端点时，该端点调用失败会退回主模型再试一次。
 
@@ -225,7 +235,7 @@ Jev 采纳规则：意图是否采纳只看 `intent` 自身置信度（`JEV_INTE
 | `manual_review` | 其余审批 | 需人工进一步确认 |
 | `preliminary_answer` | 先答后审，见下 | AI 初步答复 + “人工复核中”说明，`status=answered` |
 
-先答后审（`PUBLIC_PRELIMINARY_ANSWER_ENABLED`，默认开启）：中性的只读咨询已在 Workflow 层直接自动回答（见上），这里是第二层，覆盖仍被业务域规则转人工的提问（例如带负面情绪的账务提问）。它只改公开入口给用户看什么，Workflow 的升级结论、`ResponseApproval` 和人工队列都不变。放行必须同时满足：意图是 `billing_dispute` 或 `outage_report`；风险原因只有业务域默认项（`high_priority`、`urgent_priority`、`high_risk_business_intent`、`negative_high_priority`）；`qa_score ≥ PUBLIC_PRELIMINARY_ANSWER_MIN_QA_SCORE`（默认 0.8）；没有 errors、降级、幻觉、安全或语义风险信号；用户原文不含办理、争议、投诉、越权类说法，账务类还必须是提问或查询。任何一条不满足就只显示转人工说明。
+先答后审（`PUBLIC_PRELIMINARY_ANSWER_ENABLED`，默认开启）：只改公开入口给用户看什么，Workflow 的升级结论、`ResponseApproval` 和人工队列都不变。放行条件只读分类结论和 QA 结果：`classification.handling == answer_then_review` 且风险原因只有 `handling_answer_then_review`（可附带 `authoritative_answer_unavailable`），或自动回答的请求只因缺权威依据转人工且草稿只说明了无法确认（第 18 条）；`qa_score ≥ PUBLIC_PRELIMINARY_ANSWER_MIN_QA_SCORE`（默认 0.8）；没有 errors、降级、幻觉、安全或语义风险信号。任何一条不满足就只显示转人工说明。
 
 真实模型回归：`evaluation/online_regression/supportgpt_online_regression.json` 保存 5 条线上问题用例（投诉、重置密码、提示词泄露、英文订单查询、集群故障），不属于固定 SHA256 的 Baseline。`run_real_llm_regression.py` 默认合并该数据集，regression 套件自动包含这 5 条（预估 39 次调用，仍在默认上限 40 内）。英文回复语言需人工查看报告确认，Dataset 暂无语言断言。
 
@@ -445,7 +455,16 @@ PR Agent Quality Gate：
 python scripts/run_ci_quality_gate.py
 ```
 
-这个入口会覆盖本地 `.env` 中的模型、Guard 和 OTel 配置，并在临时 SQLite/Chroma 目录中使用 Mock Provider 回放同一组 100 条完整 Workflow。规则存放在 `evaluation/quality_gate_policy.json`：必须使用指定的 Dataset SHA256 和 100 条 Case，六项行为指标都要达到设定目标，也不能增加失败 Case。JSON、Markdown、Baseline 和 Error Analysis 报告保存在 `evaluation/reports/ci_quality_gate/`，GitHub Actions 会保留 14 天供查看。
+这个入口会覆盖本地 `.env` 中的模型、Guard 和 OTel 配置，并在临时 SQLite/Chroma 目录中使用 Mock Provider 回放同一组 100 条完整 Workflow。Jev 分类读录好的回答（`DECISION_PROVIDER=jev_replay`，录音在 `evaluation/decision_recordings/jev_baseline.json`），不调用 Jev、不需要 Key；缺录音时门禁直接失败并提示重录，不会静默回退规则。QA 评判不回放：门禁的回复是 Mock 固定文案，让真实 Jev 评判没有意义，QA 照旧走 Mock，真实质量看真实模型回归。
+
+录音键是 operation + 问题集版本 + 问题集内容哈希 + 脱敏后输入的哈希（进程内随机的业务 ID 别名、日期时间、UUID 先换成固定占位符）。改了 Jev 分类问题集、题目文本，或改动让 Jev 的输入变了，都要重录：
+
+```bash
+python scripts/record_jev_decisions.py --dry-run        # 看要真实调用多少次，不调用 Jev
+python scripts/record_jev_decisions.py --confirm-live   # 用本地 .env 的 Jev Key 录制，已有录音直接复用
+```
+
+录完把输出里的录音 SHA256 写进 `evaluation/quality_gate_policy.json` 的 `decision_recording_sha256`。规则存放在 `evaluation/quality_gate_policy.json`：必须使用指定的 Dataset SHA256、录音 SHA256 和 100 条 Case，六项行为指标都要达到设定目标，也不能增加失败 Case。JSON、Markdown、Baseline 和 Error Analysis 报告保存在 `evaluation/reports/ci_quality_gate/`，GitHub Actions 会保留 14 天供查看。
 
 Locust 压测：
 

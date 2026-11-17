@@ -110,7 +110,7 @@ Prometheus + OpenTelemetry 覆盖 API、Agent、工具、RAG 和审批过程。
 
 | Agent | 这个节点负责什么 |
 |---|---|
-| Analyzer | 确定性 Prompt Injection/Jailbreak、PII 脱敏、Qwen3Guard 语义检测；规则生成候选，Jev 启用时优先复核，再按规则/LLM 分层回退，最后执行初始 Risk Engine 评估 |
+| Analyzer | 确定性 Prompt Injection/Jailbreak、PII 脱敏、Qwen3Guard 语义检测；每条消息只判一次分类：Jev 为主判断业务类别、用户意图和是否范围外，规则只在安全、明确范围外、明确办事说法三种情况说了算，Jev 不可用或没把握时规则/LLM 兜底；按处理原则得出处理结果后执行初始 Risk Engine 评估 |
 | Skill Selector（控制节点） | 根据统一 Intent 选择有版本的 Skill，并确定可用 Tool、RAG 类别和必填信息 |
 | Tooling | 调用受治理的业务工具，补充客户、订单和历史工单上下文，并检查工具返回的间接注入 |
 | Retriever | 按知识库版本与类别进行 Hybrid RAG 检索，返回 citation，并在生成前检查文档间接注入 |
@@ -227,7 +227,7 @@ Prompt Injection 不再只是英文关键词检测，当前实现为确定性多
 
 确定性规则未命中时，可选调用独立 `Qwen3Guard-Gen-0.6B` OpenAI-compatible 端点。该 Adapter 已接入 `user_input`、`tool_result` 和 `rag_document`，并将 `Safe / Controversial / Unsafe`、Categories、延迟与降级状态写入 AgentState 和 OpenTelemetry。`Unsafe` 或 `Jailbreak` 类别阻断自动化；`Controversial` 默认进入 Risk Engine 并要求人工处理。Guard 服务默认关闭，不得宣称已有生产运行指标。
 
-独立 `RiskEngine` 综合安全分数、优先级、情绪、退款/拒付/投诉等高风险意图、Analyzer 置信度、QA、幻觉和 Workflow 错误。默认风险阈值为 `medium >= 0.4`、`high >= 0.7`、`critical >= 0.9`；Analyzer 低置信度阈值为 `0.65`，QA 阈值为 `0.8`。`high` / `critical` 要求人工处理，安全威胁额外阻断自动化。
+是否转人工由 22 条处理原则（`docs/10_HANDLING_PRINCIPLES.md`）直接决定，优先级只决定处理时限。独立 `RiskEngine` 是唯一的转人工判断点，综合处理原则的结论、安全分数、依赖降级、QA、幻觉和 Workflow 错误；Escalation 只读它的结论。默认风险阈值为 `medium >= 0.4`、`high >= 0.7`、`critical >= 0.9`；Analyzer 低置信度阈值为 `0.65`，QA 阈值为 `0.8`。`high` / `critical` 要求人工处理，安全威胁额外阻断自动化。
 
 `/chat` 与 `/suggest-response` 会返回 Analyzer 置信度、风险等级、分数和原因。Trace 和结构化日志记录风险字段，OpenTelemetry Metrics 记录最终风险评估数与分数分布。
 
@@ -305,13 +305,13 @@ Baseline V1 是独立的真实回放报告：固定读取上述 100 条数据，
 
 项目已提供真实 LLM Regression 专用入口：`regression` 固定选取 12 条并预计 27 次 Workflow LLM 调用，`full` 运行 100 条并预计 258 次；入口拒绝 Mock，需要显式 `--confirm-live`，并在报告中记录 Provider、Model、Endpoint Host、Token、成本和延迟。2026-08-26 首次 DeepSeek + Qwen 真实 100 条 Baseline 为 Case Pass `0.54`、平均 `2.50s`、P95 `4.15s`、平均总 Token `715.59`、LLM Calls `217`；2026-08-30 在完全相同 Dataset SHA256 下复测达到 Case Pass `0.99`、平均 `1.62s`、P95 `3.24s`、平均总 Token `453.29`、LLM Calls `87`。这些是特定 Dataset、Prompt、模型和阈值组合下的离线实验结果，不代表生产流量质量。
 
-CI/CD 采用两级门禁：PR/Push 强制使用 Mock Provider 回放固定 100 条 Workflow，要求六项行为指标全部达到确定性目标且无新失败 Case；Release Gate 需要人工确认付费调用，使用真实 LLM 完整回放，固定检查行为、P95、Token、LLM Calls 和 Analyzer Rule Hit Rate。仅 Release Gate 通过的同一 Git SHA 可由 CD 发布到 GHCR；当前没有自动部署到生产 Kubernetes 集群。
+CI/CD 采用两级门禁：PR/Push 强制使用 Mock Provider 回放固定 100 条 Workflow（Jev 分类读录好的回答，不调用 Jev、结果固定），要求六项行为指标全部达到确定性目标且无新失败 Case；Release Gate 需要人工确认付费调用，使用真实 LLM 完整回放，固定检查行为、P95、Token、LLM Calls 和 Analyzer Rule Hit Rate。仅 Release Gate 通过的同一 Git SHA 可由 CD 发布到 GHCR；当前没有自动部署到生产 Kubernetes 集群。
 
 ## 20. Feedback Pipeline
 
 第一阶段已可以收集用户反馈和人工修改，并导出经脱敏处理的训练候选数据：
 
-- 用户咨询页通过 `POST /support/requests` 创建唯一工单并立即执行 Workflow；普通请求返回安全回复，需要审批时返回安全的占位回复和人工介入类别（账务和故障域的只读咨询由确定性规则识别后直接自动回答，不进入审批；要求办理、询问自己这笔款能不能退、表达争议、带负面情绪或大面积故障的请求仍转人工，其中仅带负面情绪的只读提问在 QA 通过、无异常和安全信号时先展示初步答复），主响应不含内部诊断字段；隔离 Demo 另有凭本次反馈令牌读取的白名单运行摘要，不公开工具参数、输入原文、待审草稿、异常正文或 Trace。
+- 用户咨询页通过 `POST /support/requests` 创建唯一工单并立即执行 Workflow；普通请求返回安全回复，需要审批时返回安全的占位回复和人工介入类别（处理结果按处理原则决定：只问政策、流程、状态的自动回答；要求实际办理、投诉、账户被盗、大面积故障转人工；问自己能不能办、既问又办、带负面情绪的提问先答后审，即 QA 通过、无异常和安全信号时先展示初步答复，同时保留人工复核），主响应不含内部诊断字段；隔离 Demo 另有凭本次反馈令牌读取的白名单运行摘要，不公开工具参数、输入原文、待审草稿、异常正文或 Trace。
 - 客服员工后台通过受 RBAC 保护的 `GET /staff/review-queue` 仅加载待审批工单；打开详情调用 `GET /tickets/{ticket_id}/agent-result` 读取最新持久化结果，不会重新执行 Agent，也不会新增 Ticket、AgentRun 或审批记录。
 - 用户通过 `agent_run_id + feedback_token` 提交评分；数据库只保存 Token 的 SHA-256 摘要，每个 Run 只接受一条不可变用户反馈。
 - 人工审批的通过、修改和拒绝结果自动写入 `FeedbackEvent`；人工修改可形成 SFT 与 DPO 候选。

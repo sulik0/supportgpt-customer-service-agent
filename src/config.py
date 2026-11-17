@@ -91,7 +91,13 @@ class Settings(BaseSettings):
     # DeepSeek 等兼容服务的思考模式；留空不传。思考 Token 会占用 max_tokens 输出额度。
     LLM_THINKING: Optional[str] = Field(default=None, pattern="^(enabled|disabled)$")
     # DecisionProvider 默认关闭，Jev 只处理封闭选项的语义决策。
-    DECISION_PROVIDER: str = Field(default="disabled", pattern="^(disabled|jev)$")
+    # jev_replay 只供 PR 门禁和测试：读录好的 Jev 回答，生产环境禁止。
+    DECISION_PROVIDER: str = Field(
+        default="disabled", pattern="^(disabled|jev|jev_replay)$"
+    )
+    DECISION_REPLAY_PATH: str = Field(
+        default="evaluation/decision_recordings/jev_baseline.json"
+    )
     JEV_API_KEY: Optional[str] = Field(default=None)
     JEV_BASE_URL: Optional[str] = Field(default=None)
     JEV_MODEL: str = Field(default="jev-1.13.0", min_length=1, max_length=100)
@@ -237,6 +243,11 @@ class Settings(BaseSettings):
         """Jev 启用时必须显式提供密钥。"""
         if self.DECISION_PROVIDER == "jev" and not str(self.JEV_API_KEY or "").strip():
             raise ValueError("DECISION_PROVIDER=jev requires JEV_API_KEY.")
+        if self.DECISION_PROVIDER == "jev_replay" and self.APP_ENV.lower() in {
+            "production",
+            "prod",
+        }:
+            raise ValueError("DECISION_PROVIDER=jev_replay is not allowed in production.")
         return self
 
     @model_validator(mode="after")

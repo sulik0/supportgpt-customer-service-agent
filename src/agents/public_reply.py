@@ -1,33 +1,23 @@
 """公开咨询入口的回复策略：转人工时给用户看什么。
 
 Workflow 的升级与审批结论不在这里改，这里只决定终端用户看到的文案，
-以及只读咨询能否在人工复核前先看到 AI 的初步答复。
+以及先答后审时用户能否在人工复核前先看到 AI 的初步答复。
 """
 
 import re
 from typing import Any, Mapping
 
-from src.agents.inquiry import ACTION_OR_DISPUTE, QUESTION
+from src.agents.classification import ANSWER_THEN_REVIEW, AUTO_ANSWER
 from src.config import settings
 from src.models.intents import IntentType, normalize_intent
 
 # QA 把幻觉告警也写进 errors；它是质量问题，不是服务故障。
 _QA_ALERT_PREFIX = "QA score alert"
 
-# 只因业务域默认规则（账务高优先级、故障紧急）而转人工的风险原因。
-# 出现其他原因（置信度、质量、依赖降级、安全等）就不能先答。
-_DOMAIN_ONLY_REASONS = frozenset(
-    {
-        "high_priority",
-        "urgent_priority",
-        "high_risk_business_intent",
-        "negative_high_priority",
-    }
-)
+# 先答后审只因处理原则而转人工；出现其他原因（质量、依赖降级、安全等）就不能先答。
+_REVIEW_REASON = "handling_answer_then_review"
 _DEFERRAL_REASON = "authoritative_answer_unavailable"
-_PRELIMINARY_INTENTS = frozenset(
-    {IntentType.BILLING_DISPUTE, IntentType.OUTAGE_REPORT}
-)
+
 
 def _is_chinese(text: str) -> bool:
     return bool(re.search(r"[一-鿿]", text or ""))
@@ -44,30 +34,28 @@ def _service_errors(agent_output: Mapping[str, Any]) -> list[str]:
 
 
 def preliminary_answer_allowed(
-    agent_output: Mapping[str, Any], customer_text: str
+    agent_output: Mapping[str, Any], customer_text: str = ""
 ) -> bool:
-    """仍被业务域规则转人工的只读咨询（如带负面情绪的提问）：先展示 AI 初步答复。
+    """先答后审：转人工的同时先把通过 QA 的草稿给用户看。
 
-    中性的只读咨询已在 Workflow 层直接自动回答（见 inquiry.py），这里是第二层。
-
-    放行条件全部是确定性判断：转人工只因业务域默认规则、质量检查通过、
-    没有任何异常或安全信号，且用户没有要求实际办理或表达争议。
+    两种情况，都只读分类结论和 QA 结果，不再对原文重判：
+    1. 处理原则判为先答后审（第 7、8、17、21 条）；
+    2. 部分主题缺权威依据，但草稿只说明了“无法确认、需人工”（第 18 条）。
     """
     if not settings.PUBLIC_PRELIMINARY_ANSWER_ENABLED:
         return False
     if not str(agent_output.get("suggested_response") or "").strip():
         return False
-    intent = normalize_intent(agent_output.get("intent"))
+    classification = agent_output.get("classification") or {}
+    handling = classification.get("handling")
     reasons = {str(item) for item in agent_output.get("risk_reasons", []) or []}
-    # 第二种情况：部分主题缺权威依据，但草稿只说明了“无法确认、需人工”，没有下结论。
+    review = handling == ANSWER_THEN_REVIEW and _REVIEW_REASON in reasons
     deferral = bool(
-        agent_output.get("response_requires_human")
+        handling == AUTO_ANSWER
+        and agent_output.get("response_requires_human")
         and _DEFERRAL_REASON in reasons
     )
-    if not deferral and (
-        intent not in _PRELIMINARY_INTENTS
-        or agent_output.get("response_requires_human")
-    ):
+    if not review and not deferral:
         return False
     if (
         agent_output.get("security_threat_detected")
@@ -75,8 +63,6 @@ def preliminary_answer_allowed(
         or agent_output.get("errors")
         or str(agent_output.get("degradation_level", "none")).lower() != "none"
         or agent_output.get("hallucination_detected")
-        # 模型认为用户是在要求办理：不展示草稿，等人工处理。
-        or agent_output.get("model_sees_action")
         or agent_output.get("semantic_guard_degraded")
         or str(agent_output.get("semantic_guard_label", "not_run")).lower()
         in {"unsafe", "controversial"}
@@ -88,15 +74,8 @@ def preliminary_answer_allowed(
         return False
     if qa_score < settings.PUBLIC_PRELIMINARY_ANSWER_MIN_QA_SCORE:
         return False
-    allowed = _DOMAIN_ONLY_REASONS | ({_DEFERRAL_REASON} if deferral else set())
-    if not reasons or not reasons <= allowed:
-        return False
-    text = " ".join(str(customer_text or "").split())
-    if not text or ACTION_OR_DISPUTE.search(text):
-        return False
-    if intent == IntentType.BILLING_DISPUTE and not QUESTION.search(text):
-        return False
-    return True
+    allowed = {_REVIEW_REASON, _DEFERRAL_REASON}
+    return bool(reasons) and reasons <= allowed
 
 
 def answered_note(customer_text: str) -> str:

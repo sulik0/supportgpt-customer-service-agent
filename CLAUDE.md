@@ -16,7 +16,7 @@ SupportGPT：售后客服 Agent 后端（FastAPI + LangGraph）加 React 前端�
    - 改动只要新增或修改了环境变量、外部服务、密钥或 CORS，就要明确列出 Railway 和 Vercel 上各需要改哪些配置，并同步 `.env.example`。
    - 本地通过不代表线上可用。没有在线上验证过，就不要说“已部署成功”或“线上正常”。
    - `/health` 只表示进程存活，不检查数据库、模型、Redis、向量库和遥测。遥测失败不影响主流程，所以 LangSmith 鉴权失败不会报错，只会没有 Trace。
-2. **测试没有调用真实模型，导致很多问题上线后才发现、需要返工。** pytest 和 PR 门禁全部使用 Mock Provider。因此：
+2. **测试没有调用真实模型，导致很多问题上线后才发现、需要返工。** pytest 和 PR 门禁的 LLM 全部使用 Mock Provider；PR 门禁的 Jev 分类读录好的真实回答（`evaluation/decision_recordings/jev_baseline.json`），QA 评判和回复仍是 Mock。因此：
    - 改动涉及 Prompt、Agent 节点、Tool 选择、意图识别或输出解析时，Mock 测试通过不能算验证完成，要明确告诉用户“真实模型下还没验证”。
    - 这类改动完成后，主动建议用真实模型验证（`scripts/run_real_llm_regression.py --suite regression`，先 `--dry-run` 看预估调用次数）。真实调用要花钱，运行前先问用户。
    - 因真实模型行为返工过的问题，建议补成回归用例。
@@ -55,14 +55,15 @@ python -m unittest discover -s tests/mcp -v
 评测和门禁：
 
 ```bash
-python scripts/run_ci_quality_gate.py            # PR 门禁：Mock Provider 回放固定 100 条 Baseline
+python scripts/run_ci_quality_gate.py            # PR 门禁：Mock Provider 回放固定 100 条 Baseline，Jev 分类读录音
+python scripts/record_jev_decisions.py --dry-run # 改 Jev 分类问题集或题目后重录；--confirm-live 才调用 Jev（付费），录完更新门禁策略里的录音哈希
 python scripts/run_baseline_eval.py --dry-run    # --confirm-live 才会调用真实模型（付费）
 python scripts/run_post_deploy_smoke.py --api-url <Railway 域名> --frontend-url <Vercel 域名>   # 部署后冒烟；--with-chat 会建 1 张线上工单并调 1 次模型
 python scripts/check_quality_gate.py --profile release --report evaluation/reports/baseline_v1/baseline_v1_latest.json
 python scripts/run_postgres_tool_drill.py --confirm-isolated-database   # 需要 TOOL_DRILL_DATABASE_URL，库名必须以 _test 或 _drill 结尾
 ```
 
-`run_ci_quality_gate.py` 会覆盖本地 `.env` 的模型、Guard 和 OTel 配置，并使用临时 SQLite/Chroma 目录。带 `--confirm-live` 的脚本会产生真实模型费用，运行前先问用户。本机没有 PostgreSQL 时，不能把跳过演练说成演练通过，应看 CI 的实际结果。
+`run_ci_quality_gate.py` 会覆盖本地 `.env` 的模型、Guard 和 OTel 配置（Jev 改为 `jev_replay`），并使用临时 SQLite/Chroma 目录；缺录音时门禁失败。带 `--confirm-live` 的脚本会产生真实模型费用，运行前先问用户。本机没有 PostgreSQL 时，不能把跳过演练说成演练通过，应看 CI 的实际结果。
 
 测试用内存 SQLite，`tests/conftest.py` 在导入 `src` 之前强制设置环境变量（Mock LLM、`TOOL_SELECTION_MODE=rules`、关闭 Outbox Worker / OTel / DecisionProvider）。新测试如果依赖别的开关，要在用例内显式设置，不要依赖本机 `.env`。
 
@@ -76,6 +77,7 @@ python scripts/run_postgres_tool_drill.py --confirm-isolated-database   # 需要
 analyzer → skill_selector → context_enrichment（tooling ∥ retriever）→ resolver → qa → escalation → approval_gate
 ```
 
+- 分类每条消息只判一次（`src/agents/classification.py`，顶部有规则 / Jev / LLM 的优先级表），结论存进 `classification`；下游只读它，不要再对原文重跑规则。是否转人工由 `docs/10_HANDLING_PRINCIPLES.md` 的原则决定，只在 Risk Engine 一处判断，优先级只决定 SLA。
 - Analyzer 先做安全检查。Prompt Injection / Jailbreak 强命中直接短路到 escalation，跳过 Tool、RAG、Resolver、QA。
 - 范围外请求从 Analyzer 直接进 Resolver，但仍经过 QA、Escalation 和 Approval Gate。
 - `skill_selector` 和 `approval_gate` 不调用 LLM。Skill 由统一 `IntentType`（`src/models/intents.py`）确定性选择，每个 Intent 只有一个主 Skill。

@@ -67,6 +67,12 @@ async def evaluate(args, registry) -> int:
     source = source_state()
     policy = json.loads(args.policy.read_text(encoding="utf-8"))
     metadata = {"mode": "ci_offline_workflow_replay", "suite": "full", "llm_provider": "mock"}
+    if settings.DECISION_PROVIDER == "jev_replay":
+        from src.decision.replay import recording_sha256
+        metadata.update({
+            "decision_provider": "jev_replay",
+            "decision_recording_sha256": recording_sha256(Path(settings.DECISION_REPLAY_PATH)),
+        })
     if args.live:
         selected = [case.id for case in cases[:args.limit]] if args.limit else None
         plan = build_real_llm_run_plan(

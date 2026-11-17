@@ -2,7 +2,6 @@ import time
 import logging
 from typing import Dict, Any
 
-from src.config import settings
 from src.observability.metrics import (
     AGENT_EXECUTION_DURATION_SECONDS,
     RISK_ASSESSMENTS_TOTAL,
@@ -14,11 +13,41 @@ from src.risk.engine import risk_engine
 logger = logging.getLogger("supportgpt.agents.escalation")
 
 
-class EscalationAgent:
-    """负责根据优先级、情绪和 QA 结果判断是否升级人工。
+_SLA_HOURS = {"urgent": 2.0, "high": 12.0, "medium": 24.0, "low": 48.0}
+_REASON_TEXT = {
+    "security_threat_detected": "Security guardrails violation block.",
+    "semantic_safety_unsafe": "Semantic safety guard flagged the request.",
+    "dependency_failed": "A required dependency failed.",
+    "dependency_requires_human": "A required dependency needs human verification.",
+    "untrusted_context_guard_unavailable": "Untrusted context could not be checked.",
+    "hallucination_detected": "AI quality assurance detected a hallucination.",
+    "qa_score_below_threshold": "AI quality assurance score below threshold.",
+    "authoritative_answer_unavailable": (
+        "Authoritative business guidance is unavailable; human review required."
+    ),
+}
 
-    同时计算当前工单对应的 SLA 处理时限。
-    """
+
+def _escalation_reason(state: Dict[str, Any], reasons: tuple[str, ...]) -> str:
+    """转人工原因：先列安全、依赖和质量原因，再列处理原则。"""
+    for key, text in _REASON_TEXT.items():
+        if key in reasons:
+            return text
+    classification = state.get("classification") or {}
+    if "handling_human" in reasons or "handling_answer_then_review" in reasons:
+        mode = (
+            "answer then human review"
+            if "handling_answer_then_review" in reasons
+            else "human handling"
+        )
+        return (
+            f"Handling principle {classification.get('principle')} requires {mode}."
+        )
+    return f"Risk Engine policy threshold: {', '.join(reasons) or 'unspecified'}."
+
+
+class EscalationAgent:
+    """把 Risk Engine 的结论落成是否升级人工，并按优先级给出处理时限。"""
 
     async def evaluate(self, state: Dict[str, Any]) -> Dict[str, Any]:
         start_time = time.time()
@@ -26,51 +55,16 @@ class EscalationAgent:
             f"Escalation Agent started verifying state rules for ticket: {state.get('ticket_id')}"
         )
 
-        priority = state.get("priority", "medium").lower()
-        sentiment = state.get("sentiment", "neutral").lower()
-        qa_score = state.get("qa_score", 1.0)
-        hallucination_detected = state.get("hallucination_detected", False)
+        priority = str(state.get("priority", "medium")).lower()
         department = state.get("department", "general")
-        errors = state.get("errors", [])
         assessment = risk_engine.assess(state, stage="final")
 
-        # 1. Map SLA window based on ticket priority
-        sla_hours = 24.0  # default medium
-        if priority == "urgent":
-            sla_hours = 2.0
-        elif priority == "high":
-            sla_hours = 12.0
-        elif priority == "medium":
-            sla_hours = 24.0
-        elif priority == "low":
-            sla_hours = 48.0
+        # 优先级只决定人工处理时限（第 22 条）。
+        sla_hours = _SLA_HOURS.get(priority, 24.0)
 
-        # 2. Check escalation criteria
-        escalate = False
-        reason = ""
-
-        if "Security threat" in "".join(errors):
-            escalate = True
-            reason = "Security guardrails violation block."
-        elif priority == "urgent":
-            escalate = True
-            reason = "Ticket designated as Urgent priority."
-        elif sentiment == "negative" and priority == "high":
-            escalate = True
-            reason = "Negative customer sentiment combined with high priority."
-        elif state.get("response_requires_human", False):
-            escalate = True
-            reason = "Authoritative business guidance is unavailable; human review required."
-        elif "qa_score_below_threshold" in assessment.reasons or hallucination_detected:
-            escalate = True
-            reason = (
-                f"AI quality assurance score ({qa_score}) below threshold "
-                f"({settings.RISK_QA_SCORE_THRESHOLD}) or hallucination detected."
-            )
-        elif assessment.requires_human:
-            escalate = True
-            reasons = ", ".join(assessment.reasons) or "policy threshold"
-            reason = f"Risk Engine classified ticket as {assessment.level}: {reasons}."
+        # 是否转人工只看 Risk Engine 的结论，这里不再有第二套规则。
+        escalate = assessment.requires_human
+        reason = _escalation_reason(state, assessment.reasons) if escalate else ""
 
         # 3. Handle telemetry updates
         try:

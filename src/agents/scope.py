@@ -101,24 +101,19 @@ def has_support_topic(text: str) -> bool:
 
 
 def is_scope_boundary_request(state: Mapping[str, Any]) -> bool:
-    """能力说明不能覆盖安全、依赖故障或已有人工处理要求。"""
+    """能力说明不能覆盖安全、依赖故障或已有人工处理要求。
+
+    是否范围外只读 Analyzer 的分类结论，不再对原文重跑规则。
+    """
+    classification = state.get("classification")
+    if isinstance(classification, Mapping) and classification:
+        out_of_scope = classification.get("scope") == "out_of_scope"
+    else:
+        # 旧 State 没有分类结论时沿用 Analyzer 写下的范围字段。
+        out_of_scope = state.get("request_scope") == "out_of_scope"
     return bool(
-        state.get("request_scope") == "out_of_scope"
+        out_of_scope
         and normalize_intent(state.get("intent")) == IntentType.INFORMATION_REQUEST
-        and (
-            out_of_scope_reason(
-                str(state.get("description") or state.get("subject") or "")
-            )
-            == state.get("scope_reason")
-            or (
-                state.get("scope_reason") == "no_support_capability"
-                and state.get("scope_strategy") == "jev"
-                and state.get("analyzer_strategy") == "jev"
-                and not has_support_topic(
-                    str(state.get("description") or state.get("subject") or "")
-                )
-            )
-        )
         and state.get("scope_reason")
         and not state.get("security_threat_detected")
         and not state.get("risk_block_automation")

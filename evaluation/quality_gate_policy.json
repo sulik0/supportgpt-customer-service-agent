@@ -3,7 +3,7 @@
   "policy_name": "supportgpt-baseline-v1",
   "dataset": {
     "case_count": 100,
-    "sha256": "badd182fe5fa52620d2a369d9bb6bcf0a46eb6d77a325b671a27967c593e96d5",
+    "sha256": "1c781827feec11c4afeed8118072a8ed139796e030e4f42e1053cabc273fd534",
     "enabled_behavior_metrics": [
       "intent_accuracy",
       "department_accuracy",
@@ -15,9 +15,21 @@
   },
   "profiles": {
     "pull_request": {
-      "description": "Mock Provider 全量 Workflow Replay，不调用付费模型。",
+      "description": "Mock Provider 全量 Workflow Replay，Jev 分类读录音（evaluation/decision_recordings/jev_baseline.json），不调用付费模型。",
       "allowed_failed_case_ids": [],
       "requirements": [
+        {
+          "name": "decision_replay",
+          "path": "execution.decision_provider",
+          "operator": "eq",
+          "value": "jev_replay"
+        },
+        {
+          "name": "decision_recording_sha256",
+          "path": "execution.decision_recording_sha256",
+          "operator": "eq",
+          "value": "9cf28116ac2ba6a455bff6908913ba242f969d3954c37f3086f83e5ce9db921c"
+        },
         {
           "name": "ci_execution_mode",
           "path": "execution.mode",

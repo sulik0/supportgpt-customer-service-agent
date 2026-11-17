@@ -208,8 +208,8 @@ async def test_decision_service_accepts_high_confidence_intent():
 
     assert decision.accepted is True
     assert decision.analysis["intent"].value == "outage_report"
-    assert decision.analysis["department"] == "technical"
-    assert decision.analysis["priority"] == "urgent"
+    # 部门和优先级由 Taxonomy 与处理原则推导，DecisionService 只给 Jev 的结论。
+    assert "priority" not in decision.analysis
 
 
 @pytest.mark.asyncio
@@ -508,8 +508,8 @@ async def test_decision_service_keeps_confident_intent_when_mode_is_unsure(
 
     assert decision.accepted is True
     assert decision.analysis["intent"].value == intent
-    # 辅助问题不确定时置信度被压到中等风险区间，不会比原先更宽松。
-    assert decision.analysis["confidence_score"] < 0.8
+    # “办事还是问”没把握时记为没有结论，由分类优先级表按“说不清”处理（第 21 条）。
+    assert decision.analysis["operation_mode"] is None
 
 
 @pytest.mark.asyncio
@@ -525,6 +525,25 @@ async def test_decision_service_still_rejects_low_intent_confidence_with_sure_mo
 
     assert decision.accepted is False
     assert decision.fallback_reason == "low_confidence"
+    # 逐项算没把握：类别不采纳，有把握的“只是问”照常保留。
+    assert decision.analysis["intent"] is None
+    assert decision.analysis["operation_mode"] == "information"
+
+
+@pytest.mark.asyncio
+async def test_decision_service_maps_eligibility_tone_and_mixed_request():
+    answers = _mode_answers("billing_dispute", 0.95, "eligibility", 0.9)
+    answers["customer_tone"] = DecisionAnswer(
+        kind="choice", value="negative_emotion", confidence=0.9
+    )
+    answers["mixed_request"] = DecisionAnswer(kind="noul", value=0.85)
+    decision = await DecisionService(
+        _StubDecisionProvider(_result("intent_classification", answers))
+    ).classify_ticket("text")
+
+    assert decision.analysis["operation_mode"] == "eligibility"
+    assert decision.analysis["customer_tone"] == "negative_emotion"
+    assert decision.analysis["mixed_request"] is True
 
 
 @pytest.mark.asyncio
@@ -550,5 +569,5 @@ async def test_decision_service_out_of_scope_needs_confident_operation_mode():
     sure_decision = await DecisionService(sure).classify_ticket("weather?")
 
     assert unsure_decision.accepted is True
-    assert "request_scope" not in unsure_decision.analysis
-    assert sure_decision.analysis["request_scope"] == "out_of_scope"
+    assert unsure_decision.analysis["out_of_scope"] is False
+    assert sure_decision.analysis["out_of_scope"] is True

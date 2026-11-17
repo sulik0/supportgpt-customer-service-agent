@@ -110,6 +110,9 @@ export function translateEscalationReason(value) {
     qa_score_below_threshold: "回复质量评分未达到自动发送的要求。",
     workflow_error: "Agent 执行过程中出现异常，需要人工确认结果。",
     manual_review_policy: "按照当前处理规则，这张工单需要人工审批。",
+    handling_human: "按处理原则，这类请求需要人工办理。",
+    handling_answer_then_review:
+      "按处理原则先给客户初步答复，再由人工复核。",
   };
   if (reasonLabels[value]) return reasonLabels[value];
   if (
@@ -123,6 +126,18 @@ export function translateEscalationReason(value) {
   if (value === "Negative customer sentiment combined with high priority.") {
     return "客户表达了负面情绪，且该工单优先级较高。";
   }
+  const principle = value.match(
+    /^Handling principle (\d+) requires (answer then human review|human handling)\.$/,
+  );
+  if (principle) {
+    return principle[2] === "human handling"
+      ? `按处理原则第 ${principle[1]} 条，这类请求需要人工办理。`
+      : `按处理原则第 ${principle[1]} 条，先给客户初步答复，再由人工复核。`;
+  }
+  if (value === "AI quality assurance detected a hallucination.")
+    return reasonLabels.hallucination_detected;
+  if (value === "AI quality assurance score below threshold.")
+    return reasonLabels.qa_score_below_threshold;
   if (value.startsWith("AI quality assurance score")) {
     const score = value.match(/\(([^)]+)\)/)?.[1];
     return `回复质量评分${score ? `（${score}）` : ""}未达到要求，或回复可能包含没有依据的内容。`;

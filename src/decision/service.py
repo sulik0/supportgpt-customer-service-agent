@@ -13,19 +13,11 @@ from src.decision.questions import (
     intent_questions,
     qa_questions,
 )
-from src.models.intents import IntentType, intent_defaults, normalize_intent
+from src.models.intents import IntentType, normalize_intent
 
 
-_NEGATIVE_INTENTS = {
-    IntentType.BILLING_DISPUTE,
-    IntentType.OUTAGE_REPORT,
-    IntentType.ORDER_CANCELLATION,
-    IntentType.ACCOUNT_SUPPORT,
-}
-
-
-# operation_mode 不确定时的置信度上限，低于 0.8 会在 Risk Engine 记为中等风险信号。
-_UNCERTAIN_MODE_CONFIDENCE_CAP = 0.79
+OPERATION_MODES = frozenset({"action", "information", "eligibility", "unclear"})
+CUSTOMER_TONES = frozenset({"neutral", "negative_emotion", "complaint"})
 
 
 class DecisionService:
@@ -35,7 +27,7 @@ class DecisionService:
         self.provider = provider
 
     async def classify_ticket(self, text: str) -> TicketIntentDecision:
-        """只输出统一 Intent，部门和优先级继续由 Taxonomy 推导。"""
+        """只输出 Jev 的结论；最终分类由 Analyzer 的优先级表决定。"""
         result = await self.provider.evaluate(
             state={"current_ticket": text},
             questions=intent_questions(),
@@ -71,38 +63,18 @@ class DecisionService:
                 accepted=False,
                 fallback_reason="unknown_intent",
             )
-        if str(operation_mode.value) not in {"action", "information", "unclear"}:
+        if str(operation_mode.value) not in OPERATION_MODES:
             return TicketIntentDecision(
                 result=result,
                 accepted=False,
                 fallback_reason="unknown_operation_mode",
             )
-        if _bounded(needs_clarification.value) >= settings.JEV_NOUL_THRESHOLD:
-            return TicketIntentDecision(
-                result=result,
-                accepted=False,
-                fallback_reason="needs_clarification",
-            )
-        # 意图是否采纳只看意图自身置信度；operation_mode 是辅助问题，不连带否决意图。
+        # “没把握”逐项算（原则第 21 条）：意图没把握只让业务类别兜底，
+        # 其余有把握的回答（办事还是问、语气、是否既问又办）照常采用。
         threshold = settings.JEV_INTENT_CONFIDENCE_THRESHOLD
         intent_confidence = float(answer.confidence or 0.0)
-        if intent_confidence < threshold:
-            return TicketIntentDecision(
-                result=result,
-                accepted=False,
-                fallback_reason="low_confidence",
-            )
-        # operation_mode 置信度不足时，只下调写入 analysis 的置信度（触发中等风险信号），
-        # 不会比原先放松风险判断；范围外判定则按保守方向处理（见下）。
-        mode_value_confidence = float(operation_mode.confidence or 0.0)
-        mode_confident = mode_value_confidence >= threshold
-        confidence = (
-            min(intent_confidence, mode_value_confidence)
-            if mode_confident
-            else min(intent_confidence, _UNCERTAIN_MODE_CONFIDENCE_CAP)
-        )
+        mode_confident = float(operation_mode.confidence or 0.0) >= threshold
         intent = normalize_intent(raw_intent)
-        defaults = intent_defaults(intent)
         scope = result.answers.get("support_scope")
         outside_support = bool(
             intent == IntentType.INFORMATION_REQUEST
@@ -111,34 +83,44 @@ class DecisionService:
             and scope is not None
             and scope.kind == "choice"
             and scope.value == "benign_out_of_scope"
-            and float(scope.confidence or 0.0)
-            >= settings.JEV_INTENT_CONFIDENCE_THRESHOLD
+            and float(scope.confidence or 0.0) >= threshold
         )
+        tone = result.answers.get("customer_tone")
+        tone_value = (
+            str(tone.value)
+            if tone is not None
+            and tone.kind == "choice"
+            and str(tone.value) in CUSTOMER_TONES
+            and float(tone.confidence or 0.0) >= threshold
+            else None
+        )
+        mixed = result.answers.get("mixed_request")
+        mixed_value = (
+            _bounded(mixed.value) >= settings.JEV_NOUL_THRESHOLD
+            if mixed is not None and mixed.kind == "noul"
+            else None
+        )
+        if _bounded(needs_clarification.value) >= settings.JEV_NOUL_THRESHOLD:
+            intent_rejection = "needs_clarification"
+        elif intent_confidence < threshold:
+            intent_rejection = "low_confidence"
+        else:
+            intent_rejection = None
+        outside_support = outside_support and intent_rejection is None
         return TicketIntentDecision(
             result=result,
-            accepted=True,
+            accepted=intent_rejection is None,
+            fallback_reason=intent_rejection,
             analysis={
-                "intent": intent,
-                "priority": defaults.priority,
-                "department": defaults.department,
-                "sentiment": (
-                    "negative"
-                    if intent in _NEGATIVE_INTENTS
-                    else "positive" if intent is IntentType.FEEDBACK else "neutral"
-                ),
-                "confidence_score": confidence,
-                # 只在有把握时带出：Analyzer 用它否决“只读咨询”判定，不用它放行。
+                "intent": intent if intent_rejection is None else None,
+                "confidence_score": intent_confidence,
+                # 没把握时为 None，由分类优先级表按“说不清”处理。
                 "operation_mode": (
                     str(operation_mode.value) if mode_confident else None
                 ),
-                **(
-                    {
-                        "request_scope": "out_of_scope",
-                        "scope_reason": "no_support_capability",
-                    }
-                    if outside_support
-                    else {}
-                ),
+                "customer_tone": tone_value,
+                "mixed_request": mixed_value,
+                "out_of_scope": outside_support,
             },
         )
 

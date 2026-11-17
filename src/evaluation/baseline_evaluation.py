@@ -11,7 +11,7 @@ from dataclasses import asdict, dataclass, field
 from datetime import datetime, timezone
 from pathlib import Path
 from statistics import mean
-from typing import Any, Dict, Mapping, Optional, Sequence
+from typing import Any, Dict, List, Mapping, Optional, Sequence
 
 from src.config import settings
 from src.evaluation.baseline_error_analysis import write_baseline_error_analysis
@@ -599,6 +599,20 @@ def build_baseline_report(
                             "context_citations", []
                         ),
                         "errors": record.workflow_errors,
+                        # 分类和转人工依据，用于前后对照，不参与门禁打分。
+                        "sentiment": record.workflow_output.get("sentiment"),
+                        "request_scope": record.workflow_output.get("request_scope"),
+                        "risk_reasons": record.workflow_output.get("risk_reasons", []),
+                        "escalation_reason": record.workflow_output.get(
+                            "escalation_reason"
+                        ),
+                        "read_only_inquiry": record.workflow_output.get(
+                            "read_only_inquiry"
+                        ),
+                        "classification": record.workflow_output.get("classification"),
+                        "decisions": _decision_digest(
+                            record.workflow_output.get("decision_records", [])
+                        ),
                     }
                 ),
                 "behavior_evaluation": {
@@ -859,6 +873,26 @@ def _render_markdown(report: Dict[str, Any]) -> str:
         ]
     )
     return "\n".join(lines)
+
+
+def _decision_digest(records: Sequence[Any]) -> List[Dict[str, Any]]:
+    """只保留 Jev 每次决策的结论，不带置信度明细。"""
+    digest = []
+    for item in records or []:
+        if not isinstance(item, Mapping):
+            continue
+        digest.append(
+            {
+                "operation": item.get("operation"),
+                "accepted": item.get("accepted"),
+                "fallback_reason": item.get("fallback_reason"),
+                "answers": {
+                    name: (answer or {}).get("value")
+                    for name, answer in dict(item.get("answers") or {}).items()
+                },
+            }
+        )
+    return digest
 
 
 def _latency_summary(values: Sequence[float]) -> Dict[str, Any]:

@@ -24,45 +24,17 @@ from src.observability.metrics import (
 )
 from src.observability.sanitization import redact_text
 from src.risk.engine import risk_engine
-from src.agents.inquiry import is_read_only_inquiry
+from src.agents.classification import (
+    AUTO_ANSWER,
+    build_classification,
+    sentiment_label,
+)
 
 logger = logging.getLogger("supportgpt.agents.analyzer")
-
-# 只读咨询的优先级：账务按普通咨询，故障仍高于普通咨询但不触发紧急升级。
-_READ_ONLY_PRIORITY = {
-    IntentType.BILLING_DISPUTE: "medium",
-    IntentType.OUTAGE_REPORT: "high",
-}
 
 _BILLING_DOMAIN = re.compile(
     r"\b(refund|payment|invoice|billing|charged?|card payment|bank statement)\b|"
     r"退款|支付|发票|账单|扣款|扣费|多扣|乱扣|重复扣|银行卡"
-)
-_BILLING_INFORMATION_QUERY = re.compile(
-    r"(?:了解|咨询|请问).{0,12}(?:退款|退费|退钱|发票|账单)|"
-    r"(?:退款|退费|退钱|发票|账单).{0,16}"
-    r"(?:条件|要求|资格|政策|规则|流程|时限|期限|范围|怎么|如何|什么)|"
-    r"(?:什么|哪些|怎么|如何).{0,12}(?:退款|退费|退钱)|"
-    r"\b(?:refund (?:policy|conditions?|requirements?|eligibility|rules?|process)|"
-    r"what (?:conditions?|requirements?).{0,20}refund|how does (?:a )?refund work|"
-    r"invoice (?:policy|rules?|total))\b"
-)
-_BILLING_ACTION_REQUEST = re.compile(
-    r"(?:我要|需要|要求|申请|办理|帮我|给我)"
-    r"(?:立即|现在|马上)?(?:退款|退费|退钱)|"
-    r"我想(?:要)?(?:申请|办理)?(?:退款|退费|退钱)|"
-    r"(?:退款|退费|退钱)(?:申请|办理)|"
-    r"\b(?:i (?:need|want)(?: to request)?|please|request(?:ing)?)\b.{0,20}\brefund\b"
-)
-_EXPLICIT_NEGATIVE_SENTIMENT = re.compile(
-    r"\b(?:angry|upset|furious|unacceptable|terrible|awful|disappointed|complain|complaint|"
-    r"overcharged|wrongly charged|charged twice|failed|rejected|never arrived)\b|"
-    r"不满|生气|愤怒|投诉|糟糕|离谱|坑人|欺骗|乱扣|错误扣款|"
-    r"多扣|重复扣款|不能退|无法退|退款失败|退款被拒|未收到|没收到|迟迟"
-)
-_EMOTIONAL_NEGATIVE = re.compile(
-    r"\b(?:angry|upset|furious|unacceptable|terrible|awful|disappointed|complain|"
-    r"complaint)\b|不满|生气|愤怒|投诉|糟糕|离谱|坑人|欺骗|迟迟"
 )
 _API_INCIDENT = re.compile(
     r"(?:\bapi\b|接口|服务|集群|生产环境|\bcluster\b|\bproduction\b).{0,50}"
@@ -216,13 +188,31 @@ class TicketAnalyzerAgent:
                 ],
             )
 
-        # 明确无关的新问题不继承历史业务实体，也不需要业务意图模型判断。
-        scope_reason = out_of_scope_reason(clean_description or clean_subject)
+        current_text = clean_description or clean_subject
+        record_tool = requested_record_tool(current_text)
+        complaint_rule = is_explicit_complaint(
+            " ".join(f"{clean_subject} {clean_description}".lower().split())
+        )
+
+        # 明确无关的新问题不继承历史业务实体，也不需要业务意图模型判断（第 3 条）。
+        scope_reason = out_of_scope_reason(current_text)
         if (
             scope_reason
             and not semantic_result.degraded
             and not state.get("risk_requires_human")
         ):
+            classification = build_classification(
+                text=current_text,
+                category=IntentType.INFORMATION_REQUEST,
+                category_source="rule",
+                jev_status="not_run",
+                jev_analysis=None,
+                complaint_rule=False,
+                record_tool=None,
+                out_of_scope=True,
+                scope_reason=scope_reason,
+                scope_source="rule",
+            )
             next_state = {
                 **state,
                 "description": clean_description,
@@ -233,28 +223,16 @@ class TicketAnalyzerAgent:
                 "sentiment": "neutral",
                 "analyzer_confidence": 0.95,
                 "analyzer_strategy": "rule",
+                "classification": classification,
+                "read_only_inquiry": False,
+                "model_sees_action": False,
                 **scope_context_updates(scope_reason, "rule"),
             }
             assessment = risk_engine.assess(next_state, stage="input")
             return {**next_state, **assessment.state_updates()}
 
-        # 5. 规则生成可回退候选，Jev 启用时优先做封闭语义决策。
+        # 5. Jev 为主；Jev 不可用或没把握时，规则有明确结论用规则，否则 LLM（第 20、21 条）。
         try:
-            rule_analysis = (
-                None
-                if semantic_result.degraded
-                else self._match_rule(clean_description or clean_subject)
-            )
-            rule_analysis = self._apply_memory_rule(
-                clean_description or clean_subject,
-                state,
-                rule_analysis,
-            )
-            # 关键词零命中只是兜底的通用咨询，不算规则结论，交给 Jev / LLM 判断。
-            if rule_analysis is not None and rule_analysis.get("rule_fallback"):
-                rule_analysis = None
-            analysis = rule_analysis
-            strategy = "rule" if rule_analysis else "llm"
             in_tok = 0
             out_tok = 0
             decision_records = list(state.get("decision_records", []))
@@ -273,26 +251,38 @@ class TicketAnalyzerAgent:
                         fallback_reason=decision.fallback_reason,
                     )
                 )
-            # Jev 认为用户是在要求办理时，后面否决只读咨询判定；即使意图用的是规则结论也生效。
-            model_sees_action = bool(
-                decision.accepted
-                and decision.analysis is not None
-                and decision.analysis.get("operation_mode") == "action"
-            )
-            if (
-                decision.accepted
-                and decision.analysis is not None
-                and not self._rule_domain_wins(rule_analysis, decision.analysis)
-            ):
+            if decision.accepted and decision.analysis is not None:
+                jev_status = "accepted"
+            elif decision.result.available:
+                jev_status = "unsure"
+            else:
+                jev_status = "unavailable"
+
+            if jev_status == "accepted":
                 analysis = dict(decision.analysis)
                 strategy = "jev"
-            elif rule_analysis is None:
-                analysis, llm_in_tok, llm_out_tok = (
-                    await llm_provider.analyze_ticket(classifier_input)
+            else:
+                rule_analysis = (
+                    None
+                    if semantic_result.degraded
+                    else self._match_rule(current_text)
                 )
-                in_tok += llm_in_tok
-                out_tok += llm_out_tok
-                strategy = "llm"
+                rule_analysis = self._apply_memory_rule(
+                    current_text, state, rule_analysis
+                )
+                # 关键词零命中只是兜底的通用咨询，不算规则结论。
+                if rule_analysis is not None and rule_analysis.get("rule_fallback"):
+                    rule_analysis = None
+                if rule_analysis is not None:
+                    analysis = rule_analysis
+                    strategy = "rule"
+                else:
+                    analysis, llm_in_tok, llm_out_tok = (
+                        await llm_provider.analyze_ticket(classifier_input)
+                    )
+                    in_tok += llm_in_tok
+                    out_tok += llm_out_tok
+                    strategy = "llm"
 
             # 所有分类结果在进入 State 前统一收敛到 IntentType。
             raw_intent = analysis.get("intent")
@@ -300,62 +290,62 @@ class TicketAnalyzerAgent:
             intent_is_known = isinstance(raw_intent, IntentType) or (
                 str(raw_intent).strip().lower() in IntentType.values()
             )
-            # 具体设备的保修记录查询和实体设备故障需要保修 Tool，不随模型分类漂移。
-            normalized_intent = self._device_intent_override(
-                clean_description or clean_subject, normalized_intent
-            )
+            if strategy == "llm":
+                # 兜底时具体设备的保修查询和实体设备故障按保修处理。
+                normalized_intent = self._device_intent_override(
+                    current_text, normalized_intent
+                )
             analyzer_confidence = self._confidence(
                 analysis.get("confidence_score", analysis.get("confidence", 0.0))
             )
             if not intent_is_known:
                 analyzer_confidence = min(analyzer_confidence, 0.5)
-            sentiment = self._normalize_sentiment(
-                f"{clean_subject} {clean_description}".strip(),
-                normalized_intent,
-                analysis.get("sentiment", "neutral"),
-            )
 
-            # Increment token and latency stats
+            jev_out_of_scope = bool(
+                strategy == "jev"
+                and analysis.get("out_of_scope")
+                and normalized_intent == IntentType.INFORMATION_REQUEST
+                and not has_support_topic(current_text)
+                and not semantic_result.degraded
+            )
+            classification = build_classification(
+                text=current_text,
+                category=normalized_intent,
+                category_source=strategy,
+                jev_status=jev_status,
+                jev_analysis=decision.analysis,
+                complaint_rule=complaint_rule,
+                record_tool=record_tool,
+                out_of_scope=jev_out_of_scope,
+                scope_reason="no_support_capability" if jev_out_of_scope else None,
+                scope_source="jev" if jev_out_of_scope else None,
+            )
+            sentiment = sentiment_label(classification)
+
             state["tokens_input"] = state.get("tokens_input", 0) + in_tok
             state["tokens_output"] = state.get("tokens_output", 0) + out_tok
-
-            # Track sentiment through OpenTelemetry Metrics.
-            TICKET_SENTIMENT_TOTAL.add(
-                1, {"sentiment": sentiment}
-            )
-
-            # Record execution latency
+            TICKET_SENTIMENT_TOTAL.add(1, {"sentiment": sentiment})
             duration = time.time() - start_time
             AGENT_EXECUTION_DURATION_SECONDS.record(
                 duration, {"agent_name": "ticket_analyzer"}
             )
 
             defaults = intent_defaults(normalized_intent)
-            priority, sentiment = self._escalate_complaint(
-                f"{clean_subject} {clean_description}",
-                normalized_intent,
-                defaults.priority,
-                sentiment,
-            )
-            # 只读的账务/故障咨询不按业务域默认规则强制转人工；负面情绪除外。
-            # 关键词规则和模型判断都不认为是办理要求才算只读；模型只能否决，不能放行。
-            read_only_inquiry = (
-                sentiment != "negative"
-                and not model_sees_action
-                and is_read_only_inquiry(
-                    normalized_intent, clean_description or clean_subject
-                )
-            )
-            if read_only_inquiry:
-                priority = _READ_ONLY_PRIORITY.get(normalized_intent, priority)
             next_state = {
                 **state,
                 "description": clean_description,
                 "subject": clean_subject,
                 "sentiment": sentiment,
-                "priority": priority,
-                "read_only_inquiry": read_only_inquiry,
-                "model_sees_action": model_sees_action,
+                "priority": classification["priority"],
+                "classification": classification,
+                # 旧字段保留给 Trace 和旧 Checkpoint：账务/故障咨询且不转人工。
+                "read_only_inquiry": bool(
+                    normalized_intent
+                    in {IntentType.BILLING_DISPUTE, IntentType.OUTAGE_REPORT}
+                    and classification["handling"] == AUTO_ANSWER
+                ),
+                "model_sees_action": classification["mode_source"] == "jev"
+                and classification["mode"] == "action",
                 "intent": normalized_intent,
                 "department": defaults.department,
                 "analyzer_confidence": analyzer_confidence,
@@ -363,13 +353,7 @@ class TicketAnalyzerAgent:
                 "decision_records": decision_records,
                 "errors": state.get("errors", []),
             }
-            if (
-                strategy == "jev"
-                and analysis.get("request_scope") == "out_of_scope"
-                and normalized_intent == IntentType.INFORMATION_REQUEST
-                and not has_support_topic(clean_description or clean_subject)
-                and not semantic_result.degraded
-            ):
+            if jev_out_of_scope:
                 next_state.update(scope_context_updates("no_support_capability", "jev"))
             assessment = risk_engine.assess(next_state, stage="input")
             return {**next_state, **assessment.state_updates()}
@@ -424,44 +408,14 @@ class TicketAnalyzerAgent:
             return None
         intent = candidates[0] if candidates else IntentType.INFORMATION_REQUEST
         defaults = intent_defaults(intent)
-        rule_sentiment = (
-            "negative"
-            if intent
-            in {
-                IntentType.BILLING_DISPUTE,
-                IntentType.OUTAGE_REPORT,
-                IntentType.ORDER_CANCELLATION,
-                IntentType.ACCOUNT_SUPPORT,
-            }
-            else "positive" if intent == IntentType.FEEDBACK else "neutral"
-        )
         return {
             "intent": intent,
             "priority": defaults.priority,
             "department": defaults.department,
-            "sentiment": TicketAnalyzerAgent._normalize_sentiment(
-                normalized, intent, rule_sentiment
-            ),
             "confidence_score": 0.95,
             # 没有任何业务关键词命中；仅供记忆续接使用，不作为最终分类。
             "rule_fallback": not candidates,
         }
-
-    @staticmethod
-    def _rule_domain_wins(
-        rule_analysis: Dict[str, Any] | None, decision_analysis: Dict[str, Any]
-    ) -> bool:
-        """规则明确命中账务或故障域时，模型不能把它降成通用咨询。
-
-        降成通用咨询会丢掉对应的 Skill 和只读 Tool；其他方向的改判仍听模型的。
-        """
-        return bool(
-            rule_analysis
-            and rule_analysis.get("intent")
-            in {IntentType.BILLING_DISPUTE, IntentType.OUTAGE_REPORT}
-            and normalize_intent(decision_analysis.get("intent"))
-            == IntentType.INFORMATION_REQUEST
-        )
 
     @staticmethod
     def _device_intent_override(text: str, intent: IntentType) -> IntentType:
@@ -482,53 +436,12 @@ class TicketAnalyzerAgent:
         return intent
 
     @staticmethod
-    def _escalate_complaint(
-        text: str, intent: IntentType, priority: str, sentiment: str
-    ) -> tuple[str, str]:
-        """明确投诉统一提为 high 优先级 + 负面情绪，由 Risk Engine 转人工。
-
-        不依赖模型输出：Jev / LLM 把投诉判成 feedback 或 information_request 时同样生效。
-        """
-        if intent not in {IntentType.FEEDBACK, IntentType.INFORMATION_REQUEST}:
-            return priority, sentiment
-        if not is_explicit_complaint(" ".join(text.lower().split())):
-            return priority, sentiment
-        return "high", "negative"
-
-    @staticmethod
     def _confidence(value: Any) -> float:
         """将 LLM 分类置信度约束在 0 到 1。"""
         try:
             return min(max(float(value), 0.0), 1.0)
         except (TypeError, ValueError):
             return 0.0
-
-    @staticmethod
-    def _normalize_sentiment(
-        text: str, intent: IntentType, candidate: Any
-    ) -> str:
-        """将情绪与业务意图解耦，避免把中性政策咨询标成负向。"""
-        normalized = " ".join(str(text).lower().split())
-        sentiment = str(candidate or "neutral").strip().lower()
-        read_only = is_read_only_inquiry(intent, normalized)
-        if _EXPLICIT_NEGATIVE_SENTIMENT.search(normalized):
-            # 故障求助里的 failed/rejected 是在描述现象，不算负面情绪。
-            if not (
-                intent == IntentType.OUTAGE_REPORT
-                and read_only
-                and not _EMOTIONAL_NEGATIVE.search(normalized)
-            ):
-                return "negative"
-        # 域默认的“负面”不是文本证据：只读咨询没有明确负面表达时按中性处理。
-        if read_only:
-            return "neutral"
-        if (
-            intent == IntentType.BILLING_DISPUTE
-            and _BILLING_INFORMATION_QUERY.search(normalized)
-            and not _BILLING_ACTION_REQUEST.search(normalized)
-        ):
-            return "neutral"
-        return sentiment if sentiment in {"positive", "neutral", "negative"} else "neutral"
 
     @staticmethod
     def _classifier_input(subject: str, description: str, memory_context: str) -> str:

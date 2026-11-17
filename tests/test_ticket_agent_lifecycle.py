@@ -123,7 +123,6 @@ async def test_create_ticket_runs_agent_once_and_detail_only_reads_saved_result(
     assert first_detail.json()["review_reasons"] == [
         "Risk Engine classified ticket as high: high_risk_business_intent.",
         "high_risk_business_intent",
-        "negative_high_priority",
     ]
     assert first_detail.json()["risk_level"] == "high"
     assert first_detail.json()["risk_score"] == 0.82
@@ -254,16 +253,17 @@ async def test_public_support_request_hides_draft_and_enters_staff_queue(
 async def test_readonly_billing_question_shows_preliminary_answer_and_keeps_review(
     client: AsyncClient, monkeypatch
 ):
-    """只读账务咨询：用户先看到初步答复，审批记录和人工队列照常保留。"""
+    """先答后审：用户先看到初步答复，审批记录和人工队列照常保留。"""
 
     async def fake_workflow(state):
         output = _public_workflow_output(state, approval_required=True)
         output.update(
             {
                 "intent": "billing_dispute",
+                "classification": {"handling": "answer_then_review", "principle": 21},
                 "risk_level": "high",
                 "risk_requires_human": True,
-                "risk_reasons": ["high_priority", "high_risk_business_intent"],
+                "risk_reasons": ["handling_answer_then_review"],
             }
         )
         return output
@@ -320,9 +320,10 @@ async def test_preliminary_answer_is_not_fed_into_next_turn_prompt(
         output.update(
             {
                 "intent": "billing_dispute",
+                "classification": {"handling": "answer_then_review", "principle": 21},
                 "risk_level": "high",
                 "risk_requires_human": True,
-                "risk_reasons": ["high_priority"],
+                "risk_reasons": ["handling_answer_then_review"],
             }
         )
         return output

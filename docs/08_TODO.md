@@ -36,7 +36,7 @@
 - [x] 建立 Evaluation Report 生命周期：清理旧 `report_*.json`、单条评测最多保留 20 份、Baseline 使用时间戳快照与 latest 普通文件副本，并固化完整实验配置。
 - [x] Baseline Report 增加 `metric_failure_index`，支持按 Intent、Department、Required/Forbidden Tool、HITL 和 Approval 指标反查失败 Case 与 Trace ID。
 - [x] Baseline 每次运行后纯离线生成 Error Analysis 时间戳快照与 latest 副本，覆盖 Failure Breakdown、Intent Confusion Matrix、HITL/Approval mismatch、Tool 问题和逐 FAIL Case 详情。
-- [x] 建立 PR Agent Quality Gate：固定 100 条 Dataset 使用 Mock Provider 完整回放 Workflow，校验 Dataset Hash、六项行为指标与新增失败 Case。
+- [x] 建立 PR Agent Quality Gate：固定 100 条 Dataset 使用 Mock Provider 完整回放 Workflow，校验 Dataset Hash、六项行为指标与新增失败 Case。2026-11-17 起 Jev 分类读录好的回答（`jev_replay`），校验录音 Hash，缺录音直接失败。
 - [x] 建立真实 LLM Release Quality Gate：显式付费确认、调用预算、行为/延迟/Token/LLM Calls 阈值与 Actions Artifact。
 - [x] 建立门禁后 CD：仅对通过 Release Gate 的同一 Git SHA 构建镜像，发布 GHCR 不可变 SHA Tag 并生成 Provenance Attestation。
 - [x] 完成 Resilience V1：LLM/RAG/Tool 统一故障分类、超时、有界 Retry、进程内 Circuit Breaker、Fallback、AgentState/Risk/OTel 联动与高风险禁重试。
@@ -141,8 +141,12 @@
 - [ ] 21 条里只有约 4 条是原先规则零命中的通用咨询，且 Jev 开着时大多由 Jev 决定，新的 LLM 回退路径在真实模型下覆盖很少。需要时再跑 100 条真实回放（`run_baseline_eval.py --confirm-live`），重点看原先规则判通用咨询的 32 条意图是否漂移。
 - [x] 2026-11-17 修复“模型不知道今天日期”：证据里加入系统计算的 `today` 和每笔订单的 `days_since_order`，并说明用户自述时间与记录冲突时以记录为准；Resolver 和两个质检模型读同一份证据。退款期限不写死在代码里（V1 30 天、V2 60 天），仍由政策文档给出。起因：线上 `own-refund-eligibility-zh`（用户说买了 20 天，记录是 90 天前）回复说“仍在 30 天内”，Jev 质检给 0.97～0.98。修复后真实模型复现 4/4 次都指出记录是 90 天、已超期；regression 套件 21/21；Mock 门禁 100/100 且与上一提交逐条一致。本地 `.env` 的 `LLM_RESOLVER_MAX_TOKENS=320` 低于代码默认 480，会让本地 Resolver 常因截断失败，线上值未核对。
 - [ ] 线上没有启用语义安全模型（Qwen3Guard）：Railway 上没有它的地址、密钥和模型变量。线上输入安全只有规则层，换一种规则没覆盖的说法仍可能绕过；启用需要另外部署 Guard 服务并在 Railway 配置 `QWEN3_GUARD_BASE_URL`、`QWEN3_GUARD_API_KEY`、`QWEN3_GUARD_MODEL_NAME`。
-- [ ] 只读咨询的关键词规则仍可能有没覆盖的说法；现在靠 Jev 否决兜底，Jev 不可用或没把握时只剩关键词规则。
+- [x] ~~只读咨询的关键词规则仍可能有没覆盖的说法~~：2026-11-17 改为 Jev 为主判断“办事还是问”，规则只能改判为“要办事”；Jev 不可用或没把握时按“说不清”，账务/取消/故障先答后审（原则第 21 条）。
 - [ ] 保修状态查询在真实模型下路由和 Tool 正确，但 QA 评委偶尔把“仍在保修期内”判为幻觉而转人工（保守方向），未处理。
+- [x] 2026-11-17 分类判断收拢（按 `docs/10_HANDLING_PRINCIPLES.md` 22 条原则）：每条消息只判一次，结论存进 `classification`，Graph 路由、Resolver、公开回复、Risk Engine 只读结论，不再对原文重跑规则；删掉 Analyzer 里规则压过 Jev 的例外（账务/故障不许降为通用咨询、Jev 有把握时的设备故障纠正）、`is_read_only_inquiry` 和公开入口对原文的二次判断；Risk Engine 与 Escalation 两套转人工规则合并为 Risk Engine 一处，转人工由原则决定，优先级只决定 SLA。Jev 问题集升到 v1.2（增加“问自己能不能办”、语气、既问又办）。PR 门禁改为回放录好的 Jev 分类（81 条，`scripts/record_jev_decisions.py`）。改造前用回放跑门禁 93/100，改造后 100/100；15 条处理方式变化都对应到原则第 7、12、13、14、17、21 条（逐条清单见提交说明）；Baseline 另有 2 条按第 21 条改为先答后审（Jev 对“办事还是问”置信度 0.45、0.67）。全量 pytest 跑一次：703 条通过、4 条仍按旧规则断言，改写后单独复跑通过（MCP 子目录本机缺 `mcp` 包未跑）。真实模型 regression 套件（deepseek-flash + Jev，`TOOL_SELECTION_MODE=react`）20/21，转人工判断和路由 1.0，唯一失败 `baseline-refund-v2-fee` 未调订单历史，与改动前同一失败。
+- [ ] 门禁里 Jev 的分类结论依赖录制当次的置信度：有 2 条（v2 第 61 天能否退、v2 退款能否退到另一张卡）Jev 对“办事还是问”在 0.45～0.67，重录可能翻转。线上同类提问会先答后审。
+- [ ] 线上 `DECISION_PROVIDER=jev` 时，Jev 超时或报错的请求里账务/取消/故障一律先答后审（第 21 条），人工队列可能变多；上线后看一周 `handling_answer_then_review` 占比和 Jev `fallback_reason` 分布。
+- [ ] 本地 `.env` 是 `TOOL_SELECTION_MODE=react`，与线上 `rules` 不同，真实模型回归结果的 Tool 指标和线上不完全可比。
 - [ ] DeepSeek 价格按高峰价、cache miss 估算，未区分错峰与缓存命中，官方调价后需手动更新 `MODEL_PRICING`。
 - [ ] 旧的 Python 3.13 `.venv` 仍是混装环境，不再作为项目验收环境。
 - [ ] 当前新增表依赖 SQLAlchemy `create_all`，不等同于生产 Schema Migration。

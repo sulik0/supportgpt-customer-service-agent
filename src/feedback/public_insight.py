@@ -47,6 +47,8 @@ PUBLIC_REVIEW_REASONS = frozenset(
         "qa_score_below_threshold",
         "workflow_error",
         "manual_review_policy",
+        "handling_human",
+        "handling_answer_then_review",
     }
 )
 

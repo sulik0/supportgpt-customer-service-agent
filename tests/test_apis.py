@@ -71,12 +71,13 @@ async def test_copilot_service_routes(
     assert chat_res.status_code == 200
     data = chat_res.json()
     assert data["session_id"] == "sess_test"
-    assert data["sentiment"] == "negative"
+    # 明确要求退款按第 5 条转人工；没有情绪词，情绪为中性。
+    assert data["sentiment"] == "neutral"
     assert data["priority"] == "high"
     assert data["analyzer_confidence"] == 0.95
     assert data["risk_level"] in {"high", "critical"}
     assert data["risk_score"] >= 0.7
-    assert "high_risk_business_intent" in data["risk_reasons"]
+    assert "handling_human" in data["risk_reasons"]
     assert "response" in data
     # High-priority / billing triggers Human-In-The-Loop approval requirement
     assert data["approval_required"] is True

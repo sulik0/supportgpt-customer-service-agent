@@ -116,6 +116,7 @@ class AgentState(TypedDict):
     risk_reasons: List[str]
     risk_requires_human: bool
     risk_block_automation: bool
+    classification: Dict[str, Any]
     read_only_inquiry: bool
     model_sees_action: bool
     operator_role: str
@@ -616,6 +617,11 @@ def _trace_attrs(state: Dict[str, Any], node: str) -> Dict[str, Any]:
         "risk.score": state.get("risk_score"),
         "risk.requires_human": state.get("risk_requires_human"),
         "agent.read_only_inquiry": bool(state.get("read_only_inquiry", False)),
+        "agent.handling": (state.get("classification") or {}).get("handling"),
+        "agent.handling_principle": (state.get("classification") or {}).get(
+            "principle"
+        ),
+        "agent.intent_mode": (state.get("classification") or {}).get("mode"),
         "security.threat_detected": state.get("security_threat_detected"),
         "guardrail.semantic_label": state.get("semantic_guard_label", "not_run"),
         "guardrail.semantic_degraded": state.get("semantic_guard_degraded", False),
@@ -807,6 +813,7 @@ def build_ticket_state(initial_state: Dict[str, Any]) -> AgentState:
         "risk_reasons": [],
         "risk_requires_human": False,
         "risk_block_automation": False,
+        "classification": {},
         "read_only_inquiry": False,
         "model_sees_action": False,
         "operator_role": initial_state.get("operator_role", "agent"),

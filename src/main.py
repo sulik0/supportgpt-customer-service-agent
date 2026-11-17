@@ -1656,9 +1656,15 @@ def _ticket_review_reasons(
             add(str(reason))
 
     # 旧 AgentRun 没有审批快照时，仍用已持久化字段给出可说明的原因。
-    if ticket and ticket.priority == "urgent":
+    # 新工单的转人工由处理原则决定，优先级不再是原因。
+    if not review_context and ticket and ticket.priority == "urgent":
         add("urgent_priority")
-    if ticket and ticket.priority == "high" and ticket.sentiment == "negative":
+    if (
+        not review_context
+        and ticket
+        and ticket.priority == "high"
+        and ticket.sentiment == "negative"
+    ):
         add("negative_high_priority")
     if agent_run.hallucination_detected:
         add("hallucination_detected")

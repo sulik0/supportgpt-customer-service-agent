@@ -3,7 +3,7 @@
 from src.models.intents import IntentType
 
 
-INTENT_QUESTION_SET_VERSION = "supportgpt-jev-intent-v1.1"
+INTENT_QUESTION_SET_VERSION = "supportgpt-jev-intent-v1.2"
 QA_QUESTION_SET_VERSION = "supportgpt-jev-qa-v1"
 
 
@@ -13,7 +13,10 @@ INTENT_CRITERIA = {
         "including questions about those policies."
     ),
     IntentType.OUTAGE_REPORT.value: (
-        "A currently failing, unavailable, slow, or timing-out API or service."
+        "A currently failing, unavailable, slow, or timing-out API or service, "
+        "including questions about troubleshooting or recovery steps after API "
+        "errors, failover or routing switches. A faulty physical device such as "
+        "a gateway or router is warranty_claim, not an outage."
     ),
     IntentType.ORDER_CANCELLATION.value: (
         "The customer asks to actually cancel a specific order, not merely "
@@ -28,8 +31,11 @@ INTENT_CRITERIA = {
         "navigation guidance."
     ),
     IntentType.WARRANTY_CLAIM.value: (
-        "The customer asks to start repair, replacement, or warranty service "
-        "for a specific item."
+        "Warranty and devices: the customer's own physical device is faulty, the "
+        "customer asks to start repair, replacement or warranty service for a "
+        "specific item, or asks to check the warranty status of their own specific "
+        "device. General warranty policy or duration questions are "
+        "information_request."
     ),
     IntentType.FEEDBACK.value: (
         "Praise, thanks, or feedback that does not request a business operation."
@@ -58,9 +64,51 @@ def intent_questions() -> dict[str, dict]:
             "type": "choice",
             "instructions": "What is the customer asking the support system to do?",
             "criteria": {
-                "action": "Perform or initiate a concrete business operation.",
-                "information": "Explain information, policy, status, or navigation.",
+                "action": (
+                    "Perform or initiate a concrete business operation, including a "
+                    "request phrased as a question such as 'can you refund me?'."
+                ),
+                "information": (
+                    "Explain general information, policy, fees, refund destinations, "
+                    "settlement times, status, or navigation, or look up the "
+                    "customer's records. Hypothetical policy questions belong here."
+                ),
+                "eligibility": (
+                    "Ask whether the customer's own specific case, described with "
+                    "first-person facts such as 'my payment was 45 days ago', "
+                    "qualifies for a refund, cancellation or similar operation, "
+                    "without asking to perform it."
+                ),
                 "unclear": "The requested outcome is not sufficiently specified.",
+            },
+        },
+        "customer_tone": {
+            "type": "choice",
+            "instructions": (
+                "Judge the customer's tone in the current ticket only. Describing a "
+                "technical symptom such as an error or timeout is not negative emotion."
+            ),
+            "criteria": {
+                "neutral": "Neutral or polite, including plain problem reports.",
+                "negative_emotion": (
+                    "Clear frustration, impatience or dissatisfaction, without an "
+                    "explicit complaint."
+                ),
+                "complaint": (
+                    "An explicit complaint, or a threat to involve regulators, media "
+                    "or lawyers. Asking how to file a complaint is not a complaint."
+                ),
+            },
+        },
+        "mixed_request": {
+            "type": "noul",
+            "instructions": (
+                "Does the current ticket both ask for a business operation and ask a "
+                "separate general question that could be answered from policy?"
+            ),
+            "criteria": {
+                "true": "It contains an operation request and a separate question.",
+                "false": "It contains only one of them, or neither.",
             },
         },
         "support_scope": {

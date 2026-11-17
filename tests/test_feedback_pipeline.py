@@ -174,7 +174,7 @@ async def test_human_correction_and_evaluation_export_sft_dpo(
         "intent": "billing_dispute",
         "department": "billing",
         "priority": "high",
-        "sentiment": "negative",
+        "sentiment": "neutral",
         "confidence": 0.95,
     }
     assert snapshot["qa_strategy"] == "llm"

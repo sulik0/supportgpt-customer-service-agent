@@ -29,7 +29,7 @@ README 顶部提供在线演示入口、三步路径与四张本地假接口截�
 
 - 将客户的自然语言问题转换为可路由、可审批、可追踪的工单处理流程。
 - 在生成回复前同时引入知识库依据和结构化业务上下文。
-- 通过独立 Risk Engine 统一评估安全、业务、分类置信度和回复质量，对高风险或临界风险引入 Human-in-the-Loop。
+- 每条消息只判一次分类（`src/agents/classification.py`），是否转人工由处理原则（`docs/10_HANDLING_PRINCIPLES.md`）直接决定；独立 Risk Engine 汇总处理原则、安全、依赖和回复质量信号，是唯一的转人工判断点。
 - 通过 citation、QA 结果、工具审计和 Trace 为客服坐席提供可核查依据。
 
 ### 工程目标
@@ -58,7 +58,7 @@ README 顶部提供在线演示入口、三步路径与四张本地假接口截�
 11. **可观测性**：使用 OpenTelemetry 统一采集 Trace 与 Metrics；Collector 将 Trace 转发 LangSmith，并通过 Prometheus exporter 提供指标，由 Grafana 展示。
 12. **离线评测适配**：提供 RAGAS、DeepEval 和本地确定性指标的统一评测入口。
 13. **Durable Execution**：使用 SQLite / PostgreSQL Checkpointer、稳定 `thread_id`、`AgentExecution` 业务元数据和数据库恢复租约，支持 `interrupt` / `Command(resume=...)`、重启恢复和幂等重试。
-14. **DecisionProvider**：以可替换接口封装 Jev System One；启用后复核 Analyzer 规则候选，并承担 QA 正向 Grounding 与非确定评判，规则/LLM 作为分层回退。
+14. **DecisionProvider**：以可替换接口封装 Jev System One；启用后由 Jev 为主判断业务类别、用户意图和是否范围外，规则只在安全拦截、明确范围外主题、明确办事说法三种情况说了算，Jev 不可用或没把握时规则/LLM 兜底；QA 正向 Grounding 与非确定评判也由 Jev 承担。PR 门禁读录好的 Jev 分类（`jev_replay`）。
 
 ## 技术栈
 
@@ -171,7 +171,7 @@ approval_gate
 1. **Analyzer**
    - 先执行多层 Prompt Injection 和 Jailbreak 检测。
    - 命中安全风险时写入 `errors`，设置紧急优先级和拒绝回复，不执行后续 Tooling、RAG、Resolver 和 QA。
-   - 正常请求先对 PII 脱敏并生成规则候选；Jev 启用时优先执行封闭 Intent 决策，低置信度或故障时，有候选则回退规则，无候选才回退 Analyzer LLM。关键词零命中不算候选（不再直接判为 0.95 置信度的通用咨询），只用于显式指代的记忆续接。
+   - 正常请求先对 PII 脱敏，再按 `src/agents/classification.py` 顶部的优先级表合并规则、Jev、LLM 意见：Jev 有把握时由 Jev 定业务类别和用户意图（要办事 / 只是问 / 问自己能不能办 / 说不清），原话有明确办事说法时规则改判为“要办事”；Jev 不可用或对类别没把握时，规则有明确结论用规则，否则 LLM；对“办事还是问”没把握时按“说不清”。“没把握”逐项算。结论（类别、意图、范围、要查的记录、投诉/情绪、来源、处理结果和依据的原则编号）存进 `classification`，下游只读它。
    - 安全检查通过后，明确的天气、创作和常识等无关请求先按规则标记为 `out_of_scope`；其余请求可在同一次 Jev 分类中判断 `support_scope`，只有普通信息请求且判断置信度达到原有门槛时才采用。业务操作、混合意图和不确定请求保留业务路径。
    - `out_of_scope` 请求只隔离本轮无关 Memory，不删除会话历史；直接进入 Resolver，不选择 Skill 或查询 Tool / RAG。
 2. **Skill Selector**
@@ -202,7 +202,7 @@ approval_gate
    - 通过 Response Filter 删除内部指令或工作流泄露；命中时将 QA 分数降为 `0.5` 并标记幻觉。
 7. **Escalation**
    - 按优先级计算 SLA：urgent `2h`、high `12h`、medium `24h`、low `48h`。
-   - 调用独立 Risk Engine 综合安全威胁、优先级、情绪、业务意图、Analyzer 置信度、QA、幻觉和 Workflow 错误。
+   - 是否升级只看 Risk Engine 的结论；Risk Engine 综合处理原则（`classification.handling`）、安全威胁、依赖降级、QA、幻觉和 Workflow 错误。优先级只决定 SLA。没有 `classification` 的旧 State 沿用旧的优先级/情绪/意图打分。
    - 默认风险等级阈值为 `medium >= 0.4`、`high >= 0.7`、`critical >= 0.9`；`high` / `critical` 要求人工处理。
    - 建议升级、`qa_score < 0.8` 或 `risk_requires_human = true` 任一命中，就设置 `approval_required = true`。
 8. **Approval Gate**
@@ -256,7 +256,7 @@ resolved / closed --reopen--> in_progress
 1. 终端用户通过用户咨询页提交问题，前端调用 `POST /support/requests`。
 2. API 创建唯一业务工单并执行 LangGraph Workflow，随后持久化 `AgentRun`，包含回复、citation、Tool Call、QA、版本、Token、延迟和 Trace ID。
 3. 普通请求返回安全回复。仅在隔离 Demo 中，访客可凭本次反馈令牌展开已保存的路径、工具/引用摘要、QA 与风险结论；不返回输入原文、草稿、异常正文、参数或 Trace。
-4. 高风险、低置信度、低 QA、幻觉或异常请求创建 `ResponseApproval`；用户页持续显示安全的处理回复，并以 `risk_review`（仅安全拦截）、`business_review`（退款、取消、投诉等需人工办理）、`incident_review`（故障已升级）、`quality_review`、`processing_exception` 或 `manual_review` 告知人工介入类别，文案跟随用户输入语言，不暴露内部规则。账务和故障域的只读咨询（是提问，且不含办理、询问自己能否退款、争议、投诉、越权或大面积故障的说法，由 `src/agents/inquiry.py` 的确定性规则判定）在 Workflow 层直接自动回答，不创建审批；置信度、QA、幻觉、降级和安全条件照常生效。另有先答后审：仍被业务域规则转人工的只读提问（如带负面情绪），如果 QA 通过且无任何异常或安全信号，用户会先看到 AI 的初步答复（`status=answered`、`handling_reason=preliminary_answer`），审批记录和人工队列照常保留；要求实际办理、表达争议或投诉的请求仍不展示草稿。
+4. 高风险、低置信度、低 QA、幻觉或异常请求创建 `ResponseApproval`；用户页持续显示安全的处理回复，并以 `risk_review`（仅安全拦截）、`business_review`（退款、取消、投诉等需人工办理）、`incident_review`（故障已升级）、`quality_review`、`processing_exception` 或 `manual_review` 告知人工介入类别，文案跟随用户输入语言，不暴露内部规则。处理结果按处理原则决定（见 `docs/02_BUSINESS_LOGIC.md` 第 13 节）。先答后审（问自己能不能办、既问又办、带负面情绪的提问、Jev 没把握的账务/取消/故障提问，以及只说明“无法确认”的缺依据回复）在 QA 通过且无任何异常或安全信号时，用户会先看到 AI 的初步答复（`status=answered`、`handling_reason=preliminary_answer`），审批记录和人工队列照常保留；转人工办理的请求不展示草稿。公开入口只读分类结论，不再对原文重判。
 5. 客服员工后台通过受 RBAC 保护的 `GET /staff/review-queue` 仅加载 `pending_approval` 工单，不展示普通自动处理工单。
 6. 员工打开详情时调用 `GET /tickets/{ticket_id}/agent-result`，只读取最新持久化结果，不重新执行 Workflow；审批完成后工单自动移出人工队列。
 
@@ -352,7 +352,7 @@ resolved / closed --reopen--> in_progress
 - Baseline V1 在同一次 OTel Trace 中采集端到端与 Analyzer / Tool / RAG / Resolver / QA 节点耗时、Token、模型、Analyzer 策略和 LLM 调用明细，报告汇总 Average、P50、P95、平均 Token 与 Rule Hit Rate，并关联实际 Agent Trace ID。
 - 每次 Baseline V1 正式运行同时保存带本地时间戳的不可变 JSON / Markdown 快照，`baseline_v1_latest.*` 以普通文件副本保留最新内容，兼容 Typora 等不打开符号链接的桌面工具；报告固定记录 Dataset SHA256、Evaluator 范围、Workflow/Prompt 版本、模型、生成限制、Risk 阈值与 Observability 配置。旧单条评测隔离到 `single_response/` 并最多保留 20 份，所有运行报告默认不提交 Git。
 - Baseline JSON 写入后会纯离线、确定性生成 `error_analysis_<run_id>.md` 与 `error_analysis_latest.md`，只分析 FAIL Case 的 Failure Breakdown、Intent Confusion Matrix、HITL/Approval mismatch、Tool 问题和逐 Case Expected/Actual/Trace，不重放 Workflow、不调用 LLM、不修改 Dataset 或 Agent。
-- PR Gate 使用 Mock Provider 在隔离 SQLite/Chroma 目录中回放同一固定 100 条 Workflow，对 Dataset Hash、六项行为指标和新增失败 Case 执行免费、确定性门禁。Release Gate 必须显式确认付费调用，对真实 LLM 报告额外检查 P95、Token、LLM Calls 和 Analyzer Rule Hit Rate。
+- PR Gate 使用 Mock Provider 在隔离 SQLite/Chroma 目录中回放同一固定 100 条 Workflow，Jev 分类读录好的回答（`evaluation/decision_recordings/jev_baseline.json`，`scripts/record_jev_decisions.py` 录制），对 Dataset Hash、录音 Hash、六项行为指标和新增失败 Case 执行免费、确定性门禁；缺录音直接失败。QA 评判不回放（门禁回复是 Mock 固定文案），仍走 Mock。Release Gate 必须显式确认付费调用，对真实 LLM 报告额外检查 P95、Token、LLM Calls 和 Analyzer Rule Hit Rate。
 - GitHub Actions `CI` 执行全量后端测试、前端构建、PR Gate 和镜像构建；仅当 `Release Quality Gate` 通过时，`CD` 才会将完全相同 Git SHA 的镜像发布到 GHCR。当前交付目标是镜像仓库，不代表已自动部署生产集群。
 - 正式离线报告同时输出 Faithfulness、Answer Relevancy、Context Precision、Context Recall、Agent 行为指标、Security Precision / Recall / F1 / 误报率、安全处置正确率、citation hit rate、Workflow Path 和 Trace ID。
 - 没有可用 API Key 时可显式选择 `local` 确定性指标进行 CI 烟测；正式 RAGAS / DeepEval 模式缺少依赖或密钥会直接失败，不会自动伪装为正式结果。

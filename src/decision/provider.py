@@ -460,6 +460,15 @@ def get_decision_provider() -> DecisionProvider:
     """根据配置创建唯一 DecisionProvider。"""
     if settings.DECISION_PROVIDER == "jev":
         return JevDecisionProvider()
+    if settings.DECISION_PROVIDER == "jev_replay":
+        from pathlib import Path
+
+        from src.decision.replay import ReplayDecisionProvider
+
+        path = Path(settings.DECISION_REPLAY_PATH)
+        if not path.is_absolute():
+            path = Path(__file__).resolve().parents[2] / path
+        return ReplayDecisionProvider(path)
     return DisabledDecisionProvider()
 
 

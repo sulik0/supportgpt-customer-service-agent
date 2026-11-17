@@ -36,8 +36,13 @@ class ResolutionAgent:
 
         subject = state.get("subject", "")
         description = state.get("description", "")
-        # A missing/failed query is not a successful lookup with no matching records.
-        required_tool = requested_record_tool(description)
+        # 查询失败不等于“查到了但没有记录”（第 10 条）。要查哪类记录读分类结论。
+        classification = state.get("classification")
+        required_tool = (
+            classification.get("record_tool")
+            if isinstance(classification, dict) and classification
+            else requested_record_tool(description)
+        )
         service = (state.get("tool_context") or {}).get("service_query") or {}
         data = service.get("data")
         if required_tool and not (

@@ -32,10 +32,11 @@ def _jev(monkeypatch, intent, confidence=0.95):
             accepted=True,
             analysis={
                 "intent": intent,
-                "priority": "medium",
-                "department": "general",
-                "sentiment": "neutral",
                 "confidence_score": confidence,
+                "operation_mode": "information",
+                "customer_tone": None,
+                "mixed_request": False,
+                "out_of_scope": False,
             },
         )
 
@@ -67,9 +68,11 @@ def test_warranty_policy_question_is_not_a_record_lookup(text):
 
 
 @pytest.mark.asyncio
-async def test_warranty_status_question_routes_to_warranty_even_if_model_says_information(
+async def test_warranty_status_lookup_is_kept_even_if_jev_says_information(
     monkeypatch,
 ):
+    # 第 20 条：类别听 Jev；但“要查哪类记录”是单独的结论，Resolver 据此
+    # 发现保修没查到时如实说明无法确认并转人工（第 10 条），不会编造。
     _jev(monkeypatch, IntentType.INFORMATION_REQUEST)
     state = await ticket_analyzer_agent.analyze(
         {
@@ -78,15 +81,14 @@ async def test_warranty_status_question_routes_to_warranty_even_if_model_says_in
             "customer_id": "cust_202",
         }
     )
-    assert state["intent"] is IntentType.WARRANTY_CLAIM
-
-
-# --- 实体设备故障被判成 API 故障，按紧急转人工 ---
+    assert state["intent"] is IntentType.INFORMATION_REQUEST
+    assert state["classification"]["record_tool"] == "warranty.get_entitlements"
 
 
 @pytest.mark.asyncio
-async def test_device_fault_is_not_an_api_outage(monkeypatch):
-    _jev(monkeypatch, IntentType.OUTAGE_REPORT, confidence=0.79)
+async def test_device_fault_override_only_applies_to_llm_fallback(monkeypatch):
+    # Jev 有把握时听 Jev；设备故障纠正只在 Jev 不可用、规则也没结论的 LLM 兜底时用。
+    _jev(monkeypatch, IntentType.WARRANTY_CLAIM)
     state = await ticket_analyzer_agent.analyze(
         {
             "subject": "断网",
@@ -95,7 +97,13 @@ async def test_device_fault_is_not_an_api_outage(monkeypatch):
         }
     )
     assert state["intent"] is IntentType.WARRANTY_CLAIM
-    assert state["priority"] == "medium"
+    assert state["classification"]["category_source"] == "jev"
+    assert (
+        TicketAnalyzerAgent._device_intent_override(
+            "我的网关设备最近老是断网", IntentType.OUTAGE_REPORT
+        )
+        is IntentType.WARRANTY_CLAIM
+    )
 
 
 @pytest.mark.parametrize(
@@ -305,21 +313,30 @@ def test_greeting_with_a_question_is_not_short_circuited(text):
 
 @pytest.mark.asyncio
 @pytest.mark.parametrize(
-    ("text", "intent"),
+    "text",
     [
-        ("After an API error causes routing to switch, what client-side action is required?", IntentType.OUTAGE_REPORT),
-        ("API error 触发路由切换后，客户端是否需要清理缓存？", IntentType.OUTAGE_REPORT),
-        ("What processing fee is deducted from a refund under corporate policy v2?", IntentType.BILLING_DISPUTE),
+        "After an API error causes routing to switch, what client-side action is required?",
+        "What processing fee is deducted from a refund under corporate policy v2?",
     ],
 )
-async def test_model_cannot_downgrade_rule_matched_domain_to_information(
-    monkeypatch, text, intent
-):
+async def test_jev_category_is_not_overridden_by_rule_keywords(monkeypatch, text):
+    # 第 20 条：规则只在安全、明确范围外和明确办事说法三种情况说了算。
     _jev(monkeypatch, IntentType.INFORMATION_REQUEST)
     state = await ticket_analyzer_agent.analyze(
         {"subject": text[:40], "description": text, "customer_id": "cust_101"}
     )
-    assert state["intent"] is intent
+    assert state["intent"] is IntentType.INFORMATION_REQUEST
+    assert state["analyzer_strategy"] == "jev"
+
+
+@pytest.mark.asyncio
+async def test_rule_category_is_used_when_jev_is_unavailable():
+    # 第 21 条：Jev 不可用时规则有明确结论就用规则。
+    text = "API error 触发路由切换后，客户端是否需要清理缓存？"
+    state = await ticket_analyzer_agent.analyze(
+        {"subject": text[:40], "description": text, "customer_id": "cust_101"}
+    )
+    assert state["intent"] is IntentType.OUTAGE_REPORT
     assert state["analyzer_strategy"] == "rule"
 
 

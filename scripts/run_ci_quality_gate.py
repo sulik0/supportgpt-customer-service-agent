@@ -1,4 +1,8 @@
-"""使用 Mock Provider 回放固定 100 条 Baseline，并执行 PR 质量门禁。"""
+"""使用 Mock Provider 回放固定 100 条 Baseline，并执行 PR 质量门禁。
+
+Jev 的分类和 QA 评判读录好的回答（scripts/record_jev_decisions.py 录制），
+不调用 Jev、不需要 Key。缺录音时门禁直接失败，提示重录。
+"""
 
 import argparse
 import asyncio
@@ -12,6 +16,9 @@ PROJECT_ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(PROJECT_ROOT))
 BASELINE_PATH = (
     PROJECT_ROOT / "evaluation" / "baseline" / "supportgpt_baseline_100.json"
+)
+DECISION_RECORDING_PATH = (
+    PROJECT_ROOT / "evaluation" / "decision_recordings" / "jev_baseline.json"
 )
 
 
@@ -30,6 +37,12 @@ def parse_args() -> argparse.Namespace:
         type=Path,
         default=PROJECT_ROOT / "evaluation" / "quality_gate_policy.json",
     )
+    parser.add_argument(
+        "--decision-recording",
+        type=Path,
+        default=DECISION_RECORDING_PATH,
+        help="Recorded Jev answers replayed by the gate.",
+    )
     return parser.parse_args()
 
 
@@ -37,10 +50,12 @@ async def run() -> int:
     """在隔离数据库和向量目录中执行完整 Workflow Replay。"""
     args = parse_args()
     with tempfile.TemporaryDirectory(prefix="supportgpt-quality-gate-") as runtime:
-        _configure_offline_environment(Path(runtime))
+        configure_offline_environment(Path(runtime), args.decision_recording)
 
         # 延迟导入，避免本地真实模型配置进入 PR Gate。
         from src.database import init_db
+        from src.decision import decision_service
+        from src.decision.replay import recording_sha256
         from src.evaluation.baseline_evaluation import run_baseline_evaluation_v1
         from src.evaluation.quality_gate import (
             evaluate_quality_gate,
@@ -62,22 +77,37 @@ async def run() -> int:
                 "replay_case_count": 100,
                 "otel_enabled": False,
                 "langsmith_via_otlp": False,
+                "decision_provider": "jev_replay",
+                "decision_recording_sha256": recording_sha256(
+                    args.decision_recording
+                ),
             },
         )
         report = load_json_object(paths["json"])
+        missing = list(getattr(decision_service.provider, "missing", []))
         policy = load_json_object(args.policy)
         result = evaluate_quality_gate(report, policy, profile="pull_request")
         gate_paths = write_quality_gate_report(result, args.output_dir)
 
-    status = "PASS" if result["passed"] else "FAIL"
+    passed = bool(result["passed"]) and not missing
+    status = "PASS" if passed else "FAIL"
     print(f"PR Agent quality gate: {status}")
     print(f"Baseline report: {paths['json']}")
     print(f"Gate report: {gate_paths['json']}")
+    if missing:
+        print(
+            f"Missing Jev recordings: {len(missing)}. "
+            "Re-record with: python scripts/record_jev_decisions.py --dry-run"
+        )
+        for item in missing[:20]:
+            print(f"  - {item.operation} {item.key[:12]} {item.preview}")
     _append_github_summary(gate_paths["markdown"])
-    return 0 if result["passed"] else 1
+    return 0 if passed else 1
 
 
-def _configure_offline_environment(runtime: Path) -> None:
+def configure_offline_environment(
+    runtime: Path, decision_recording: Path = DECISION_RECORDING_PATH
+) -> None:
     """强制关闭网络模型和遥测，保证 PR Gate 免费且可重复。"""
     values = {
         "APP_ENV": "testing",
@@ -93,11 +123,13 @@ def _configure_offline_environment(runtime: Path) -> None:
         "LLM_FAST_API_KEY": "",
         "LLM_ANALYZER_MODEL_NAME": "",
         "LLM_QA_MODEL_NAME": "",
-        # 本机 .env 可能配置了 Fallback 模型和 Jev，必须关闭，否则会发起真实调用。
+        # 本机 .env 可能配置了 Fallback 模型和 Jev，必须关闭，否则会发起真实调用；
+        # Jev 改为读录音（jev_replay），录制脚本再换成录制模式。
         "LLM_FALLBACK_MODEL_NAME": "",
         "LLM_FALLBACK_BASE_URL": "",
         "LLM_FALLBACK_API_KEY": "",
-        "DECISION_PROVIDER": "disabled",
+        "DECISION_PROVIDER": "jev_replay",
+        "DECISION_REPLAY_PATH": str(decision_recording.resolve()),
         "JEV_API_KEY": "",
         "QWEN3_GUARD_ENABLED": "false",
         "TOOL_SELECTION_MODE": "rules",
@@ -106,6 +138,10 @@ def _configure_offline_environment(runtime: Path) -> None:
         "OTEL_EXPORTER_OTLP_METRICS_ENDPOINT": "",
     }
     os.environ.update(values)
+
+
+# 旧名保留给 promptops 使用。
+_configure_offline_environment = configure_offline_environment
 
 
 def _append_github_summary(markdown_path: Path) -> None:

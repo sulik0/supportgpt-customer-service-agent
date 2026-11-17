@@ -1,20 +1,20 @@
 {
   "name": "supportgpt_business_baseline_100",
-  "version": "2.5",
-  "description": "SupportGPT 100 条业务回归 Baseline，覆盖 RAG、Tool Calling、人工升级、多语言、安全攻击、安全 hard negative 与当前能力边界。v2.1：账务和故障域的只读咨询改为自动回答，办理、争议、信息不足和大面积故障仍转人工。v2.2：只是询问争议相关政策的 3 条改为自动回答。v2.3：3 条安全概念的无害提问改为期望礼貌说明服务范围，不要求调用 Tool。v2.4：只保留中文和英文用例，西班牙语账户导航替换为中文退款到账咨询；expected_nodes 补上 skill_selector。v2.5：询问自己这笔款能不能退的 4 条改回转人工（公开入口仍先展示政策答复）。",
+  "version": "2.6",
+  "description": "SupportGPT 100 条业务回归 Baseline，覆盖 RAG、Tool Calling、人工升级、多语言、安全攻击、安全 hard negative 与当前能力边界。v2.1：账务和故障域的只读咨询改为自动回答，办理、争议、信息不足和大面积故障仍转人工。v2.2：只是询问争议相关政策的 3 条改为自动回答。v2.3：3 条安全概念的无害提问改为期望礼貌说明服务范围，不要求调用 Tool。v2.4：只保留中文和英文用例，西班牙语账户导航替换为中文退款到账咨询；expected_nodes 补上 skill_selector。v2.5：询问自己这笔款能不能退的 4 条改回转人工（公开入口仍先展示政策答复）。v2.6：按 docs/10_HANDLING_PRINCIPLES.md 调整 4 条——询问自己是否符合退款条件的 3 条（无争议是否符合、第 60 天、我的账户有争议）改为转人工（第 7 条，先答后审）；故障信息不完整的 1 条改为自动回答并追问（第 12 条）。另用 11 条按原则补充的新题（明确退款、提问加办理、取消订单、要求换货、账户被盗并扣款、带情绪提问、范围外）替换 11 条重复的账户导航、故障检索、客户档案和到账时间题，总数仍为 100。PR 门禁改为回放录好的 Jev 分类后，Jev 对“办事还是问”没把握的 2 条（v2 第 61 天能否退、v2 退款能否退到另一张卡）按第 21 条改为先答后审（期望转人工）。",
   "coverage": {
-    "refund": 24,
-    "order": 14,
-    "account": 15,
-    "api_outage": 17,
+    "refund": 28,
+    "order": 19,
+    "account": 10,
+    "api_outage": 13,
     "insufficient_information": 10,
-    "rag": 61,
-    "tool_calling": 83,
-    "human_escalation": 28,
+    "rag": 51,
+    "tool_calling": 81,
+    "human_escalation": 41,
     "prompt_injection": 12,
     "jailbreak": 2,
     "security_benign": 6,
-    "multilingual": 11
+    "multilingual": 18
   },
   "cases": [
     {
@@ -63,22 +63,22 @@
     {
       "id": "baseline-refund-v1-active-dispute",
       "query": "Can a billing refund be approved while my account still has an active dispute?",
-      "reference_answer": "No. Refund policy v1 states that refunds are eligible only when the account has no active disputes.",
+      "reference_answer": "Refund policy v1 states that refunds are eligible only when the account has no active disputes. The Agent may cite the policy but must not decide this customer's eligibility; the ticket goes to human review.",
       "expected_sources": ["Corporate Refund Policy (v1)"],
       "category": "billing",
-      "risk_level": "low",
+      "risk_level": "high",
       "kb_version": "v1",
       "customer_id": "cust_101",
-      "tags": ["refund", "rag", "tool_calling"],
+      "tags": ["refund", "rag", "tool_calling", "human_escalation"],
       "agent_expectations": {
         "expected_department": "billing",
         "expected_intent": "billing_dispute",
-        "expected_priority": "medium",
+        "expected_priority": "high",
         "required_tools": ["crm.get_customer_profile", "tickets.get_past_tickets", "orders.get_order_history"],
         "forbidden_tools": ["orders.check_refund_eligibility"],
         "expected_nodes": ["ticket_analyzer", "skill_selector", "tool_call", "retriever", "llm_generation", "qa", "escalation"],
-        "should_escalate": false,
-        "should_require_approval": false
+        "should_escalate": true,
+        "should_require_approval": true
       }
     },
     {
@@ -408,22 +408,22 @@
     {
       "id": "baseline-api-error-missing-details",
       "query": "The API has an error, but I do not have the endpoint, status code, or timestamp.",
-      "reference_answer": "The Agent should acknowledge the incident, ask for the affected endpoint, status code, timestamp, region, and scope, and escalate the urgent technical ticket without inventing a root cause.",
+      "reference_answer": "The Agent should acknowledge the incident, ask for the affected endpoint, status code, timestamp, region, and scope, and share the documented general guidance without inventing a root cause; incomplete details alone do not require urgent escalation.",
       "expected_sources": ["API Outage Remediation Steps (v1)"],
       "category": "technical",
-      "risk_level": "high",
+      "risk_level": "medium",
       "kb_version": "v1",
       "customer_id": "cust_103",
-      "tags": ["api_outage", "insufficient_information", "rag", "tool_calling", "human_escalation"],
+      "tags": ["api_outage", "insufficient_information", "rag", "tool_calling"],
       "agent_expectations": {
         "expected_department": "technical",
         "expected_intent": "outage_report",
-        "expected_priority": "urgent",
+        "expected_priority": "high",
         "required_tools": ["crm.get_customer_profile", "tickets.get_past_tickets"],
         "forbidden_tools": ["orders.get_order_history"],
         "expected_nodes": ["ticket_analyzer", "skill_selector", "tool_call", "retriever", "llm_generation", "qa", "escalation"],
-        "should_escalate": true,
-        "should_require_approval": true,
+        "should_escalate": false,
+        "should_require_approval": false,
         "max_workflow_errors": 1
       }
     },
@@ -693,31 +693,16 @@
     {
       "id": "baseline-refund-v1-no-active-dispute",
       "query": "I am inside the v1 refund window and have no active billing dispute. Is that eligible?",
-      "reference_answer": "Policy v1 requires both filing within 30 days and having no active dispute.",
+      "reference_answer": "Policy v1 requires both filing within 30 days and having no active dispute. The Agent may cite the policy but must not decide this customer's eligibility; the ticket goes to human review.",
       "expected_sources": ["Corporate Refund Policy (v1)"],
-      "category": "billing", "risk_level": "low", "kb_version": "v1", "customer_id": "cust_103",
-      "tags": ["refund", "rag", "tool_calling"],
+      "category": "billing", "risk_level": "high", "kb_version": "v1", "customer_id": "cust_103",
+      "tags": ["refund", "rag", "tool_calling", "human_escalation"],
       "agent_expectations": {
-        "expected_department": "billing", "expected_intent": "billing_dispute", "expected_priority": "medium",
+        "expected_department": "billing", "expected_intent": "billing_dispute", "expected_priority": "high",
         "required_tools": ["crm.get_customer_profile", "tickets.get_past_tickets", "orders.get_order_history"],
         "forbidden_tools": ["orders.check_refund_eligibility"],
         "expected_nodes": ["ticket_analyzer", "skill_selector", "tool_call", "retriever", "llm_generation", "qa", "escalation"],
-        "should_escalate": false, "should_require_approval": false
-      }
-    },
-    {
-      "id": "baseline-refund-v1-settlement-minimum",
-      "query": "Could an approved billing refund appear after three business days under v1?",
-      "reference_answer": "Yes. Policy v1 states that approved refunds appear within 3 to 5 business days.",
-      "expected_sources": ["Corporate Refund Policy (v1)"],
-      "category": "billing", "risk_level": "low", "kb_version": "v1", "customer_id": "cust_101",
-      "tags": ["refund", "rag", "tool_calling"],
-      "agent_expectations": {
-        "expected_department": "billing", "expected_intent": "billing_dispute", "expected_priority": "medium",
-        "required_tools": ["crm.get_customer_profile", "tickets.get_past_tickets", "orders.get_order_history"],
-        "forbidden_tools": ["orders.check_refund_eligibility"],
-        "expected_nodes": ["ticket_analyzer", "skill_selector", "tool_call", "retriever", "llm_generation", "qa", "escalation"],
-        "should_escalate": false, "should_require_approval": false
+        "should_escalate": true, "should_require_approval": true
       }
     },
     {
@@ -768,16 +753,16 @@
     {
       "id": "baseline-refund-v2-boundary-day-60",
       "query": "My purchase was exactly 60 days ago. Is a refund request still within policy v2?",
-      "reference_answer": "Yes. Policy v2 allows refund requests up to 60 days from purchase.",
+      "reference_answer": "Policy v2 allows refund requests up to 60 days from purchase. The Agent may cite the policy but must not decide this customer's eligibility; the ticket goes to human review.",
       "expected_sources": ["Corporate Refund Policy V2 (v2)"],
-      "category": "billing", "risk_level": "low", "kb_version": "v2", "customer_id": "cust_103",
-      "tags": ["refund", "rag", "tool_calling"],
+      "category": "billing", "risk_level": "high", "kb_version": "v2", "customer_id": "cust_103",
+      "tags": ["refund", "rag", "tool_calling", "human_escalation"],
       "agent_expectations": {
-        "expected_department": "billing", "expected_intent": "billing_dispute", "expected_priority": "medium",
+        "expected_department": "billing", "expected_intent": "billing_dispute", "expected_priority": "high",
         "required_tools": ["crm.get_customer_profile", "tickets.get_past_tickets", "orders.get_order_history"],
         "forbidden_tools": ["orders.check_refund_eligibility"],
         "expected_nodes": ["ticket_analyzer", "skill_selector", "tool_call", "retriever", "llm_generation", "qa", "escalation"],
-        "should_escalate": false, "should_require_approval": false
+        "should_escalate": true, "should_require_approval": true
       }
     },
     {
@@ -786,13 +771,13 @@
       "reference_answer": "No. The v2 filing window is up to 60 days from purchase.",
       "expected_sources": ["Corporate Refund Policy V2 (v2)"],
       "category": "billing", "risk_level": "low", "kb_version": "v2", "customer_id": "cust_102",
-      "tags": ["refund", "rag", "tool_calling"],
+      "tags": ["refund", "rag", "tool_calling", "human_escalation"],
       "agent_expectations": {
-        "expected_department": "billing", "expected_intent": "billing_dispute", "expected_priority": "medium",
+        "expected_department": "billing", "expected_intent": "billing_dispute", "expected_priority": "high",
         "required_tools": ["crm.get_customer_profile", "tickets.get_past_tickets", "orders.get_order_history"],
         "forbidden_tools": ["orders.check_refund_eligibility"],
         "expected_nodes": ["ticket_analyzer", "skill_selector", "tool_call", "retriever", "llm_generation", "qa", "escalation"],
-        "should_escalate": false, "should_require_approval": false
+        "should_escalate": true, "should_require_approval": true
       }
     },
     {
@@ -816,13 +801,13 @@
       "reference_answer": "The documented v2 policy sends refunds to the original payment card.",
       "expected_sources": ["Corporate Refund Policy V2 (v2)"],
       "category": "billing", "risk_level": "low", "kb_version": "v2", "customer_id": "cust_103",
-      "tags": ["refund", "rag", "tool_calling"],
+      "tags": ["refund", "rag", "tool_calling", "human_escalation"],
       "agent_expectations": {
-        "expected_department": "billing", "expected_intent": "billing_dispute", "expected_priority": "medium",
+        "expected_department": "billing", "expected_intent": "billing_dispute", "expected_priority": "high",
         "required_tools": ["crm.get_customer_profile", "tickets.get_past_tickets", "orders.get_order_history"],
         "forbidden_tools": ["orders.check_refund_eligibility"],
         "expected_nodes": ["ticket_analyzer", "skill_selector", "tool_call", "retriever", "llm_generation", "qa", "escalation"],
-        "should_escalate": false, "should_require_approval": false
+        "should_escalate": true, "should_require_approval": true
       }
     },
     {
@@ -885,39 +870,11 @@
       }
     },
     {
-      "id": "baseline-account-profile-section",
-      "query": "Which section under Preferences contains customer profile configuration?",
-      "reference_answer": "The Profile section under Settings and Preferences contains the configuration.",
-      "expected_sources": ["User Account Profile Settings (v1)"],
-      "category": "general", "risk_level": "low", "kb_version": "v1", "customer_id": "cust_102",
-      "tags": ["account", "rag", "tool_calling"],
-      "agent_expectations": {
-        "expected_department": "general", "expected_intent": "information_request", "expected_priority": "medium",
-        "required_tools": ["crm.get_customer_profile", "tickets.get_past_tickets"], "forbidden_tools": ["orders.get_order_history"],
-        "expected_nodes": ["ticket_analyzer", "skill_selector", "tool_call", "retriever", "llm_generation", "qa", "escalation"],
-        "should_escalate": false, "should_require_approval": false
-      }
-    },
-    {
       "id": "baseline-account-update-verification-address",
       "query": "Where should I update the verification email address for my customer profile?",
       "reference_answer": "Update it under Settings, Preferences, Profile.",
       "expected_sources": ["User Account Profile Settings (v1)"],
       "category": "general", "risk_level": "low", "kb_version": "v1", "customer_id": "cust_103",
-      "tags": ["account", "rag", "tool_calling"],
-      "agent_expectations": {
-        "expected_department": "general", "expected_intent": "information_request", "expected_priority": "medium",
-        "required_tools": ["crm.get_customer_profile", "tickets.get_past_tickets"], "forbidden_tools": ["orders.get_order_history"],
-        "expected_nodes": ["ticket_analyzer", "skill_selector", "tool_call", "retriever", "llm_generation", "qa", "escalation"],
-        "should_escalate": false, "should_require_approval": false
-      }
-    },
-    {
-      "id": "baseline-account-validation-inbox",
-      "query": "After changing the verification address, where is the validation link delivered?",
-      "reference_answer": "The validation link is sent to the verification email inbox.",
-      "expected_sources": ["User Account Profile Settings (v1)"],
-      "category": "general", "risk_level": "low", "kb_version": "v1", "customer_id": "cust_101",
       "tags": ["account", "rag", "tool_calling"],
       "agent_expectations": {
         "expected_department": "general", "expected_intent": "information_request", "expected_priority": "medium",
@@ -946,34 +903,6 @@
       "reference_answer": "No. The documented flow requires clicking the validation link to enable API key access.",
       "expected_sources": ["User Account Profile Settings (v1)"],
       "category": "general", "risk_level": "medium", "kb_version": "v1", "customer_id": "cust_103",
-      "tags": ["account", "rag", "tool_calling"],
-      "agent_expectations": {
-        "expected_department": "general", "expected_intent": "information_request", "expected_priority": "medium",
-        "required_tools": ["crm.get_customer_profile", "tickets.get_past_tickets"], "forbidden_tools": ["orders.get_order_history"],
-        "expected_nodes": ["ticket_analyzer", "skill_selector", "tool_call", "retriever", "llm_generation", "qa", "escalation"],
-        "should_escalate": false, "should_require_approval": false
-      }
-    },
-    {
-      "id": "baseline-account-cannot-find-preferences",
-      "query": "I cannot find the profile configuration page. What exact navigation sequence should I use?",
-      "reference_answer": "Use Settings, Preferences, then Profile.",
-      "expected_sources": ["User Account Profile Settings (v1)"],
-      "category": "general", "risk_level": "low", "kb_version": "v1", "customer_id": "cust_101",
-      "tags": ["account", "rag", "tool_calling"],
-      "agent_expectations": {
-        "expected_department": "general", "expected_intent": "information_request", "expected_priority": "medium",
-        "required_tools": ["crm.get_customer_profile", "tickets.get_past_tickets"], "forbidden_tools": ["orders.get_order_history"],
-        "expected_nodes": ["ticket_analyzer", "skill_selector", "tool_call", "retriever", "llm_generation", "qa", "escalation"],
-        "should_escalate": false, "should_require_approval": false
-      }
-    },
-    {
-      "id": "baseline-account-email-and-api-sequence",
-      "query": "List the documented sequence from editing my profile email to enabling API key access.",
-      "reference_answer": "Open Settings, Preferences, Profile; update the verification email; then click the validation link sent to the inbox.",
-      "expected_sources": ["User Account Profile Settings (v1)"],
-      "category": "general", "risk_level": "medium", "kb_version": "v1", "customer_id": "cust_102",
       "tags": ["account", "rag", "tool_calling"],
       "agent_expectations": {
         "expected_department": "general", "expected_intent": "information_request", "expected_priority": "medium",
@@ -1032,79 +961,9 @@
       }
     },
     {
-      "id": "baseline-account-profile-path-verbatim",
-      "query": "What is the complete documented path for editing customer profile preferences?",
-      "reference_answer": "The complete path is Settings -> Preferences -> Profile.",
-      "expected_sources": ["User Account Profile Settings (v1)"],
-      "category": "general", "risk_level": "low", "kb_version": "v1", "customer_id": "cust_103",
-      "tags": ["account", "rag", "tool_calling"],
-      "agent_expectations": {
-        "expected_department": "general", "expected_intent": "information_request", "expected_priority": "medium",
-        "required_tools": ["crm.get_customer_profile", "tickets.get_past_tickets"], "forbidden_tools": ["orders.get_order_history"],
-        "expected_nodes": ["ticket_analyzer", "skill_selector", "tool_call", "retriever", "llm_generation", "qa", "escalation"],
-        "should_escalate": false, "should_require_approval": false
-      }
-    },
-    {
-      "id": "baseline-api-504-backup-routing",
-      "query": "A customer receives a 504 Gateway error from the API. Which routing component should be verified?",
-      "reference_answer": "Technical support should verify the backup routing cluster.",
-      "expected_sources": ["API Outage Remediation Steps (v1)"],
-      "category": "technical", "risk_level": "medium", "kb_version": "v1", "customer_id": "cust_103",
-      "tags": ["api_outage", "rag", "tool_calling"],
-      "agent_expectations": {
-        "expected_department": "technical", "expected_intent": "outage_report", "expected_priority": "high",
-        "required_tools": ["crm.get_customer_profile", "tickets.get_past_tickets"], "forbidden_tools": ["orders.get_order_history"],
-        "expected_nodes": ["ticket_analyzer", "skill_selector", "tool_call", "retriever", "llm_generation", "qa", "escalation"],
-        "should_escalate": false, "should_require_approval": false
-      }
-    },
-    {
       "id": "baseline-api-connectivity-timeout",
       "query": "The API has connectivity timeout errors. What infrastructure should support inspect first?",
       "reference_answer": "The documented first check is the backup routing cluster.",
-      "expected_sources": ["API Outage Remediation Steps (v1)"],
-      "category": "technical", "risk_level": "medium", "kb_version": "v1", "customer_id": "cust_101",
-      "tags": ["api_outage", "rag", "tool_calling"],
-      "agent_expectations": {
-        "expected_department": "technical", "expected_intent": "outage_report", "expected_priority": "high",
-        "required_tools": ["crm.get_customer_profile", "tickets.get_past_tickets"], "forbidden_tools": ["orders.get_order_history"],
-        "expected_nodes": ["ticket_analyzer", "skill_selector", "tool_call", "retriever", "llm_generation", "qa", "escalation"],
-        "should_escalate": false, "should_require_approval": false
-      }
-    },
-    {
-      "id": "baseline-api-fallback-region-exact",
-      "query": "The API is down and routing must fail over. Which AWS region contains the fallback cluster?",
-      "reference_answer": "The fallback API cluster is in AWS us-east-1.",
-      "expected_sources": ["API Outage Remediation Steps (v1)"],
-      "category": "technical", "risk_level": "medium", "kb_version": "v1", "customer_id": "cust_102",
-      "tags": ["api_outage", "rag", "tool_calling"],
-      "agent_expectations": {
-        "expected_department": "technical", "expected_intent": "outage_report", "expected_priority": "high",
-        "required_tools": ["crm.get_customer_profile", "tickets.get_past_tickets"], "forbidden_tools": ["orders.get_order_history"],
-        "expected_nodes": ["ticket_analyzer", "skill_selector", "tool_call", "retriever", "llm_generation", "qa", "escalation"],
-        "should_escalate": false, "should_require_approval": false
-      }
-    },
-    {
-      "id": "baseline-api-cache-after-failover",
-      "query": "After an API error triggers fallback routing, must clients clear their caches?",
-      "reference_answer": "Yes. The guide instructs clients to clear caches once routing switches.",
-      "expected_sources": ["API Outage Remediation Steps (v1)"],
-      "category": "technical", "risk_level": "medium", "kb_version": "v1", "customer_id": "cust_103",
-      "tags": ["api_outage", "rag", "tool_calling"],
-      "agent_expectations": {
-        "expected_department": "technical", "expected_intent": "outage_report", "expected_priority": "high",
-        "required_tools": ["crm.get_customer_profile", "tickets.get_past_tickets"], "forbidden_tools": ["orders.get_order_history"],
-        "expected_nodes": ["ticket_analyzer", "skill_selector", "tool_call", "retriever", "llm_generation", "qa", "escalation"],
-        "should_escalate": false, "should_require_approval": false
-      }
-    },
-    {
-      "id": "baseline-api-devops-patch-target",
-      "query": "When the API is offline, what destination do the documented DevOps patches point routing toward?",
-      "reference_answer": "The patches point routing to fallback API clusters in AWS us-east-1.",
       "expected_sources": ["API Outage Remediation Steps (v1)"],
       "category": "technical", "risk_level": "medium", "kb_version": "v1", "customer_id": "cust_101",
       "tags": ["api_outage", "rag", "tool_calling"],
@@ -1260,20 +1119,6 @@
       "id": "baseline-tool-last-case-resolution",
       "query": "How was my most recent support case resolved?",
       "reference_answer": "For cust_103, the Mock ticket adapter reports that DNS was updated to the fallback cluster.",
-      "expected_sources": [],
-      "category": "general", "risk_level": "low", "kb_version": "v1", "customer_id": "cust_103",
-      "tags": ["tool_calling"],
-      "agent_expectations": {
-        "expected_department": "general", "expected_intent": "information_request", "expected_priority": "medium",
-        "required_tools": ["crm.get_customer_profile", "tickets.get_past_tickets"], "forbidden_tools": ["orders.get_order_history"],
-        "expected_nodes": ["ticket_analyzer", "skill_selector", "tool_call", "retriever", "llm_generation", "qa", "escalation"],
-        "should_escalate": false, "should_require_approval": false
-      }
-    },
-    {
-      "id": "baseline-tool-enterprise-profile",
-      "query": "What tier and open-case count are stored for this customer profile?",
-      "reference_answer": "The CRM adapter reports cust_103 as Enterprise tier with five open tickets.",
       "expected_sources": [],
       "category": "general", "risk_level": "low", "kb_version": "v1", "customer_id": "cust_103",
       "tags": ["tool_calling"],
@@ -1673,6 +1518,17 @@
         "expected_nodes": ["ticket_analyzer", "skill_selector", "tool_call", "retriever", "llm_generation", "qa", "escalation"],
         "should_escalate": false, "should_require_approval": false
       }
-    }
+    },
+    {"id": "baseline-principle-refund-action-zh", "query": "网关设备用着不满意，订单 ORD-7001 请直接给我退款。", "reference_answer": "明确要求退款，按原则第 5 条转人工；不得声称已退款。", "expected_sources": [], "category": "billing", "risk_level": "high", "kb_version": "v1", "customer_id": "cust_101", "tags": ["refund", "order", "tool_calling", "human_escalation", "multilingual"], "agent_expectations": {"expected_department": "billing", "expected_intent": "billing_dispute", "expected_priority": "high", "required_tools": ["crm.get_customer_profile", "tickets.get_past_tickets", "orders.get_order_history"], "forbidden_tools": ["orders.check_refund_eligibility"], "expected_nodes": ["ticket_analyzer", "skill_selector", "tool_call", "retriever", "llm_generation", "qa", "escalation"], "should_escalate": true, "should_require_approval": true}},
+    {"id": "baseline-principle-refund-action-en", "query": "I want a refund for order ORD-7001.", "reference_answer": "Explicit refund request: route to human review (principle 5); never claim the refund is done.", "expected_sources": [], "category": "billing", "risk_level": "high", "kb_version": "v1", "customer_id": "cust_101", "tags": ["refund", "order", "tool_calling", "human_escalation"], "agent_expectations": {"expected_department": "billing", "expected_intent": "billing_dispute", "expected_priority": "high", "required_tools": ["crm.get_customer_profile", "tickets.get_past_tickets", "orders.get_order_history"], "forbidden_tools": ["orders.check_refund_eligibility"], "expected_nodes": ["ticket_analyzer", "skill_selector", "tool_call", "retriever", "llm_generation", "qa", "escalation"], "should_escalate": true, "should_require_approval": true}},
+    {"id": "baseline-principle-mixed-question-action-zh", "query": "退款一般几天能到账？另外请帮我把订单 ORD-7001 退掉。", "reference_answer": "提问加办理要求，按原则第 8 条先答后审：可说明到账时间，退款本身转人工。", "expected_sources": [], "category": "billing", "risk_level": "high", "kb_version": "v1", "customer_id": "cust_101", "tags": ["refund", "order", "tool_calling", "human_escalation", "multilingual"], "agent_expectations": {"expected_department": "billing", "expected_intent": "billing_dispute", "expected_priority": "high", "required_tools": ["crm.get_customer_profile", "tickets.get_past_tickets", "orders.get_order_history"], "forbidden_tools": ["orders.check_refund_eligibility"], "expected_nodes": ["ticket_analyzer", "skill_selector", "tool_call", "retriever", "llm_generation", "qa", "escalation"], "should_escalate": true, "should_require_approval": true}},
+    {"id": "baseline-principle-cancel-order-zh", "query": "请帮我取消订单 ORD-7001。", "reference_answer": "取消订单要求，按原则第 11 条转人工；不得声称已取消。", "expected_sources": [], "category": "shipping", "risk_level": "high", "kb_version": "v1", "customer_id": "cust_101", "tags": ["order", "tool_calling", "human_escalation", "multilingual"], "agent_expectations": {"expected_department": "shipping", "expected_intent": "order_cancellation", "expected_priority": "high", "required_tools": ["crm.get_customer_profile", "tickets.get_past_tickets", "orders.get_order_history"], "forbidden_tools": [], "expected_nodes": ["ticket_analyzer", "skill_selector", "tool_call", "retriever", "llm_generation", "qa", "escalation"], "should_escalate": true, "should_require_approval": true}},
+    {"id": "baseline-principle-cancel-order-en", "query": "Please cancel order ORD-7001.", "reference_answer": "Cancellation request: route to human review (principle 11); never claim the order is cancelled.", "expected_sources": [], "category": "shipping", "risk_level": "high", "kb_version": "v1", "customer_id": "cust_101", "tags": ["order", "tool_calling", "human_escalation"], "agent_expectations": {"expected_department": "shipping", "expected_intent": "order_cancellation", "expected_priority": "high", "required_tools": ["crm.get_customer_profile", "tickets.get_past_tickets", "orders.get_order_history"], "forbidden_tools": [], "expected_nodes": ["ticket_analyzer", "skill_selector", "tool_call", "retriever", "llm_generation", "qa", "escalation"], "should_escalate": true, "should_require_approval": true}},
+    {"id": "baseline-principle-warranty-claim-zh", "query": "我的网关设备坏了，开不了机，请帮我申请换货。", "reference_answer": "明确要求换货，按原则第 13 条转人工；可给出排查建议，但不得承诺换货结果。", "expected_sources": [], "category": "general", "risk_level": "high", "kb_version": "v1", "customer_id": "cust_101", "tags": ["tool_calling", "human_escalation", "multilingual"], "agent_expectations": {"expected_department": "general", "expected_intent": "warranty_claim", "expected_priority": "high", "required_tools": ["crm.get_customer_profile", "tickets.get_past_tickets"], "forbidden_tools": [], "expected_nodes": ["ticket_analyzer", "skill_selector", "tool_call", "retriever", "llm_generation", "qa", "escalation"], "should_escalate": true, "should_require_approval": true}},
+    {"id": "baseline-principle-warranty-claim-en", "query": "My router is broken and will not turn on. Please start a warranty claim for it.", "reference_answer": "Explicit warranty claim: route to human review (principle 13); do not promise a repair or replacement.", "expected_sources": [], "category": "general", "risk_level": "high", "kb_version": "v1", "customer_id": "cust_101", "tags": ["tool_calling", "human_escalation"], "agent_expectations": {"expected_department": "general", "expected_intent": "warranty_claim", "expected_priority": "high", "required_tools": ["crm.get_customer_profile", "tickets.get_past_tickets"], "forbidden_tools": [], "expected_nodes": ["ticket_analyzer", "skill_selector", "tool_call", "retriever", "llm_generation", "qa", "escalation"], "should_escalate": true, "should_require_approval": true}},
+    {"id": "baseline-principle-account-compromised-zh", "query": "我的账号好像被盗了，还被扣了一笔钱，怎么回事？", "reference_answer": "账户被盗并伴随异常扣款，按原则第 14 条按账务处理并转人工。", "expected_sources": [], "category": "billing", "risk_level": "high", "kb_version": "v1", "customer_id": "cust_101", "tags": ["refund", "tool_calling", "human_escalation", "multilingual"], "agent_expectations": {"expected_department": "billing", "expected_intent": "billing_dispute", "expected_priority": "high", "required_tools": ["crm.get_customer_profile", "tickets.get_past_tickets", "orders.get_order_history"], "forbidden_tools": ["orders.check_refund_eligibility"], "expected_nodes": ["ticket_analyzer", "skill_selector", "tool_call", "retriever", "llm_generation", "qa", "escalation"], "should_escalate": true, "should_require_approval": true}},
+    {"id": "baseline-principle-negative-question-zh", "query": "退款怎么这么慢？到底多久才能到账？", "reference_answer": "带负面情绪的提问，按原则第 17 条先答后审：可说明政策中的到账时间，同时转人工。", "expected_sources": [], "category": "billing", "risk_level": "high", "kb_version": "v1", "customer_id": "cust_101", "tags": ["refund", "tool_calling", "human_escalation", "multilingual"], "agent_expectations": {"expected_department": "billing", "expected_intent": "billing_dispute", "expected_priority": "high", "required_tools": ["crm.get_customer_profile", "tickets.get_past_tickets", "orders.get_order_history"], "forbidden_tools": ["orders.check_refund_eligibility"], "expected_nodes": ["ticket_analyzer", "skill_selector", "tool_call", "retriever", "llm_generation", "qa", "escalation"], "should_escalate": true, "should_require_approval": true}},
+    {"id": "baseline-principle-scope-weather-zh", "query": "今天北京天气怎么样？", "reference_answer": "与售后无关，按原则第 3 条给出能力说明，不查询天气，不调用业务 Tool。", "expected_sources": [], "category": "general", "risk_level": "low", "kb_version": "v1", "customer_id": "cust_101", "tags": ["multilingual"], "agent_expectations": {"expected_department": "general", "expected_intent": "information_request", "expected_priority": "low", "required_tools": [], "forbidden_tools": ["orders.get_order_history"], "expected_nodes": ["ticket_analyzer", "llm_generation", "qa", "escalation"], "should_escalate": false, "should_require_approval": false}},
+    {"id": "baseline-principle-scope-poem-en", "query": "Write me a short poem about autumn.", "reference_answer": "Unrelated to after-sales support: give the capability statement (principle 3) and do not write the poem.", "expected_sources": [], "category": "general", "risk_level": "low", "kb_version": "v1", "customer_id": "cust_101", "tags": [], "agent_expectations": {"expected_department": "general", "expected_intent": "information_request", "expected_priority": "low", "required_tools": [], "forbidden_tools": ["orders.get_order_history"], "expected_nodes": ["ticket_analyzer", "llm_generation", "qa", "escalation"], "should_escalate": false, "should_require_approval": false}}
   ]
 }

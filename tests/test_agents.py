@@ -29,20 +29,23 @@ async def test_analyzer_agent_logic():
         "subject": "Billing issue",
     }
     res = await ticket_analyzer_agent.analyze(state)
-    assert res["sentiment"] == "negative"
+    # 明确要求退款：按第 5 条转人工；没有情绪词，情绪为中性。
+    assert res["classification"]["handling"] == "human"
+    assert res["classification"]["principle"] == 5
+    assert res["sentiment"] == "neutral"
     assert res["priority"] == "high"
     assert res["department"] == "billing"
     assert res["analyzer_confidence"] == 0.95
     assert res["risk_level"] == "high"
 
-    # Test technical analysis triggers
+    # Jev 不可用时故障按第 21 条先答后审；不是大面积故障，优先级 high。
     state = {
         "description": "API is down with 504 errors.",
         "subject": "Connection timeout",
     }
     res = await ticket_analyzer_agent.analyze(state)
-    assert res["sentiment"] == "negative"
-    assert res["priority"] == "urgent"
+    assert res["classification"]["handling"] == "answer_then_review"
+    assert res["priority"] == "high"
     assert res["department"] == "technical"
 
     # Test prompt injection detection triggers block
@@ -139,21 +142,29 @@ async def test_billing_policy_question_is_neutral_not_negative():
 
 
 @pytest.mark.parametrize(
-    ("text", "candidate", "expected"),
+    ("text", "expected"),
     [
-        ("退款政策和申请条件是什么？", "negative", "neutral"),
-        ("What are the refund policy requirements?", "negative", "neutral"),
-        ("我要申请退款。", "negative", "negative"),
-        ("你们重复扣款，我要投诉。", "neutral", "negative"),
+        ("退款政策和申请条件是什么？", "neutral"),
+        ("What are the refund policy requirements?", "neutral"),
+        ("我要申请退款。", "neutral"),
+        ("退款怎么这么慢？到底多久才能到账？", "negative"),
+        ("你们重复扣款，我要投诉。", "negative"),
     ],
 )
-def test_billing_sentiment_uses_language_not_only_intent(text, candidate, expected):
-    assert (
-        ticket_analyzer_agent._normalize_sentiment(
-            text, IntentType.BILLING_DISPUTE, candidate
-        )
-        == expected
+def test_sentiment_follows_language_not_intent(text, expected):
+    from src.agents.analyzer import is_explicit_complaint
+    from src.agents.classification import build_classification, sentiment_label
+
+    classification = build_classification(
+        text=text,
+        category=IntentType.BILLING_DISPUTE,
+        category_source="rule",
+        jev_status="unavailable",
+        jev_analysis=None,
+        complaint_rule=is_explicit_complaint(text),
+        record_tool=None,
     )
+    assert sentiment_label(classification) == expected
 
 
 @pytest.mark.asyncio
@@ -923,8 +934,25 @@ def test_workflow_usage_uses_configured_model_name(monkeypatch):
 
 
 @pytest.mark.asyncio
-async def test_compiled_langgraph_flow():
-    # E2E flow testing
+async def test_compiled_langgraph_flow(monkeypatch):
+    # E2E flow testing；Jev 判为“只是问”的账务政策咨询自动回答（第 6 条）。
+    from src.decision.models import DecisionResult, TicketIntentDecision
+
+    async def decide(_text):
+        return TicketIntentDecision(
+            result=DecisionResult(
+                enabled=False, available=True, provider="x", operation="o",
+                question_set_version="v", model="m",
+            ),
+            accepted=True,
+            analysis={
+                "intent": IntentType.BILLING_DISPUTE, "confidence_score": 0.95,
+                "operation_mode": "information", "customer_tone": "neutral",
+                "mixed_request": False, "out_of_scope": False,
+            },
+        )
+
+    monkeypatch.setattr("src.agents.analyzer.decision_service.classify_ticket", decide)
     initial_state = {
         "ticket_id": 99,
         "customer_id": "cust_101",

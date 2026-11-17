@@ -4,6 +4,7 @@ from dataclasses import dataclass
 from typing import Any, Literal, Mapping
 
 from src.config import settings
+from src.agents.classification import ANSWER_THEN_REVIEW, HUMAN
 from src.models.intents import IntentType, normalize_intent
 
 
@@ -33,7 +34,7 @@ class RiskAssessment:
 
 
 class RiskEngine:
-    """综合安全、业务、分类置信度和回复质量计算风险。"""
+    """综合安全、处理原则、依赖状态和回复质量计算风险；是否转人工只在这里决定。"""
 
     def assess(
         self,
@@ -89,35 +90,18 @@ class RiskEngine:
             score = max(score, 0.9)
             reasons.add("dependency_failed")
 
-        priority = str(state.get("priority", "medium")).lower()
-        sentiment = str(state.get("sentiment", "neutral")).lower()
-        intent = normalize_intent(state.get("intent"))
-        analyzer_confidence = self._bounded_score(
-            state.get("analyzer_confidence", 1.0), default=1.0
-        )
-
-        if priority == "urgent":
-            score = max(score, 0.85)
-            reasons.add("urgent_priority")
-        elif priority == "high":
-            score = max(score, 0.55)
-            reasons.add("high_priority")
-
-        if sentiment == "negative" and priority == "high":
-            score = max(score, 0.75)
-            reasons.add("negative_high_priority")
-
-        # 只读咨询由 Analyzer 用确定性规则标记，不按高风险业务域处理。
-        if intent in _HIGH_RISK_INTENTS and not state.get("read_only_inquiry"):
-            score = max(score, 0.78)
-            reasons.add("high_risk_business_intent")
-
-        if analyzer_confidence < settings.RISK_LOW_CONFIDENCE_THRESHOLD:
-            score = max(score, 0.8)
-            reasons.add("low_analyzer_confidence")
-        elif analyzer_confidence < 0.8:
-            score = max(score, 0.5)
-            reasons.add("medium_analyzer_confidence")
+        classification = state.get("classification")
+        if isinstance(classification, Mapping) and classification.get("handling"):
+            # 是否转人工直接由处理原则决定（第 22 条）；优先级只决定处理时限。
+            handling = classification.get("handling")
+            if handling == HUMAN:
+                score = max(score, 0.78)
+                reasons.add("handling_human")
+            elif handling == ANSWER_THEN_REVIEW:
+                score = max(score, 0.78)
+                reasons.add("handling_answer_then_review")
+        else:
+            score = self._legacy_input_signals(state, reasons, score)
 
         if stage in {"output", "final"}:
             if bool(state.get("response_requires_human", False)):
@@ -157,6 +141,36 @@ class RiskEngine:
             requires_human=level in {"high", "critical"},
             block_automation=security_threat or semantic_label == "unsafe",
         )
+
+    def _legacy_input_signals(
+        self, state: Mapping[str, Any], reasons: set[str], score: float
+    ) -> float:
+        """没有分类结论的旧 State（旧 Checkpoint、Analyzer 异常）沿用旧打分。"""
+        priority = str(state.get("priority", "medium")).lower()
+        sentiment = str(state.get("sentiment", "neutral")).lower()
+        intent = normalize_intent(state.get("intent"))
+        analyzer_confidence = self._bounded_score(
+            state.get("analyzer_confidence", 1.0), default=1.0
+        )
+        if priority == "urgent":
+            score = max(score, 0.85)
+            reasons.add("urgent_priority")
+        elif priority == "high":
+            score = max(score, 0.55)
+            reasons.add("high_priority")
+        if sentiment == "negative" and priority == "high":
+            score = max(score, 0.75)
+            reasons.add("negative_high_priority")
+        if intent in _HIGH_RISK_INTENTS and not state.get("read_only_inquiry"):
+            score = max(score, 0.78)
+            reasons.add("high_risk_business_intent")
+        if analyzer_confidence < settings.RISK_LOW_CONFIDENCE_THRESHOLD:
+            score = max(score, 0.8)
+            reasons.add("low_analyzer_confidence")
+        elif analyzer_confidence < 0.8:
+            score = max(score, 0.5)
+            reasons.add("medium_analyzer_confidence")
+        return score
 
     @staticmethod
     def _bounded_score(value: Any, *, default: float) -> float:
