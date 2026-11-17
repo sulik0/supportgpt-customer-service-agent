@@ -1,5 +1,6 @@
 """一次生成、原样复用的回复证据；只接收已经过安全检查的上下文。"""
 
+import datetime
 import json
 from copy import deepcopy
 from typing import Any
@@ -15,6 +16,33 @@ _RECORD_TOOLS = {
     "warranty": ("warranty.",),
     "billing_invoices": ("billing.",),
 }
+# 时间由代码算好再给模型；模型自己不知道今天的日期，会轻信用户说的天数。
+_DATE_NOTE = (
+    "today and days_since_order are computed by the system. Judge elapsed time and "
+    "deadlines only from them. If the customer states a different time, follow the "
+    "records and point out the difference."
+)
+
+
+def _today() -> datetime.date:
+    """业务记录按 UTC 存储，今天也按 UTC 计算。"""
+    return datetime.datetime.now(datetime.timezone.utc).date()
+
+
+def _as_date(value: Any) -> datetime.date | None:
+    """兼容 datetime、date 和 ISO 字符串；无法识别时不推算。"""
+    if isinstance(value, datetime.datetime):
+        return value.date()
+    if isinstance(value, datetime.date):
+        return value
+    if isinstance(value, str) and value.strip():
+        try:
+            return datetime.datetime.fromisoformat(
+                value.strip().replace("Z", "+00:00")
+            ).date()
+        except ValueError:
+            return None
+    return None
 
 
 def compact_tool_context(
@@ -69,6 +97,13 @@ def compact_tool_context(
         ],
     }
 
+    today = _today()
+    for order in compact["recent_orders"]:
+        order_day = _as_date(order.get("order_date"))
+        if order_day is not None and order_day <= today:
+            order["order_date"] = order_day.isoformat()
+            order["days_since_order"] = (today - order_day).days
+
     if called_tools is not None:
         if _ORDER_TOOL not in called_tools:
             compact.pop("recent_orders", None)
@@ -89,6 +124,9 @@ def compact_tool_context(
                 **compact,
             }
 
+    if any("days_since_order" in order for order in compact.get("recent_orders", [])):
+        compact = {"today": today.isoformat(), "date_note": _DATE_NOTE, **compact}
+
     def encode() -> str:
         return json.dumps(
             compact, default=str, ensure_ascii=False, separators=(",", ":")
@@ -104,6 +142,10 @@ def compact_tool_context(
         if len(encode()) <= budget:
             return encode()
         compact.pop(key, None)
+        if key == "recent_orders":
+            # 订单被裁掉后，日期说明也没有可依据的对象。
+            compact.pop("today", None)
+            compact.pop("date_note", None)
     if isinstance(data, dict) and len(encode()) > budget:
         core_keys = (
             "order_id",
