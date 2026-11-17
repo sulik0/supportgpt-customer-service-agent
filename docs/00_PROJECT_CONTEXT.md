@@ -171,7 +171,7 @@ approval_gate
 1. **Analyzer**
    - 先执行多层 Prompt Injection 和 Jailbreak 检测。
    - 命中安全风险时写入 `errors`，设置紧急优先级和拒绝回复，不执行后续 Tooling、RAG、Resolver 和 QA。
-   - 正常请求先对 PII 脱敏并生成规则候选；Jev 启用时优先执行封闭 Intent 决策，低置信度或故障时，有候选则回退规则，无候选才回退 Analyzer LLM。
+   - 正常请求先对 PII 脱敏并生成规则候选；Jev 启用时优先执行封闭 Intent 决策，低置信度或故障时，有候选则回退规则，无候选才回退 Analyzer LLM。关键词零命中不算候选（不再直接判为 0.95 置信度的通用咨询），只用于显式指代的记忆续接。
    - 安全检查通过后，明确的天气、创作和常识等无关请求先按规则标记为 `out_of_scope`；其余请求可在同一次 Jev 分类中判断 `support_scope`，只有普通信息请求且判断置信度达到原有门槛时才采用。业务操作、混合意图和不确定请求保留业务路径。
    - `out_of_scope` 请求只隔离本轮无关 Memory，不删除会话历史；直接进入 Resolver，不选择 Skill 或查询 Tool / RAG。
 2. **Skill Selector**
@@ -198,7 +198,7 @@ approval_gate
    - 验证纯能力说明时不要求天气等外部知识依据；仅接受可验证的能力说明，附加“今天晴、25 度”等事实仍进入正常 QA，不能靠范围外标签免检。
    - 规则校验和 Jev / LLM Judge 都读取 Resolver 保存的 `resolution_evidence`，不再次裁剪或从原始 State 拼装另一份证据。旧 Checkpoint 没有该字段时才使用共同构造器补齐。
    - 空回复、输出泄露或完全缺少依据等确定性失败优先使用规则判断，不调用 LLM。
-   - 安全硬失败、澄清和安全限制回复仍由规则短路；正向 Grounding 候选和其余非确定请求在 Jev 启用时合并评判 Grounding、完成度、citation 与未授权承诺。Jev 不可用时，前者回退规则，后者回退轻量 LLM Judge。
+   - 安全硬失败、澄清和不含数字的安全限制回复仍由规则短路；正向 Grounding 候选、带数字的限制回复和其余非确定请求在 Jev 启用时合并评判 Grounding、完成度、citation 与未授权承诺，Jev 不可用时都回退轻量 LLM Judge。规则要求的人工跟进不会被评判结果取消。
    - 通过 Response Filter 删除内部指令或工作流泄露；命中时将 QA 分数降为 `0.5` 并标记幻觉。
 7. **Escalation**
    - 按优先级计算 SLA：urgent `2h`、high `12h`、medium `24h`、low `48h`。

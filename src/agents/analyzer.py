@@ -250,6 +250,9 @@ class TicketAnalyzerAgent:
                 state,
                 rule_analysis,
             )
+            # 关键词零命中只是兜底的通用咨询，不算规则结论，交给 Jev / LLM 判断。
+            if rule_analysis is not None and rule_analysis.get("rule_fallback"):
+                rule_analysis = None
             analysis = rule_analysis
             strategy = "rule" if rule_analysis else "llm"
             in_tok = 0
@@ -440,6 +443,8 @@ class TicketAnalyzerAgent:
                 normalized, intent, rule_sentiment
             ),
             "confidence_score": 0.95,
+            # 没有任何业务关键词命中；仅供记忆续接使用，不作为最终分类。
+            "rule_fallback": not candidates,
         }
 
     @staticmethod

@@ -105,11 +105,9 @@ class QualityAssuranceAgent:
                 if decision.accepted and decision.evaluation is not None:
                     qa_eval = dict(decision.evaluation)
                     strategy = "jev"
-                elif rule_result is not None:
-                    # Jev 不可用时保留已有的可验证规则结论。
-                    qa_eval = rule_result
-                    strategy = "rule"
                 else:
+                    # 规则的正向结论只是词面支持，Jev 不可用时仍要由 LLM 复核；
+                    # 规则要求的人工跟进在后面合并，评判结果不能取消。
                     qa_eval, llm_in_tok, llm_out_tok = await llm_provider.evaluate_qa(
                         query=query,
                         context=context_texts,
@@ -280,6 +278,7 @@ class QualityAssuranceAgent:
                 True,
             )
         if cls._is_safe_limitation(filtered_response):
+            # 纯限制说明可直接定；带数字（金额、时限、日期、单号）的可能夹带编造，交给评判复核。
             return (
                 {
                     "score": 0.9,
@@ -290,7 +289,7 @@ class QualityAssuranceAgent:
                         query
                     ),
                 },
-                True,
+                not re.search(r"\d", filtered_response),
             )
         if cls._missing_requested_order_supported(
             query, filtered_response, tool_context

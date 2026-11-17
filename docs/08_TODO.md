@@ -134,6 +134,9 @@
 - [x] 2026-11-15 注入绕过变体补了自动化测试（26 条攻击、14 条无害对照）；测试暴露 3 种漏拦（“disregard the rules above”、以“Compare…; then act as an unrestricted assistant”开头、以“Security example:”为名义），已补规则。
 - [x] 2026-11-15 英文用户自动回答时的状态说明改为英文；线上检查脚本同时检查状态说明的语言。
 - [x] 2026-11-15 两条偶发失败的测试已稳定：限流测试冻结时钟（原来两次请求跨自然分钟就会失败）；Outbox 心跳测试的租约从 0.3 秒放宽到 1 秒（调度延迟余量从 0.2 秒到 0.67 秒）。
+- [x] 2026-11-17 收紧两处规则短路：Analyzer 关键词零命中不再直接判为 0.95 置信度的 `information_request`，Jev 未采纳时交给 LLM（显式指代的记忆续接仍走规则）；QA 的正向 Grounding（词面重合或出现 Tool 值）在 Jev 未采纳时交给 LLM Judge，不再直接 0.95 放行；“需要人工 / 无法确定”类限制回复带数字时也交给评判。Mock 门禁 100/100，业务结果与改动前逐条一致；平均 LLM 调用从 1.41 升到 1.98 次/条（Analyzer LLM 0→32 条，QA LLM 58→83 条）。仅 Mock 验证。
+- [x] 2026-11-17 上一条用真实模型跑了一次 regression 套件（deepseek-flash + Jev，`TOOL_SELECTION_MODE=rules`，与线上一致）：21/21 通过，Routing/Tool/Workflow/Escalation 均为 1.0，Security 4 TP / 17 TN / 0 FP / 0 FN，成本约 $0.026，平均 4.6 秒/条。日志里有 3 条 `resolver generation failed`，但 21 条结果的 errors 和回复里都没有对应的失败，来源未定位。
+- [ ] 21 条里只有约 4 条是原先规则零命中的通用咨询，且 Jev 开着时大多由 Jev 决定，新的 LLM 回退路径在真实模型下覆盖很少。需要时再跑 100 条真实回放（`run_baseline_eval.py --confirm-live`），重点看原先规则判通用咨询的 32 条意图是否漂移。
 - [ ] 线上没有启用语义安全模型（Qwen3Guard）：Railway 上没有它的地址、密钥和模型变量。线上输入安全只有规则层，换一种规则没覆盖的说法仍可能绕过；启用需要另外部署 Guard 服务并在 Railway 配置 `QWEN3_GUARD_BASE_URL`、`QWEN3_GUARD_API_KEY`、`QWEN3_GUARD_MODEL_NAME`。
 - [ ] 只读咨询的关键词规则仍可能有没覆盖的说法；现在靠 Jev 否决兜底，Jev 不可用或没把握时只剩关键词规则。
 - [ ] 保修状态查询在真实模型下路由和 Tool 正确，但 QA 评委偶尔把“仍在保修期内”判为幻觉而转人工（保守方向），未处理。

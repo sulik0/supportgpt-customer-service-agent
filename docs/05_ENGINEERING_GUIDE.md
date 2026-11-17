@@ -199,7 +199,7 @@ JEV_NOUL_THRESHOLD=0.7
 
 </details>
 
-当前路由已调整为：Analyzer 对正常请求优先用 Jev 复核规则候选；QA 保留空回复、泄露、无权威证据等硬规则，将正向 Grounding 候选和其余非确定结论交给 Jev。Jev 不可用或置信度不足时，有可验证候选则回退规则，否则回退原 LLM。
+当前路由已调整为：Analyzer 对正常请求优先用 Jev 复核规则候选；QA 保留空回复、泄露、无权威证据等硬规则，将正向 Grounding 候选和其余非确定结论交给 Jev。Jev 不可用或置信度不足时：Analyzer 有规则候选则回退规则，关键词零命中或多意图冲突时回退原 LLM；QA 的正向 Grounding 候选和带数字的限制性回复一律回退 LLM Judge，只有失败类结论、澄清、纯限制说明（不含数字）和订单不存在说明由规则直接定。
 
 Jev 只用于线上封闭决策；当前不作为 Baseline、Ragas 或 DeepEval 的离线 Judge。`Skill Selector`、Tool Allowlist / RBAC / Risk Policy 和 Approval Gate 仍为确定性代码。
 

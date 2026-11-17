@@ -202,9 +202,9 @@ CLI 可将当前/候选版本在相同 100 条 Baseline 上成对回放，生成
 
 | Prompt 阶段 | 当前约束 |
 |---|---|
-| Analyzer | 规则先生成高置信度候选；DecisionProvider 启用时由 Jev 优先输出封闭 `IntentType`，低置信度或故障时有候选则回退规则，无候选再调用原 LLM；各层统一使用 8 项 `IntentType` |
+| Analyzer | 规则先生成高置信度候选（关键词零命中不算候选）；DecisionProvider 启用时由 Jev 优先输出封闭 `IntentType`，低置信度或故障时有候选则回退规则，无候选（零命中或多意图冲突）再调用原 LLM；各层统一使用 8 项 `IntentType` |
 | Resolver | 只依据 Top-2 citation 和必要 Tool 字段生成最终客服回复，限制输入字符数与输出 token |
-| QA | 确定性失败由规则短路；其余可用 Jev 一次输出 Grounding、完成度、citation、未授权承诺和人工建议，低置信度或故障时回退轻量 LLM Judge |
+| QA | 确定性失败由规则短路；规则的正向 Grounding 只是词面支持，不直接放行；其余可用 Jev 一次输出 Grounding、完成度、citation、未授权承诺和人工建议，低置信度或故障时回退轻量 LLM Judge |
 | 输出过滤 | 删除可能泄露内部角色、指令或工作流的内容 |
 
 OpenAI 与 Azure OpenAI Provider 使用 `temperature=0.0`；默认 Mock Provider 用于离线可复现。可以表述 Prompt 已内容版本化、已有离线发布门禁；不能表述已灰度、已通过线上实验提升质量，也不能把 Mock 成对实验当作 Prompt 语义效果验证。

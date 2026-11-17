@@ -75,6 +75,55 @@ async def test_analyzer_rule_match_skips_business_llm(monkeypatch):
 
 
 @pytest.mark.asyncio
+async def test_analyzer_keyword_miss_falls_back_to_llm(monkeypatch):
+    calls = []
+
+    async def classify(text):
+        calls.append(text)
+        return (
+            {
+                "intent": "order_status",
+                "priority": "medium",
+                "department": "shipping",
+                "sentiment": "negative",
+                "confidence_score": 0.9,
+            },
+            30,
+            10,
+        )
+
+    monkeypatch.setattr("src.agents.analyzer.llm_provider.analyze_ticket", classify)
+    # 不含任何业务关键词的订单问题，不能被规则直接判成通用咨询。
+    result = await ticket_analyzer_agent.analyze(
+        {"subject": "还没到", "description": "我上周买的东西到现在还没送来。"}
+    )
+
+    assert len(calls) == 1
+    assert result["analyzer_strategy"] == "llm"
+    assert result["intent"] == "order_status"
+
+
+@pytest.mark.asyncio
+async def test_analyzer_memory_continuation_still_skips_llm(monkeypatch):
+    async def unexpected_llm_call(text):
+        raise AssertionError("explicit continuation should stay deterministic")
+
+    monkeypatch.setattr(
+        "src.agents.analyzer.llm_provider.analyze_ticket", unexpected_llm_call
+    )
+    result = await ticket_analyzer_agent.analyze(
+        {
+            "subject": "",
+            "description": "那就帮我取消它",
+            "memory_active_entities": {"order_id": "ORD-7001"},
+        }
+    )
+
+    assert result["analyzer_strategy"] == "rule"
+    assert result["intent"] == "order_cancellation"
+
+
+@pytest.mark.asyncio
 async def test_billing_policy_question_is_neutral_not_negative():
     result = await ticket_analyzer_agent.analyze(
         {
@@ -490,15 +539,38 @@ async def test_qa_without_context_skips_llm(monkeypatch):
     assert result["tokens_input"] == 0
 
 
-@pytest.mark.asyncio
-async def test_qa_accepts_tool_grounded_read_response_without_llm(monkeypatch):
-    async def unexpected_qa_call(**kwargs):
-        raise AssertionError("grounded Tool response should not call LLM Judge")
+def _record_qa_judge(monkeypatch, evaluation):
+    """替换 LLM Judge，记录调用次数并返回固定评判。"""
+    calls = []
+
+    async def fake_qa_call(**kwargs):
+        calls.append(kwargs)
+        return dict(evaluation), 10, 5
 
     monkeypatch.setattr(
         "src.agents.quality_assurance.llm_provider.evaluate_qa",
-        unexpected_qa_call,
+        fake_qa_call,
     )
+    return calls
+
+
+_PASSING_JUDGE = {
+    "score": 0.92,
+    "hallucination_detected": False,
+    "citation_verified": True,
+    "response_grounded": True,
+}
+_HALLUCINATION_JUDGE = {
+    "score": 0.4,
+    "hallucination_detected": True,
+    "citation_verified": False,
+    "response_grounded": False,
+}
+
+
+@pytest.mark.asyncio
+async def test_qa_rechecks_tool_grounded_response_with_llm_when_jev_off(monkeypatch):
+    calls = _record_qa_judge(monkeypatch, _PASSING_JUDGE)
     result = await quality_assurance_agent.verify(
         {
             "description": "What customer tier is on my profile?",
@@ -509,11 +581,52 @@ async def test_qa_accepts_tool_grounded_read_response_without_llm(monkeypatch):
         }
     )
 
-    assert result["qa_strategy"] == "rule"
-    assert result["qa_score"] == 0.95
+    # 词面命中 Tool 值只是候选结论，Jev 关闭时仍由 LLM 复核。
+    assert len(calls) == 1
+    assert result["qa_strategy"] == "llm"
     assert result["hallucination_detected"] is False
-    assert result["response_grounded"] is True
     assert result["risk_requires_human"] is False
+
+
+@pytest.mark.asyncio
+async def test_qa_catches_fabricated_amount_next_to_matching_order_id(monkeypatch):
+    calls = _record_qa_judge(monkeypatch, _HALLUCINATION_JUDGE)
+    result = await quality_assurance_agent.verify(
+        {
+            "description": "What is the status of order ORD-7001?",
+            "suggested_response": (
+                "Order ORD-7001 has been refunded 500 USD and the money "
+                "will arrive in 3 days."
+            ),
+            "context_citations": [],
+            "tool_context": {
+                "recent_orders": [{"order_id": "ORD-7001", "status": "delivered"}]
+            },
+            "errors": [],
+        }
+    )
+
+    assert len(calls) == 1
+    assert result["hallucination_detected"] is True
+    assert result["risk_requires_human"] is True
+
+
+@pytest.mark.asyncio
+async def test_qa_rechecks_limitation_reply_that_carries_numbers(monkeypatch):
+    calls = _record_qa_judge(monkeypatch, _HALLUCINATION_JUDGE)
+    result = await quality_assurance_agent.verify(
+        {
+            "description": "我的退款什么时候到账？",
+            "suggested_response": "需要人工审核，退款预计 3-5 个工作日到账。",
+            "context_citations": [],
+            "tool_context": {},
+            "errors": [],
+        }
+    )
+
+    assert len(calls) == 1
+    assert result["hallucination_detected"] is True
+    assert result["risk_requires_human"] is True
 
 
 @pytest.mark.asyncio
@@ -541,15 +654,11 @@ async def test_qa_accepts_tool_grounded_read_response_without_llm(monkeypatch):
         ),
     ],
 )
-async def test_qa_accepts_valid_cross_language_citation_and_empty_tool_result(
+async def test_qa_judges_cross_language_citation_and_empty_tool_result(
     monkeypatch, response, citations, tool_context, citation_verified
 ):
-    async def unexpected_qa_call(**kwargs):
-        raise AssertionError("deterministic evidence should not call LLM Judge")
-
-    monkeypatch.setattr(
-        "src.agents.quality_assurance.llm_provider.evaluate_qa",
-        unexpected_qa_call,
+    calls = _record_qa_judge(
+        monkeypatch, {**_PASSING_JUDGE, "citation_verified": citation_verified}
     )
     result = await quality_assurance_agent.verify(
         {
@@ -561,7 +670,7 @@ async def test_qa_accepts_valid_cross_language_citation_and_empty_tool_result(
         }
     )
 
-    assert result["qa_score"] == 0.95
+    assert len(calls) == 1
     assert result["citation_verified"] is citation_verified
     assert result["risk_requires_human"] is False
 
