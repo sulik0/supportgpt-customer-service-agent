@@ -128,6 +128,10 @@ npm run dev
 - 客服后台：只处理异常、待审批和需要人工修改的工单，支持原样批准、人工修改和拒绝。
 - Agent 可观测页：仅 `manager/admin` 可访问 Agent Run 摘要，支持按工单编号精确查询并以北京时间展示运行时间，可继续跳转 LangSmith Project。
 
+## 环境变量和固定值
+
+`src/config.py` 的 `Settings` 里，普通字段可以用环境变量或 `.env` 覆盖；标注为 `ClassVar` 的是固定值（超时、重试次数、上下文长度、各类阈值、Memory 和 Outbox 参数、安全开关等），不读环境变量，要调整就改代码并走评审。2026-11-18 把 50 个从未在线上或本地改过的调参项改成了固定值，并删除了没有代码使用的 `HOST`、`PORT`（容器端口由 Dockerfile 的 `$PORT` 决定）和 `OTEL_COLLECTOR_LANGSMITH_ENDPOINT`（只给 Collector 容器用，Compose 直接传）。`Settings` 设置了 `extra = "ignore"`，旧 `.env` 或 Railway 上残留这些变量不会导致启动失败，只是不再生效。
+
 ## LangGraph Checkpoint 配置
 
 Durable Execution 默认启用。本地使用独立 SQLite 文件；当 DATABASE_URL 为 PostgreSQL 时，默认使用同一个 PostgreSQL 实例中的 LangGraph 官方 Checkpoint 表：
@@ -136,8 +140,6 @@ Durable Execution 默认启用。本地使用独立 SQLite 文件；当 DATABASE
 LANGGRAPH_CHECKPOINT_ENABLED=true
 LANGGRAPH_CHECKPOINT_DATABASE_URL=
 LANGGRAPH_CHECKPOINT_SQLITE_PATH=./.runtime/langgraph-checkpoints.sqlite
-LANGGRAPH_CHECKPOINT_NAMESPACE=supportgpt-workflow-v1
-LANGGRAPH_RESUME_LEASE_SECONDS=60
 ```
 
 LANGGRAPH_CHECKPOINT_DATABASE_URL 可显式覆盖 Saver 数据库。高风险请求在 Approval Gate 暂停；人工审批后使用原 execution ID 恢复。应用启动会扫描人工已决策但未完成的执行，恢复失败则保留 resume_pending，可由主管重试。不要手工删除正在等待审批的 Checkpoint 文件或表。
@@ -187,9 +189,6 @@ JEV_BASE_URL=https://api.typesafe.ai
 JEV_MODEL=jev-1.13.0
 JEV_TIMEOUT_SECONDS=3
 JEV_MAX_RETRIES=0
-JEV_INTENT_CONFIDENCE_THRESHOLD=0.75
-JEV_QA_CONFIDENCE_THRESHOLD=0.75
-JEV_NOUL_THRESHOLD=0.7
 # 只供 PR 门禁和测试：读录好的 Jev 分类，生产环境禁止
 # DECISION_PROVIDER=jev_replay
 # DECISION_REPLAY_PATH=evaluation/decision_recordings/jev_baseline.json
@@ -247,12 +246,8 @@ Jev 只用于线上封闭决策；当前不作为 Baseline、Ragas 或 DeepEval 
 LLM_FALLBACK_BASE_URL=<openai-compatible-endpoint>
 LLM_FALLBACK_API_KEY=<api-key>
 LLM_FALLBACK_MODEL_NAME=<fallback-model>
-RESILIENCE_LLM_TIMEOUT_SECONDS=20
 RESILIENCE_LLM_MAX_RETRIES=1
-RESILIENCE_RAG_TIMEOUT_SECONDS=5
-RESILIENCE_RAG_MAX_RETRIES=1
 RESILIENCE_TOOL_READ_MAX_RETRIES=1
-RESILIENCE_CIRCUIT_FAILURE_THRESHOLD=3
 RESILIENCE_CIRCUIT_RECOVERY_SECONDS=30
 ```
 
@@ -263,8 +258,6 @@ RESILIENCE_CIRCUIT_RECOVERY_SECONDS=30
 ```dotenv
 TOOL_POLICY_VERSION=tool-policy-v2.2
 TOOL_OUTBOX_WORKER_ENABLED=true
-TOOL_OUTBOX_POLL_INTERVAL_SECONDS=1
-TOOL_OUTBOX_BATCH_SIZE=20
 TOOL_OUTBOX_LEASE_SECONDS=30
 TOOL_OUTBOX_MAX_ATTEMPTS=5
 TOOL_OUTBOX_RETRY_BASE_SECONDS=1
@@ -312,7 +305,7 @@ QWEN3_GUARD_API_KEY=EMPTY
 QWEN3_GUARD_MODEL_NAME=Qwen/Qwen3Guard-Gen-0.6B
 ```
 
-风险阈值由 `RISK_MEDIUM_THRESHOLD`、`RISK_HIGH_THRESHOLD`、`RISK_CRITICAL_THRESHOLD`、`RISK_LOW_CONFIDENCE_THRESHOLD` 和 `RISK_QA_SCORE_THRESHOLD` 配置。安全检测不得因外部 Guard 服务不可用而使主 API 失败；降级场景会隔离不可信上下文并转人工。
+风险阈值由 `RISK_MEDIUM_THRESHOLD`、`RISK_HIGH_THRESHOLD`、`RISK_CRITICAL_THRESHOLD` 配置；低置信度阈值 `RISK_LOW_CONFIDENCE_THRESHOLD`（0.65）和 QA 分阈值 `RISK_QA_SCORE_THRESHOLD`（0.8）是代码里的固定值。安全检测不得因外部 Guard 服务不可用而使主 API 失败；降级场景会隔离不可信上下文并转人工。
 
 公网 Demo 额外遵循以下边界：
 
@@ -426,11 +419,6 @@ OTEL_COLLECTOR_LANGSMITH_PROJECT=supportgpt-enterprise
 
 ```dotenv
 MEMORY_ENABLED=true
-MEMORY_RECENT_MESSAGES=12
-MEMORY_CONTEXT_MAX_CHARS=4000
-MEMORY_SUMMARY_MAX_CHARS=1200
-MEMORY_SCAN_MESSAGES=48
-MEMORY_TTL_SECONDS=86400
 ```
 
 ## 测试
@@ -505,7 +493,7 @@ python scripts/run_online_reply_check.py --api-url <Railway 域名> --dry-run   
 python scripts/run_online_reply_check.py --api-url <Railway 域名> --confirm-live   # 25 条，带密钥约 3 分钟
 ```
 
-检查专用额度（2026-11-18 起）：公开入口按 IP 和访客限额（每分钟 `PUBLIC_CHAT_RATE_LIMIT_PER_MINUTE`、每天 `PUBLIC_CHAT_RATE_LIMIT_PER_DAY`），被拒的请求也计数，检查脚本和真实访客共用会互相挤占。Railway 上设置 `ONLINE_CHECK_KEY`（至少 32 个字符，生产环境启动时校验），本地 `.env` 放同一个值，脚本就带请求头 `X-SupportGPT-Check-Key` 走单独额度（`ONLINE_CHECK_RATE_LIMIT_PER_MINUTE` 默认 10、`ONLINE_CHECK_RATE_LIMIT_PER_DAY` 默认 300），不占公开额度。后端用恒定时间比较；密钥为空时不启用，错误密钥按公开访客处理。`X-SupportGPT-Test` 只是测试标记，不是凭证，任何人都能带，不能用来放行。密钥不进仓库，`.env.example` 只留空值。
+检查专用额度（2026-11-18 起）：公开入口按 IP 和访客限额（每分钟 `PUBLIC_CHAT_RATE_LIMIT_PER_MINUTE`、每天 `PUBLIC_CHAT_RATE_LIMIT_PER_DAY`），被拒的请求也计数，检查脚本和真实访客共用会互相挤占。Railway 上设置 `ONLINE_CHECK_KEY`（至少 32 个字符，生产环境启动时校验），本地 `.env` 放同一个值，脚本就带请求头 `X-SupportGPT-Check-Key` 走单独额度（`ONLINE_CHECK_RATE_LIMIT_PER_MINUTE` 默认 10、`ONLINE_CHECK_RATE_LIMIT_PER_DAY` 固定 300），不占公开额度。后端用恒定时间比较；密钥为空时不启用，错误密钥按公开访客处理。`X-SupportGPT-Test` 只是测试标记，不是凭证，任何人都能带，不能用来放行。密钥不进仓库，`.env.example` 只留空值。
 
 用例在 `evaluation/online_checks/reply_checks.json`（只含中文和英文）。每条检查状态、转人工原因、意图、Tool、回复语言、必须出现和禁止出现的内容、长度，以及回复里有没有残留 `[S1]` 这类内部引用。每条会新建 1 张线上工单并调用真实模型；检查完脚本凭本次反馈令牌调用撤回接口清理，结尾列出没清理掉的工单号。任何一条不通过或有工单没清理，退出码为 1。报告写到 `evaluation/reports/online_reply_check/`（不进 Git）。
 

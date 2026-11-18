@@ -58,7 +58,7 @@ Memory 通过现有 Analyzer `text`、Resolver `context` 和 QA `query/context` 
 }
 ```
 
-未知意图必须回退统一 `DEFAULT_INTENT`并降低置信度，不允许 Provider 创造新枚举值。`LLM_ANALYZER_MAX_TOKENS` 默认为 120。
+未知意图必须回退统一 `DEFAULT_INTENT`并降低置信度，不允许 Provider 创造新枚举值。`LLM_ANALYZER_MAX_TOKENS` 固定为 120（`src/config.py`）。
 
 ## Resolver Prompt
 
@@ -72,8 +72,8 @@ Memory 通过现有 Analyzer `text`、Resolver `context` 和 QA `query/context` 
 - Tool Result 仅保留生成回复必需的允许字段。
 - 生成前把实际使用的上下文保存为 `resolution_evidence`。QA 原样复用，不再另行选择文档、漏掉 `service_query` 或再次截短上下文。
 - 优先保留当前 Tool 的状态、异常和下一步，再分配 KB 与会话预算；按完整字段删除次要 Tool 数据，不能截断 JSON。KB 保留引用编号、来源和版本，会话历史明确标为非权威内容。
-- `LLM_RESOLVER_MAX_RAG_CHARS` 默认 5000。
-- `LLM_RESOLVER_MAX_TOOL_CHARS` 默认 2500。
+- `LLM_RESOLVER_MAX_RAG_CHARS` 固定 5000。
+- `LLM_RESOLVER_MAX_TOOL_CHARS` 固定 2500。
 - Tool / KB / 会话证据共同受 `LLM_QA_MAX_CONTEXT_CHARS`（默认 4000）限制；前两个配置是各自上限，不代表一定会用满。
 
 ### 输出约束
