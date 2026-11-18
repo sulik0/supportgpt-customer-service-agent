@@ -61,22 +61,22 @@ _ACCOUNT_INCIDENT = re.compile(
     r"登录不了|登不上|登陆不了|密码错误|密码不对"
 )
 # 明确投诉诉求；“怎么投诉 / 如何投诉”这类流程咨询不算。
-_COMPLAINT_REQUEST = re.compile(
-    r"(?:我要|我想|我们要|我们想|要|想|准备|必须|需要)投诉|投诉(?:你们|贵司|客服|公司)|"
-    r"\b(?:file|make|lodge|submit) (?:a |an |my )?(?:formal )?complaint\b|"
-    r"\b(?:i|we) (?:want to |would like to |need to |will )?complain\b"
-)
+# 投诉类词汇只在这里判断（`ACTION_OR_DISPUTE` 不再包含），出现即算投诉，
+# 再由 _COMPLAINT_INFORMATION 排除流程咨询。
+_COMPLAINT_REQUEST = re.compile(r"投诉|\bcomplain(?:t|ts|ing|ed)?\b")
 # 以监管、媒体、法律途径相威胁，或直接辱骂，同样按投诉处理。
 _COMPLAINT_THREAT = re.compile(
-    r"消协|12315|工商局|市场监管|曝光|找媒体|起诉|告你们|律师函|举报你们|维权|"
+    r"消协|12315|工商局|市场监管|曝光|找媒体|起诉|告你们|律师|举报|维权|"
     r"骗子|垃圾公司|黑店|"
     r"\b(?:report you|consumer protection|better business bureau|sue you|"
-    r"take legal action|legal action|my lawyer|go to the (?:media|press)|"
+    r"take legal action|legal action|lawyers?|lawsuit|sue|go to the (?:media|press)|"
     r"scam(?:mers?)?)\b"
 )
 _COMPLAINT_INFORMATION = re.compile(
     r"(?:怎么|如何|哪里|在哪|怎样|渠道|流程|方式).{0,8}投诉|"
-    r"\bhow (?:do|can|to|should)\b.{0,20}complain|\bwhere (?:do|can|to)\b.{0,20}complain"
+    r"投诉(?:的)?(?:电话|渠道|流程|方式|入口|政策|规则)|"
+    r"\bhow (?:do|can|to|should)\b.{0,20}complain|\bwhere (?:do|can|to)\b.{0,20}complain|"
+    r"\bcomplaints? (?:process|procedure|policy|channel|hotline)\b"
 )
 _WARRANTY_ACTION = re.compile(
     r"\b(?:file|open|start|submit) (?:a )?(?:warranty )?claim\b|"

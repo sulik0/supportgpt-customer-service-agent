@@ -72,3 +72,40 @@ async def test_plain_feedback_is_not_escalated(monkeypatch):
 
     assert state["priority"] == "low"
     assert state["risk_requires_human"] is False
+
+
+# 投诉类词汇只由投诉规则判断：问投诉流程不算“要办事”，真投诉仍按第 16 条转人工。
+def _billing_classification(text, jev_mode="information"):
+    from src.agents.analyzer import is_explicit_complaint
+    from src.agents.classification import build_classification
+
+    return build_classification(
+        text=text,
+        category=IntentType.BILLING_DISPUTE,
+        category_source="jev",
+        jev_status="accepted",
+        jev_analysis={"operation_mode": jev_mode},
+        complaint_rule=is_explicit_complaint(" ".join(text.lower().split())),
+        record_tool=None,
+    )
+
+
+@pytest.mark.parametrize(
+    "text",
+    ["请问怎么投诉扣费的问题", "扣费有问题，投诉电话是多少？", "How can I complain about a charge?"],
+)
+def test_asking_how_to_complain_is_not_an_action(text):
+    c = _billing_classification(text)
+    assert c["mode"] == "information"
+    assert c["complaint"] is False
+    assert c["handling"] != "human"
+
+
+@pytest.mark.parametrize(
+    "text",
+    ["扣费不对，我要投诉", "乱收费，我要找律师", "再不退钱我就去 12315 举报", "I will sue you over this charge"],
+)
+def test_complaint_words_still_require_human(text):
+    c = _billing_classification(text)
+    assert c["complaint"] is True
+    assert (c["handling"], c["principle"]) == ("human", 16)

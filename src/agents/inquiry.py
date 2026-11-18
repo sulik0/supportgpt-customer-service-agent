@@ -11,7 +11,9 @@ ACTION_OR_DISPUTE = re.compile(
     r"我要退|要求退|帮我退|给我退|直接退|立即退|马上退|退给我|退我|"
     r"想退|想要退|(?:我要|我想|帮我|给我|请|麻烦)(?:立即|现在|马上|直接)?(?:申请|办理)退|"
     r"退\s*\d|退款工具|无需审批|不用审批|跳过审批|免审批|"
-    r"赔偿|赔付|补偿|投诉|举报|曝光|起诉|律师|消协|12315|"
+    # 投诉、举报、法律/监管/媒体威胁不在这里判断，统一由 Analyzer 的投诉规则处理
+    # （它会排除“怎么投诉”这类流程咨询）。
+    r"赔偿|赔付|补偿|"
     # 只出现“取消/撤销/撤回”可能是在问政策（第 11 条），要有办理说法才算。
     r"(?:我|我们)?(?:要|想|想要|需要|要求|决定)(?:立即|现在|马上|直接)?(?:取消|撤销|撤回)|"
     r"(?:取消|撤销|撤回)(?:掉|它|吧|了吧)|"
@@ -43,7 +45,7 @@ ACTION_OR_DISPUTE = re.compile(
     r"\bi (?:want to |need to |will |would like to |am going to )?dispute\b|"
     r"\b(?:file|open|raise|start|submit)(?:ing)? (?:a |my )?dispute\b|"
     r"\bdisput(?:e|ing) (?:this|the|that|my) (?:charge|payment|invoice|bill|transaction)\b|"
-    r"\b(?:chargeback|compensat\w+|complain\w*|lawsuit|lawyer|sue|fraud|scam|"
+    r"\b(?:chargeback|compensat\w+|fraud|scam|"
     r"overcharged|charged twice|double charged|wrong(?:ly)? charged?|"
     r"incorrect(?:ly)? charged?|without approval|skip approval|do not execute|"
     r"don't execute)\b",

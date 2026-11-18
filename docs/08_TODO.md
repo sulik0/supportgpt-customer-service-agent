@@ -169,7 +169,7 @@
 - [x] `errors` 列表的解读收拢到 `src/agents/signals.py`：原来 8 处各自用 `"Security threat" in ...` 判断安全拦截，Risk Engine 把 QA 幻觉告警也算成 `workflow_error`。现在统一用 `is_security_blocked` / `service_errors`，QA 告警不再算处理异常（分数不变，幻觉本身已计 0.9）。
 - [x] 回复语言收拢到 `src/models/language.py`：原来 7 处用 4 种规则，只有范围外说明认“请用英语回答”，降级回复、安全拦截文案、公开状态说明都只看原文是否含中文。现在都先认显式要求。
 - [x] QA 用的权威依据判断从 `src/models/intents.py` 移到 `src/agents/authority.py`；删除没有读取方的 `model_sees_action` 字段；`/customer-context` 的 `last_interaction` 不再写死为“两天前”，改为最近一张历史工单的创建时间；清理 `src` 下（除 `evaluation/`）pyflakes 报出的未使用导入和变量。仅 Mock 测试验证。
-- [ ] 规则不一致待定：`ACTION_OR_DISPUTE`（`src/agents/inquiry.py`）含“投诉/举报/曝光/起诉/律师/消协/12315”，与 Analyzer 的 `_COMPLAINT_THREAT` 重复；“请问怎么投诉扣费的问题”投诉规则判为流程咨询，办事规则却判为“要办事”，账务类会按第 5 条转人工。改动会变更处理结果，需要用户确认并用真实模型复测。
+- [x] 2026-11-19 投诉类词汇只由投诉规则判断（用户决定）：`ACTION_OR_DISPUTE` 去掉“投诉/举报/曝光/起诉/律师/消协/12315”和 complain/lawsuit/lawyer/sue；Analyzer 投诉规则改为出现“投诉/complain”即算，再排除“怎么投诉、投诉电话/渠道/流程”等流程咨询，并补上“律师、举报、lawsuit、sue”。“请问怎么投诉扣费的问题”不再按第 5 条转人工；“我要找律师”从只在写操作类别转人工改为任何类别都按第 16 条转人工。Mock 门禁 100/100；真实模型回归套件（deepseek-flash + Jev，21 条）20/21，唯一失败仍是 `baseline-refund-v2-fee` 未调订单历史，与本次无关。线上回复检查新增 `complaint-how-to-zh`、`complaint-lawyer-zh`。
 - [ ] `errors` 仍是字符串通道，长期应改为结构化字段（安全拦截、QA 告警、处理异常分开存）；要兼容旧 Checkpoint。
 - [ ] 线上没有旧 Checkpoint 后，删除 Risk Engine 的 `_legacy_input_signals` 和 `read_only_inquiry` 兼容字段。
 - [ ] `src/agents/graph.py`（1087 行）、`src/tools/governance.py`（1222 行）偏大；`src/evaluation/` 的 pyflakes 告警未清理。
