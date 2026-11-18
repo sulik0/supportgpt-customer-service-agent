@@ -39,3 +39,4 @@ pnpm-debug.log*
 *.swp
 .DS_Store
 Thumbs.db
+docs/test_catalog.html
