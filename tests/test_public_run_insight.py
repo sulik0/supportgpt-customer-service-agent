@@ -83,7 +83,7 @@ async def test_insight_only_projects_safe_persisted_fields(
     client, db_session, monkeypatch
 ):
     run_id, token = await saved_run(db_session)
-    import src.main as main
+    import src.api.runtime as main
 
     monkeypatch.setattr(
         main,

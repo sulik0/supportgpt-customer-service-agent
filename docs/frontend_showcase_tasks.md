@@ -168,7 +168,7 @@
 ```
 目标：在人工处理台能完整走一遍 提议 → 另一人审批 → 执行 → 查看状态。
 
-- 先读 src/main.py 里 /tool-actions 的提议、/decision、/execute、/compensate、
+- 先读 src/api/tool_actions.py 里 /tool-actions 的提议、/decision、/execute、/compensate、
   GET /tool-actions、/tool-audits、/tool-outbox 的请求和响应 Model，以及
   src/tools/governance.py、action_state_machine.py。不改后端的状态机和权限。
 - client.js 补齐这些接口的调用。

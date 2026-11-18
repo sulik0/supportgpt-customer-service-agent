@@ -267,38 +267,14 @@ async def test_remaining_fastapi_routes(
     assert list_res.status_code == 200
     assert len(list_res.json()) > 0
 
-    # 3. Summarize ticket
-    sum_res = await client.post(
+    # 3. 已删除的旧接口不再提供
+    for path in (
         "/summarize-ticket",
-        json={"ticket_id": ticket_id, "kb_version": "v1"},
-        headers=agent_headers,
-    )
-    assert sum_res.status_code == 200
-    assert sum_res.json()["ticket_id"] == ticket_id
-
-    # 4. Suggest response
-    sug_res = await client.post(
         "/suggest-response",
-        json={"ticket_id": ticket_id, "kb_version": "v1"},
-        headers=agent_headers,
-    )
-    assert sug_res.status_code == 200
-    assert sug_res.json()["ticket_id"] == ticket_id
-
-    # 5. Analyze sentiment
-    sent_res = await client.post(
         "/analyze-sentiment",
-        json={"ticket_id": ticket_id, "kb_version": "v1"},
-        headers=agent_headers,
-    )
-    assert sent_res.status_code == 200
-    assert sent_res.json()["ticket_id"] == ticket_id
-
-    # 6. Recommend escalation
-    esc_res = await client.post(
         "/recommend-escalation",
-        json={"ticket_id": ticket_id, "kb_version": "v1"},
-        headers=agent_headers,
-    )
-    assert esc_res.status_code == 200
-    assert esc_res.json()["ticket_id"] == ticket_id
+    ):
+        res = await client.post(
+            path, json={"ticket_id": ticket_id, "kb_version": "v1"}, headers=agent_headers
+        )
+        assert res.status_code == 404

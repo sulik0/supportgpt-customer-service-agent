@@ -360,6 +360,8 @@ QWEN3_GUARD_MODEL_NAME=Qwen/Qwen3Guard-Gen-0.6B
 | `GET /observability/runs` | 分页查询 Agent Run 摘要；可传 `ticket_id` 精确筛选 | `manager/admin` |
 | `POST /evaluate-response` | 运行单次评估 | `agent+`；关联 Run 时需 `manager/admin` |
 
+路由实现按领域放在 `src/api/`，`src/main.py` 只负责应用、生命周期、中间件和挂载。2026-11-18 删除了 `/summarize-ticket`、`/suggest-response`、`/analyze-sentiment`、`/recommend-escalation`：前端和 MCP 都不调用，而且每次都对已有工单重跑完整 Workflow。
+
 运行摘要仅在 `PUBLIC_DEMO_ISOLATION_ENABLED=true` 时开放，否则返回 404。前端用 `X-Feedback-Token` 请求头发送本次 `/support/requests` 响应的令牌（正常与 `pending_human` 均返回），不放入 URL；CORS 允许该请求头。校验复用 `/feedback/user` 的 SHA-256 与恒定时间比较，缺失或不匹配返回 403，记录不存在返回 404；同一 `public_rate_limiter` 按 IP / 访客执行 `PUBLIC_READ_RATE_LIMIT_PER_MINUTE` 限额，超额返回 429。响应为 `Cache-Control: no-store`。
 
 白名单字段为 `workflow_path`、`intent`、`department`、`priority`、`analyzer_confidence`、`skill_selection`（名称/版本）、`tool_calls`（名称/状态/耗时）、`citations`（仅来源）、`qa_score`、`risk_level`、固定原因码 `review_reasons`、`approval_required`、`latency_seconds` 和 `tokens_total`。不返回输入、输出、草稿、异常正文、工具参数、文档正文或 Trace。旧记录缺失的观测值返回 `null`；未执行 QA 不显示为零分。
@@ -575,7 +577,7 @@ Error Analysis 只读取本次 JSON 中 `behavior_evaluation.passed=false` 的 C
 
 ## Feedback Pipeline
 
-`/chat`、`/suggest-response` 和工单 Workflow 将结果持久化为 AgentRun；用户评价、人工修正和 Evaluation 以 FeedbackEvent 关联同一 `agent_run_id` 与 `trace_id`。
+`/chat` 和工单 Workflow 将结果持久化为 AgentRun；用户评价、人工修正和 Evaluation 以 FeedbackEvent 关联同一 `agent_run_id` 与 `trace_id`。
 
 导出脱敏后的训练候选：
 

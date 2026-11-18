@@ -84,7 +84,7 @@ async def test_create_ticket_runs_agent_once_and_detail_only_reads_saved_result(
             "latency_seconds": 0.25,
         }
 
-    monkeypatch.setattr("src.main.run_agent_workflow", fake_workflow)
+    monkeypatch.setattr("src.api.runtime.run_agent_workflow", fake_workflow)
     create_response = await client.post(
         "/tickets",
         json={
@@ -170,7 +170,7 @@ async def test_public_support_request_returns_only_safe_answer(
     async def fake_workflow(state):
         return _public_workflow_output(state, approval_required=False)
 
-    monkeypatch.setattr("src.main.run_agent_workflow", fake_workflow)
+    monkeypatch.setattr("src.api.runtime.run_agent_workflow", fake_workflow)
     response = await client.post(
         "/support/requests",
         json={"customer_id": "cust_101", "message": "如何查看订单状态？"},
@@ -218,7 +218,7 @@ async def test_public_support_request_hides_draft_and_enters_staff_queue(
         output.update({"risk_level": "high", "risk_requires_human": True})
         return output
 
-    monkeypatch.setattr("src.main.run_agent_workflow", fake_workflow)
+    monkeypatch.setattr("src.api.runtime.run_agent_workflow", fake_workflow)
     response = await client.post(
         "/support/requests",
         json={"customer_id": "cust_101", "message": "请处理高风险退款。"},
@@ -268,7 +268,7 @@ async def test_readonly_billing_question_shows_preliminary_answer_and_keeps_revi
         )
         return output
 
-    monkeypatch.setattr("src.main.run_agent_workflow", fake_workflow)
+    monkeypatch.setattr("src.api.runtime.run_agent_workflow", fake_workflow)
     session_id = "preliminary-session-0001"
     response = await client.post(
         "/support/requests",
@@ -328,7 +328,7 @@ async def test_preliminary_answer_is_not_fed_into_next_turn_prompt(
         )
         return output
 
-    monkeypatch.setattr("src.main.run_agent_workflow", fake_workflow)
+    monkeypatch.setattr("src.api.runtime.run_agent_workflow", fake_workflow)
     body = {"customer_id": "cust_101", "session_id": "preliminary-session-0002"}
     await client.post("/support/requests", json={**body, "message": "发票开了吗？"})
     await client.post("/support/requests", json={**body, "message": "金额是多少？"})
@@ -350,7 +350,7 @@ async def test_requester_can_withdraw_own_request_and_leave_staff_queue(
     from src.config import settings
 
     monkeypatch.setattr(settings, "PUBLIC_DEMO_ISOLATION_ENABLED", True)
-    monkeypatch.setattr("src.main.run_agent_workflow", fake_workflow)
+    monkeypatch.setattr("src.api.runtime.run_agent_workflow", fake_workflow)
     created = (
         await client.post(
             "/support/requests",

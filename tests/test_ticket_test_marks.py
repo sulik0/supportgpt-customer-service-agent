@@ -50,7 +50,7 @@ def _workflow(approval_required: bool):
 async def test_ticket_created_with_test_header_is_hidden_from_staff_views(
     client: AsyncClient, monkeypatch
 ):
-    monkeypatch.setattr("src.main.run_agent_workflow", _workflow(True))
+    monkeypatch.setattr("src.api.runtime.run_agent_workflow", _workflow(True))
     real = (
         await client.post(
             "/support/requests", json={"customer_id": "cust_101", "message": "真实用户的退款请求"}
@@ -92,7 +92,7 @@ async def test_ticket_created_with_test_header_is_hidden_from_staff_views(
 
 @pytest.mark.asyncio
 async def test_request_without_header_is_not_marked(client: AsyncClient, monkeypatch, db_session):
-    monkeypatch.setattr("src.main.run_agent_workflow", _workflow(False))
+    monkeypatch.setattr("src.api.runtime.run_agent_workflow", _workflow(False))
     await client.post("/support/requests", json={"customer_id": "cust_101", "message": "普通问题"})
     # 只含非法字符的请求头值不算测试标记。
     await client.post(

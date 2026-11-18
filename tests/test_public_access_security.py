@@ -290,7 +290,7 @@ async def test_oversized_public_request_is_rejected_before_agent(
         agent_called = True
         raise AssertionError("Agent must not run for oversized bodies")
 
-    monkeypatch.setattr("src.main._process_ticket_with_agent", should_not_run)
+    monkeypatch.setattr("src.api.runtime.process_ticket_with_agent", should_not_run)
     body = json.dumps(
         {"customer_id": "cust_101", "message": "x" * 70000}
     ).encode("utf-8")

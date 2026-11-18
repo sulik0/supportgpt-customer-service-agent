@@ -285,64 +285,7 @@ class TicketAgentResultResponse(BaseModel):
     created_at: datetime
 
 
-class TicketSummaryResponse(BaseModel):
-    """定义工单摘要、关键问题和紧急程度结果。"""
-
-    ticket_id: int
-    summary: str
-    key_issues: List[str]
-    sentiment: str
-    priority: str
-    urgency_score: float
-
-
-class TicketSentimentResponse(BaseModel):
-    """定义工单情绪、置信度和优先级分析结果。"""
-
-    ticket_id: int
-    sentiment: str
-    confidence_score: float
-    detected_emotions: List[str]
-    priority: str
-
-
-class TicketEscalationResponse(BaseModel):
-    """定义工单升级建议、目标部门和 SLA 信息。"""
-
-    ticket_id: int
-    escalation_recommended: bool
-    escalation_reason: str
-    suggested_department: str
-    sla_hours: float
-
-
 # --- RESOLUTION SCHEMAS ---
-class SuggestResponseRequest(BaseModel):
-    """定义生成工单建议回复所需的请求参数。"""
-
-    ticket_id: int
-    kb_version: str = Field(default="v1")
-
-
-class SuggestResponseResponse(BaseModel):
-    """定义建议回复、引用、工具上下文和 QA 结果。"""
-
-    ticket_id: int
-    suggested_response: str
-    tool_context: Dict[str, Any] = Field(default_factory=dict)
-    tool_calls: List[ToolCallTrace] = Field(default_factory=list)
-    citations: List[Citation]
-    qa_score: float
-    hallucination_detected: bool
-    analyzer_confidence: float = 1.0
-    risk_level: str = "low"
-    risk_score: float = 0.0
-    risk_reasons: List[str] = Field(default_factory=list)
-    cost_metadata: CostMetadata
-    agent_run_id: Optional[str] = None
-    feedback_token: Optional[str] = None
-
-
 # --- CUSTOMER CONTEXT SCHEMAS ---
 class CustomerContextRequest(BaseModel):
     """定义查询客户业务上下文的请求。"""

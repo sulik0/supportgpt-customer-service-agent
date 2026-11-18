@@ -1,6 +1,6 @@
 """安全拦截与真实处理异常在用户侧的文案区分。"""
 
-from src.main import _public_review_feedback
+from src.api.public import _public_review_feedback
 
 
 def test_security_block_is_risk_review_even_with_errors():

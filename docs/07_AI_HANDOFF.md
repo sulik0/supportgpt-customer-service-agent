@@ -85,7 +85,7 @@
 
 | 范围 | 目录/文件 |
 |---|---|
-| FastAPI 路由与启动 | `src/main.py` |
+| FastAPI 路由与启动 | `src/main.py`（启动、中间件、挂载）、`src/api/`（各领域路由） |
 | 环境配置 | `src/config.py` |
 | LangGraph Workflow / AgentState | `src/agents/graph.py` |
 | Checkpoint / Durable Execution | `src/agents/checkpointing.py`、`src/agents/durable_execution.py` |

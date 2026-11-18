@@ -526,7 +526,7 @@ Risk Engine 位于 `src/risk/engine.py`，是独立于 Prompt、业务 LLM Provi
 | 最终选择 | 当前规则规模较小，采用纯 Python 独立模块，无外部依赖、离线可复现、单元测试稳定 |
 | 工程权衡 | 规则可解释但覆盖有限；Qwen3Guard 增加语义覆盖的同时带来最多三次额外分类调用与服务依赖；安全威胁阻断自动化，`Controversial` 默认转人工 |
 
-`/chat` 和 `/suggest-response` 响应会返回 Analyzer 置信度以及风险等级、分数和原因；OpenTelemetry Trace 与结构化日志保留风险字段，Metrics 记录最终风险评估数和分数分布。
+`/chat` 响应会返回 Analyzer 置信度以及风险等级、分数和原因；OpenTelemetry Trace 与结构化日志保留风险字段，Metrics 记录最终风险评估数和分数分布。
 
 ## 14. Human-in-the-Loop
 

@@ -71,7 +71,7 @@ python scripts/run_postgres_tool_drill.py --confirm-isolated-database   # 需要
 
 ### 请求主链
 
-`src/main.py`（约 2000 行，包含全部路由和 lifespan）→ `src/agents/graph.py` 的 `run_agent_workflow`。Graph 是固定 Workflow，不是自由 Agent：
+`src/main.py`（应用、lifespan、中间件和路由挂载）→ `src/api/` 下各路由文件（`public.py` 公开咨询、`tickets.py` 工单、`agent.py` 员工侧对话、`approvals.py`、`tool_actions.py`、`admin.py`、`auth.py`；共用的 Workflow 运行和 AgentRun 记录在 `runtime.py`）→ `src/agents/graph.py` 的 `run_agent_workflow`。Graph 是固定 Workflow，不是自由 Agent：
 
 ```
 analyzer → skill_selector → context_enrichment（tooling ∥ retriever）→ resolver → qa → escalation → approval_gate

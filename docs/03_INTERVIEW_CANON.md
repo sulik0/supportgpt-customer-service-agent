@@ -229,7 +229,7 @@ Prompt Injection 不再只是英文关键词检测，当前实现为确定性多
 
 是否转人工由 22 条处理原则（`docs/10_HANDLING_PRINCIPLES.md`）直接决定，优先级只决定处理时限。独立 `RiskEngine` 是唯一的转人工判断点，综合处理原则的结论、安全分数、依赖降级、QA、幻觉和 Workflow 错误；Escalation 只读它的结论。默认风险阈值为 `medium >= 0.4`、`high >= 0.7`、`critical >= 0.9`；Analyzer 低置信度阈值为 `0.65`，QA 阈值为 `0.8`。`high` / `critical` 要求人工处理，安全威胁额外阻断自动化。
 
-`/chat` 与 `/suggest-response` 会返回 Analyzer 置信度、风险等级、分数和原因。Trace 和结构化日志记录风险字段，OpenTelemetry Metrics 记录最终风险评估数与分数分布。
+`/chat` 会返回 Analyzer 置信度、风险等级、分数和原因。Trace 和结构化日志记录风险字段，OpenTelemetry Metrics 记录最终风险评估数与分数分布。
 
 可以说已实现“确定性规则 + Qwen3Guard-Gen-0.6B + Risk Engine”可降级链路；不能说 Guard 已在生产强制启用、阈值已经真实数据校准，或已建成策略中心与持久化安全事件平台。
 
@@ -317,7 +317,7 @@ CI/CD 采用两级门禁：PR/Push 强制使用 Mock Provider 回放固定 100 �
 - 人工审批的通过、修改和拒绝结果自动写入 `FeedbackEvent`；人工修改可形成 SFT 与 DPO 候选。
 - 可信评测结果可关联 Agent Run；离线导入同时要求 Agent Evaluation 通过、citation 命中和 RAG 平均分达到 `0.75`。
 - 导出脚本生成脱敏、去重、原子写入且权限为 `0600` 的 `sft_candidates.jsonl`、`dpo_candidates.jsonl` 和 `manifest.json`。
-- `/chat` 与 `/suggest-response` 的 Feedback 采集使用独立事务并 fail-open；`/support/requests` 与工作台的 `POST /tickets` 将 AgentRun 作为详情结果来源，必须在 AgentRun 和审批关联写入成功后才返回成功，避免产生没有可读处理结果的成功响应。
+- `/chat` 的 Feedback 采集使用独立事务并 fail-open；`/support/requests` 与工作台的 `POST /tickets` 将 AgentRun 作为详情结果来源，必须在 AgentRun 和审批关联写入成功后才返回成功，避免产生没有可读处理结果的成功响应。
 
 本阶段只生成训练候选，不执行 SFT / DPO 训练，不包含 Dataset Registry、人工标注平台、训练任务编排、模型自动发布或 vLLM Serving。
 

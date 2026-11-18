@@ -227,7 +227,7 @@ resolved / closed --reopen--> in_progress
 | 模块 | 路径 | 模块会做什么 |
 |---|---|---|
 | MCP 入口 | `src/mcp_server/`、`scripts/run_mcp_server.py` | 标准 MCP 发现与调用，转发现有员工 API；独立依赖、错误转换和 stdio 生命周期 |
-| API 入口 | `src/main.py` | FastAPI 应用、鉴权、聊天、工单、审批、评测、Metrics 与 HTTP Trace |
+| API 入口 | `src/main.py`、`src/api/` | `main.py` 负责应用、生命周期、中间件（Metrics 与 HTTP Trace）和路由挂载；`src/api/` 按领域放路由（鉴权、管理、员工对话与评测、审批、写 Tool、公开咨询、工单），`runtime.py` 放共用的 Workflow 运行与 AgentRun 记录 |
 | Agent Graph | `src/agents/graph.py` | `AgentState`、节点编排、安全条件路由、token/成本/延迟汇总 |
 | Skill Framework | `src/skills/`、`src/agents/skill_selector.py` | Skill 协议、Registry、Intent 选择、Tool Allowlist 与版本快照 |
 | Checkpoint | `src/agents/checkpointing.py` | 根据环境管理 Memory / SQLite / PostgreSQL Saver 及其连接生命周期 |
