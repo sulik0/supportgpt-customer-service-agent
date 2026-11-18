@@ -2,6 +2,7 @@ import logging
 import time
 from typing import Any, Dict
 
+from src.agents.signals import is_security_blocked
 from src.guardrails.prompt_injection import analyze_prompt_injection
 from src.guardrails.qwen3_guard import merge_qwen3_guard_result, qwen3_guard
 from src.guardrails.security_policy import build_security_block
@@ -30,7 +31,7 @@ class KnowledgeRetrievalAgent:
         start_time = time.time()
         logger.info(f"Retriever Node started for version: {state.get('kb_version')}")
 
-        if "Security threat" in "".join(state.get("errors", [])):
+        if is_security_blocked(state):
             # Bypass node if security threats are already detected
             return state
 

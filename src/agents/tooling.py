@@ -4,6 +4,7 @@ import logging
 import time
 from typing import Any, Dict
 
+from src.agents.signals import is_security_blocked
 from src.agents.tool_planner import tool_planner
 from src.config import settings
 from src.guardrails.prompt_injection import analyze_prompt_injection
@@ -76,7 +77,7 @@ class ToolingAgent:
             else str(state.get("skill_version"))
         )
 
-        if "Security threat" in "".join(state.get("errors", [])):
+        if is_security_blocked(state):
             return state
 
         logger.info(

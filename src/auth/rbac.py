@@ -7,7 +7,6 @@ from typing import List, Optional
 from src.database import get_db
 from src.models.db_models import User
 from src.auth.jwt import decode_access_token
-from src.models.schemas import TokenData
 
 security = HTTPBearer()
 optional_security = HTTPBearer(auto_error=False)

@@ -1,6 +1,5 @@
 """员工侧 Agent 接口：对话、客户上下文、回复评估、反馈和运行记录。"""
 
-import datetime
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, Response, status
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -154,7 +153,10 @@ async def get_customer_context(
         tier=profile["tier"],
         open_tickets_count=profile["open_tickets_count"],
         recent_orders=order_schemas,
-        last_interaction=datetime.datetime.utcnow() - datetime.timedelta(days=2),
+        # 取最近一张历史工单的创建时间；没有历史工单时不编造。
+        last_interaction=max(
+            (t["created_at"] for t in history if t.get("created_at")), default=None
+        ),
     )
 
 

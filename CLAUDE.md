@@ -102,6 +102,7 @@ analyzer → skill_selector → context_enrichment（tooling ∥ retriever）→
 - RAG（`src/rag/vector_store.py`）是 ChromaDB 向量召回加进程内 BM25 和轻量 rerank，默认 Mock Embedding。
 - Memory（`src/memory/`）以 SQL 为事实源，Redis 只是带 revision 的缓存。只有 final 消息进入下一轮 Prompt；订单、退款、物流状态必须重新调 Tool，不能从 Memory 读。
 - 工单状态只经 `src/tickets/state_machine.py` 流转。
+- State 的 `errors` 同时装安全拦截、QA 告警和处理异常，只通过 `src/agents/signals.py` 判断，不要对字符串做 `in` 匹配。系统固定文案和语言指令的语言只用 `src/models/language.py` 判断。
 - Trace 和 Metrics 只用 OpenTelemetry（`src/observability/`），上报前脱敏，失败不影响主流程。不要引入 LangSmith SDK 的 `traceable`。
 - `src/mcp_server/` 是独立 stdio 进程，只通过 HTTP 调员工 API，不导入后端代码；依赖在 `requirements/mcp.txt`。
 - 数据库表由启动期 `create_all` 创建，没有 Alembic。

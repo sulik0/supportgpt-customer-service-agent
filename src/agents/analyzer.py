@@ -225,7 +225,6 @@ class TicketAnalyzerAgent:
                 "analyzer_strategy": "rule",
                 "classification": classification,
                 "read_only_inquiry": False,
-                "model_sees_action": False,
                 **scope_context_updates(scope_reason, "rule"),
             }
             assessment = risk_engine.assess(next_state, stage="input")
@@ -344,8 +343,6 @@ class TicketAnalyzerAgent:
                     in {IntentType.BILLING_DISPUTE, IntentType.OUTAGE_REPORT}
                     and classification["handling"] == AUTO_ANSWER
                 ),
-                "model_sees_action": classification["mode_source"] == "jev"
-                and classification["mode"] == "action",
                 "intent": normalized_intent,
                 "department": defaults.department,
                 "analyzer_confidence": analyzer_confidence,

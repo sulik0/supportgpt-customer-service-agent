@@ -1,12 +1,10 @@
 """输入与间接 Prompt Injection 的统一阻断策略。"""
 
-import re
 from typing import Any, Iterable, Mapping
 
+from src.agents.signals import security_error
+from src.models.language import reply_language
 from src.risk.engine import risk_engine
-
-
-_CHINESE_PATTERN = re.compile(r"[\u4e00-\u9fff]")
 
 
 def build_security_block(
@@ -19,7 +17,7 @@ def build_security_block(
 ) -> dict[str, Any]:
     """生成不暴露敏感原文的统一安全阻断状态。"""
     user_text = f"{state.get('subject', '')} {state.get('description', '')}"
-    use_chinese = bool(_CHINESE_PATTERN.search(user_text))
+    use_chinese = reply_language(user_text) == "zh"
     response = (
         "出于系统安全限制，我无法执行该请求，已转交人工审核。"
         if use_chinese
@@ -29,7 +27,7 @@ def build_security_block(
     blocked = {
         **state,
         "errors": list(state.get("errors", []))
-        + [f"Security threat: {threat_type} detected in {source}."],
+        + [security_error(threat_type, source)],
         "sentiment": "negative",
         "priority": "urgent",
         "security_threat_detected": True,

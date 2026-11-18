@@ -3,6 +3,7 @@ import re
 from abc import ABC, abstractmethod
 from typing import Dict, Any, List, Tuple
 from src.config import settings
+from src.models.language import reply_language, requested_language
 from src.models.intents import (
     DEFAULT_INTENT,
     IntentType,
@@ -15,7 +16,7 @@ from src.observability.tracing import (
 )
 from src.resilience.executor import resilience_executor
 from src.resilience.policies import llm_policy, tool_planner_policy
-from src.promptops.defaults import RESOLUTION_LANGUAGE_POLICY, RESOLUTION_OUTPUT_POLICY
+from src.promptops.defaults import RESOLUTION_OUTPUT_POLICY
 from src.promptops.runtime import active_bundle
 
 
@@ -191,24 +192,6 @@ def _normalize_ticket_analysis(analysis: Dict[str, Any]) -> Dict[str, Any]:
     return normalized
 
 
-_ENGLISH_REQUESTS = (
-    "用英文",
-    "用英语",
-    "使用英文",
-    "英文回复",
-    "reply in english",
-    "respond in english",
-    "answer in english",
-)
-_CHINESE_REQUESTS = (
-    "用中文",
-    "用汉语",
-    "使用中文",
-    "中文回复",
-    "reply in chinese",
-    "respond in chinese",
-    "answer in chinese",
-)
 _ENGLISH_HINT_WORDS = re.compile(
     r"\b(?:the|is|are|my|me|can|could|you|your|i|we|to|of|what|where|how|please|"
     r"order|status|account|refund|help|tell|need|not|with|for|and)\b",
@@ -218,12 +201,7 @@ _ENGLISH_HINT_WORDS = re.compile(
 
 def _mock_uses_chinese(text: str) -> bool:
     """让 Mock 在中英文演示中遵循当前输入和显式切换要求。"""
-    lowered = text.lower()
-    if any(item in lowered for item in _ENGLISH_REQUESTS):
-        return False
-    if any(item in lowered for item in _CHINESE_REQUESTS):
-        return True
-    return any("\u4e00" <= char <= "\u9fff" for char in text)
+    return reply_language(text) == "zh"
 
 
 def resolution_language_directive(description: str) -> str:
@@ -231,8 +209,7 @@ def resolution_language_directive(description: str) -> str:
 
     用户显式指定回复语言、或无法可靠判断（如其他语种）时返回空串，交给 Prompt 规则处理。
     """
-    lowered = description.lower()
-    if any(item in lowered for item in (*_ENGLISH_REQUESTS, *_CHINESE_REQUESTS)):
+    if requested_language(description):
         return ""
     cjk = sum("\u4e00" <= char <= "\u9fff" for char in description)
     latin = sum(char.isascii() and char.isalpha() for char in description)

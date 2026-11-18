@@ -115,7 +115,7 @@ def test_review_message_follows_customer_language():
 
 def test_multi_intent_draft_that_defers_unsupported_topic_is_not_hallucination():
     from src.agents.quality_assurance import quality_assurance_agent as qa_agent
-    from src.models.intents import defers_unsupported_topic
+    from src.agents.authority import defers_unsupported_topic
 
     query = "我想查一下 ORD-12002 的发票，顺便问下网关设备保修多久，另外退货怎么操作？"
     draft = (

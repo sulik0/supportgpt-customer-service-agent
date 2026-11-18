@@ -2,7 +2,9 @@ import time
 import logging
 from typing import Dict, Any
 
+from src.agents.signals import is_security_blocked
 from src.llm.provider import llm_provider
+from src.models.language import reply_language
 from src.observability.metrics import AGENT_EXECUTION_DURATION_SECONDS
 from src.agents.evidence import build_resolution_evidence, compact_tool_context
 from src.agents.record_queries import requested_record_tool
@@ -21,7 +23,7 @@ class ResolutionAgent:
         start_time = time.time()
         logger.info(f"Resolver Node started for ticket_id: {state.get('ticket_id')}")
 
-        if "Security threat" in "".join(state.get("errors", [])):
+        if is_security_blocked(state):
             return state
 
         if is_scope_boundary_request(state):
@@ -52,7 +54,7 @@ class ResolutionAgent:
             and data.get("status") in {"found", "not_found"}
             and isinstance(data.get("records"), list)
         ):
-            chinese = any("\u4e00" <= char <= "\u9fff" for char in description)
+            chinese = reply_language(description) == "zh"
             return {
                 **state,
                 "suggested_response": (
@@ -120,7 +122,7 @@ class ResolutionAgent:
     @staticmethod
     def _empty_response_fallback(description: str) -> str:
         """模型返回空内容时给出安全、可继续的澄清回复。"""
-        if any("\u4e00" <= char <= "\u9fff" for char in description):
+        if reply_language(description) == "zh":
             return "请补充您遇到的具体问题或操作目标，我会继续为您查询。"
         return (
             "Please describe the specific support issue or task you need help with, "
@@ -130,7 +132,7 @@ class ResolutionAgent:
     @staticmethod
     def _failure_response(description: str) -> str:
         """依赖恢复失败时使用当前输入语言给出保守回复。"""
-        if any("\u4e00" <= char <= "\u9fff" for char in description):
+        if reply_language(description) == "zh":
             return "抱歉，当前暂时无法生成可靠回复，已转交人工客服复核。"
         return (
             "I’m sorry, but I cannot generate a reliable response right now. "

@@ -16,6 +16,7 @@ from src.agents.resolver import resolution_agent
 from src.agents.retriever import knowledge_retriever_agent
 from src.agents.skill_selector import skill_selector_agent
 from src.agents.scope import is_scope_boundary_request
+from src.agents.signals import is_security_blocked
 from src.agents.tooling import tooling_agent
 from src.config import settings
 from src.models.intents import DEFAULT_INTENT, IntentType
@@ -118,7 +119,6 @@ class AgentState(TypedDict):
     risk_block_automation: bool
     classification: Dict[str, Any]
     read_only_inquiry: bool
-    model_sees_action: bool
     operator_role: str
     tool_context: Dict[str, Any]
     tool_calls: List[Dict[str, Any]]
@@ -662,8 +662,7 @@ def _is_automation_blocked(state: AgentState) -> bool:
     """对安全威胁使用统一的自动化阻断条件。"""
     return (
         bool(state.get("risk_block_automation"))
-        or bool(state.get("security_threat_detected"))
-        or "Security threat" in "".join(state.get("errors", []))
+        or is_security_blocked(state)
     )
 
 
@@ -815,7 +814,6 @@ def build_ticket_state(initial_state: Dict[str, Any]) -> AgentState:
         "risk_block_automation": False,
         "classification": {},
         "read_only_inquiry": False,
-        "model_sees_action": False,
         "operator_role": initial_state.get("operator_role", "agent"),
         "tool_context": {},
         "tool_calls": [],

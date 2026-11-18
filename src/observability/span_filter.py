@@ -1,7 +1,7 @@
 """应用内 Span 过滤：直连 LangSmith 时只导出 Agent 链路，避免噪音 Span。"""
 
 import logging
-from typing import Any, Optional
+from typing import Optional
 from urllib.parse import urlparse
 
 from opentelemetry.context import Context

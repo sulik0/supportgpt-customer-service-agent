@@ -235,7 +235,8 @@ async def test_rule_action_phrase_overrides_jev_information(monkeypatch):
     _jev_says(monkeypatch, B, "action")
     vetoed = await _final_state("这笔订单的钱什么时候能回到我卡上？我等着用。")
     assert vetoed["classification"]["handling"] == "human"
-    assert vetoed["model_sees_action"] is True
+    assert vetoed["classification"]["mode"] == "action"
+    assert vetoed["classification"]["mode_source"] == "jev"
 
 
 @pytest.mark.asyncio

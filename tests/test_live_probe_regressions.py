@@ -362,7 +362,7 @@ async def test_model_can_still_move_between_other_intents(monkeypatch):
     ],
 )
 def test_warranty_duration_needs_evidence_with_an_actual_period(query):
-    from src.models.intents import has_authoritative_business_evidence
+    from src.agents.authority import has_authoritative_business_evidence
 
     process_doc = "保修 warranty 申请需要订单编号、产品型号、故障说明和购买凭证。"
     assert has_authoritative_business_evidence(query, process_doc) is False
@@ -375,7 +375,7 @@ def test_warranty_duration_needs_evidence_with_an_actual_period(query):
 
 
 def test_warranty_process_question_still_accepts_process_evidence():
-    from src.models.intents import has_authoritative_business_evidence
+    from src.agents.authority import has_authoritative_business_evidence
 
     assert has_authoritative_business_evidence(
         "申请保修需要什么资料？", "保修 warranty 申请需要订单编号、产品型号。"

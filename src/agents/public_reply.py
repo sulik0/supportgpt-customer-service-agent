@@ -4,33 +4,17 @@ Workflow 的升级与审批结论不在这里改，这里只决定终端用户�
 以及先答后审时用户能否在人工复核前先看到 AI 的初步答复。
 """
 
-import re
 from typing import Any, Mapping
 
 from src.agents.classification import ANSWER_THEN_REVIEW, AUTO_ANSWER
+from src.agents.signals import is_security_blocked, service_errors
 from src.config import settings
+from src.models.language import reply_language
 from src.models.intents import IntentType, normalize_intent
-
-# QA 把幻觉告警也写进 errors；它是质量问题，不是服务故障。
-_QA_ALERT_PREFIX = "QA score alert"
 
 # 先答后审只因处理原则而转人工；出现其他原因（质量、依赖降级、安全等）就不能先答。
 _REVIEW_REASON = "handling_answer_then_review"
 _DEFERRAL_REASON = "authoritative_answer_unavailable"
-
-
-def _is_chinese(text: str) -> bool:
-    return bool(re.search(r"[一-鿿]", text or ""))
-
-
-def _service_errors(agent_output: Mapping[str, Any]) -> list[str]:
-    """真实的处理异常，不含 QA 幻觉告警和安全拦截记录。"""
-    return [
-        str(item)
-        for item in agent_output.get("errors", []) or []
-        if not str(item).startswith(_QA_ALERT_PREFIX)
-        and "Security threat" not in str(item)
-    ]
 
 
 def preliminary_answer_allowed(
@@ -58,9 +42,9 @@ def preliminary_answer_allowed(
     if not review and not deferral:
         return False
     if (
-        agent_output.get("security_threat_detected")
+        is_security_blocked(agent_output)
         or agent_output.get("risk_block_automation")
-        or agent_output.get("errors")
+        or service_errors(agent_output)
         or str(agent_output.get("degradation_level", "none")).lower() != "none"
         or agent_output.get("hallucination_detected")
         or agent_output.get("semantic_guard_degraded")
@@ -80,14 +64,14 @@ def preliminary_answer_allowed(
 
 def answered_note(customer_text: str) -> str:
     """自动回答时附带的状态说明，跟随用户输入语言。"""
-    if _is_chinese(customer_text):
+    if reply_language(customer_text) == "zh":
         return "智能客服已完成处理。"
     return "The assistant has answered your question."
 
 
 def preliminary_answer_note(customer_text: str) -> str:
     """初步答复下方的说明：人工复核仍在进行。"""
-    if _is_chinese(customer_text):
+    if reply_language(customer_text) == "zh":
         return "以上是根据现有资料给出的初步答复，工单已同步转交人工客服复核；如有出入，以人工回复为准。"
     return (
         "This is a preliminary answer based on the information available. "
@@ -172,11 +156,9 @@ _TEXTS = {
 def _review_reason(agent_output: Mapping[str, Any]) -> str:
     degradation = str(agent_output.get("degradation_level", "none")).lower()
     # 安全拦截会往 errors 写入记录，必须先于处理异常判断。
-    if agent_output.get("security_threat_detected") or agent_output.get(
-        "risk_block_automation"
-    ):
+    if is_security_blocked(agent_output) or agent_output.get("risk_block_automation"):
         return "risk_review"
-    if _service_errors(agent_output) or degradation in {"human_required", "failed"}:
+    if service_errors(agent_output) or degradation in {"human_required", "failed"}:
         return "processing_exception"
     try:
         qa_score = float(agent_output.get("qa_score", 1.0))
@@ -207,6 +189,6 @@ def public_review_feedback(
     """
     reason = _review_reason(agent_output)
     # 没有原文时（旧调用方）按中文输出。
-    language = "zh" if not customer_text or _is_chinese(customer_text) else "en"
+    language = reply_language(customer_text) if customer_text else "zh"
     response, message = _TEXTS[reason][language]
     return reason, response, message

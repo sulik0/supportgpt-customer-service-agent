@@ -1,4 +1,3 @@
-import time
 import datetime
 import logging
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker

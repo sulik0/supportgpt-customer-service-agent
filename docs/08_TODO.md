@@ -1,6 +1,6 @@
 # 项目任务清单
 
-> 最后更新：2026-11-12。状态以代码、测试和 `03_INTERVIEW_CANON.md` 为准。
+> 最后更新：2026-11-18。状态以代码、测试和 `03_INTERVIEW_CANON.md` 为准。
 
 ## P0
 
@@ -163,3 +163,14 @@
 - [ ] Risk Engine 阈值尚未基于真实客服运营数据校准，当前采用保守的 high / critical 转人工策略。
 - [ ] Circuit Breaker 当前只在单进程内生效；`asyncio.to_thread` 超时不能终止已运行线程。V2.2 已用幂等键和对账保护受治理写 Tool，但真实 OMS 仍需验证同一契约。
 - [ ] 用户咨询页当前使用演示客户选择器；生产接入前必须绑定真实用户身份与工单归属，并增加限流和异步处理完成通知。
+
+## 代码健康（2026-11-18 审查）
+
+- [x] `errors` 列表的解读收拢到 `src/agents/signals.py`：原来 8 处各自用 `"Security threat" in ...` 判断安全拦截，Risk Engine 把 QA 幻觉告警也算成 `workflow_error`。现在统一用 `is_security_blocked` / `service_errors`，QA 告警不再算处理异常（分数不变，幻觉本身已计 0.9）。
+- [x] 回复语言收拢到 `src/models/language.py`：原来 7 处用 4 种规则，只有范围外说明认“请用英语回答”，降级回复、安全拦截文案、公开状态说明都只看原文是否含中文。现在都先认显式要求。
+- [x] QA 用的权威依据判断从 `src/models/intents.py` 移到 `src/agents/authority.py`；删除没有读取方的 `model_sees_action` 字段；`/customer-context` 的 `last_interaction` 不再写死为“两天前”，改为最近一张历史工单的创建时间；清理 `src` 下（除 `evaluation/`）pyflakes 报出的未使用导入和变量。仅 Mock 测试验证。
+- [ ] 规则不一致待定：`ACTION_OR_DISPUTE`（`src/agents/inquiry.py`）含“投诉/举报/曝光/起诉/律师/消协/12315”，与 Analyzer 的 `_COMPLAINT_THREAT` 重复；“请问怎么投诉扣费的问题”投诉规则判为流程咨询，办事规则却判为“要办事”，账务类会按第 5 条转人工。改动会变更处理结果，需要用户确认并用真实模型复测。
+- [ ] `errors` 仍是字符串通道，长期应改为结构化字段（安全拦截、QA 告警、处理异常分开存）；要兼容旧 Checkpoint。
+- [ ] 线上没有旧 Checkpoint 后，删除 Risk Engine 的 `_legacy_input_signals` 和 `read_only_inquiry` 兼容字段。
+- [ ] `src/agents/graph.py`（1087 行）、`src/tools/governance.py`（1222 行）偏大；`src/evaluation/` 的 pyflakes 告警未清理。
+

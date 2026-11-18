@@ -5,6 +5,7 @@ from typing import Any, Literal, Mapping
 
 from src.config import settings
 from src.agents.classification import ANSWER_THEN_REVIEW, HUMAN
+from src.agents.signals import is_security_blocked, service_errors
 from src.models.intents import IntentType, normalize_intent
 
 
@@ -45,10 +46,7 @@ class RiskEngine:
         """按处理阶段聚合已有风险信号，分数只升不降。"""
         score = float(state.get("risk_score", 0.0) or 0.0)
         reasons = set(str(item) for item in state.get("risk_reasons", []))
-        errors = " ".join(str(item) for item in state.get("errors", []))
-        security_threat = bool(state.get("security_threat_detected")) or (
-            "Security threat" in errors
-        )
+        security_threat = is_security_blocked(state)
         semantic_label = str(state.get("semantic_guard_label", "not_run")).lower()
         semantic_degraded = bool(state.get("semantic_guard_degraded", False))
         semantic_checks = list(state.get("semantic_guard_checks", []))
@@ -115,12 +113,8 @@ class RiskEngine:
                 score = max(score, 0.82 if qa_score >= 0.5 else 0.9)
                 reasons.add("qa_score_below_threshold")
 
-        non_security_errors = [
-            item
-            for item in state.get("errors", [])
-            if "Security threat" not in str(item)
-        ]
-        if non_security_errors:
+        # QA 幻觉告警已在上面单独计分，不算处理异常。
+        if service_errors(state):
             score = max(score, 0.55)
             reasons.add("workflow_error")
 

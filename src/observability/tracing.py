@@ -11,7 +11,6 @@ from urllib.parse import urlparse
 
 from src.config import settings
 from src.observability.sanitization import (
-    redact_text,
     sanitize_attributes,
     sanitize_value,
 )

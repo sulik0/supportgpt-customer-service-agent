@@ -3,6 +3,8 @@
 import re
 from typing import Any, Mapping
 
+from src.agents.signals import service_errors
+from src.models.language import reply_language
 from src.models.intents import IntentType, normalize_intent
 
 
@@ -121,7 +123,7 @@ def is_scope_boundary_request(state: Mapping[str, Any]) -> bool:
         and not state.get("semantic_guard_degraded")
         and str(state.get("semantic_guard_label", "not_run")).lower()
         not in {"unsafe", "controversial"}
-        and not state.get("errors")
+        and not service_errors(state)
         and state.get("degradation_level", "none") == "none"
     )
 
@@ -129,23 +131,7 @@ def is_scope_boundary_request(state: Mapping[str, Any]) -> bool:
 def scope_boundary_response(state: Mapping[str, Any]) -> str:
     """按当前输入语言说明现有能力，不查询天气或作出业务承诺。"""
     text = str(state.get("description") or state.get("subject") or "")
-    english_requested = bool(
-        re.search(
-            r"(?:用|使用|以)英语|reply in english|answer in english",
-            text,
-            re.IGNORECASE,
-        )
-    )
-    chinese_requested = bool(
-        re.search(
-            r"(?:用|使用|以)中文|reply in chinese|answer in chinese",
-            text,
-            re.IGNORECASE,
-        )
-    )
-    chinese = chinese_requested or (
-        not english_requested and bool(re.search(r"[\u4e00-\u9fff]", text))
-    )
+    chinese = reply_language(text) == "zh"
     if state.get("scope_reason") == "greeting":
         return (
             "您好！我可以帮您处理订单、退款、账户、保修和售后相关问题，请告诉我您需要什么帮助。"

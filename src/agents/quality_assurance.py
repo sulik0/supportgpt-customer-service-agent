@@ -6,6 +6,7 @@ from dataclasses import dataclass
 from decimal import Decimal, InvalidOperation
 from typing import Dict, Any
 
+from src.agents.signals import QA_HALLUCINATION_ALERT, is_security_blocked
 from src.agents.evidence import build_resolution_evidence
 from src.agents.scope import is_verified_scope_response
 from src.decision import decision_service
@@ -16,7 +17,7 @@ from src.observability.metrics import (
     QA_SCORE_HISTOGRAM,
 )
 from src.risk.engine import risk_engine
-from src.models.intents import (
+from src.agents.authority import (
     has_authoritative_business_evidence,
     defers_unsupported_topic,
     requires_authoritative_business_answer,
@@ -74,7 +75,7 @@ class QualityAssuranceAgent:
             f"QA Agent started verifying response for ticket: {state.get('ticket_id')}"
         )
 
-        if "Security threat" in "".join(state.get("errors", [])):
+        if is_security_blocked(state):
             return state
 
         query = str(state.get("description", ""))
@@ -204,7 +205,7 @@ class QualityAssuranceAgent:
                 "decision_records": decision_records,
                 "errors": state.get("errors", [])
                 + (
-                    ["QA score alert: potential hallucination detected."]
+                    [QA_HALLUCINATION_ALERT]
                     if hallucinated
                     else []
                 ),
