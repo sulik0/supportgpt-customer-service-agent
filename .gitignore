@@ -44,3 +44,5 @@ docs/test_catalog_ai.json
 docs/test_catalog_other.html
 docs/test_catalog_ai_other.json
 docs/test_catalog_ai_log.jsonl
+docs/test_catalog_runs.json
+docs/test_catalog_history.json

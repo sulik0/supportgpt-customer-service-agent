@@ -3,7 +3,7 @@
 
     python scripts/build_test_catalog.py
 
-只读取仓库文件和 git 历史，不运行测试、不调用模型、不联网。
+读取仓库文件、git 历史、本机评测报告，以及 GitHub CI 运行记录（gh，只读）；不运行测试、不调用模型。
 页面内容（数量、示例、最近变动、哈希是否一致）每次运行都重新计算。
 """
 from __future__ import annotations
@@ -149,6 +149,321 @@ def regression_ids() -> tuple[int, int]:
 
 
 
+# ---------- 最近测试结果 ----------
+GH_REPO = "sulik0/supportgpt-customer-service-agent"
+RUNS_CACHE = ROOT / "docs" / "test_catalog_runs.json"      # GitHub 运行记录缓存（按 run id，不会变）
+HISTORY = ROOT / "docs" / "test_catalog_history.json"      # 本机只留“最新一份”的报告，这里每次生成时累积
+RESULT_N = 3
+
+
+def reports_dir() -> Path | None:
+    """评测报告目录（evaluation/reports 被 gitignore，工作树里没有时回退到主仓库）。"""
+    env = os.environ.get("TEST_CATALOG_REPORTS")
+    cands = [Path(env)] if env else []
+    cands.append(ROOT / "evaluation" / "reports")
+    common = git("rev-parse", "--git-common-dir").strip()
+    if common:
+        cands.append((ROOT / common).resolve().parent / "evaluation" / "reports")
+    return next((c for c in cands if c.is_dir()), None)
+
+
+def jload(path: Path):
+    try:
+        return json.loads(path.read_text(encoding="utf-8"))
+    except Exception:
+        return None
+
+
+def local_time(iso: str) -> str:
+    try:
+        d = datetime.fromisoformat(iso.replace("Z", "+00:00"))
+        return d.astimezone().strftime("%m-%d %H:%M")
+    except Exception:
+        return iso[:16]
+
+
+def res(time_iso, ok, source, rate="", detail="") -> dict:
+    """ok: True 通过 / False 未通过 / None 未完成或取消。"""
+    return {"time": time_iso, "ok": ok, "source": source, "rate": rate, "detail": detail}
+
+
+def gh_json(*args: str):
+    try:
+        out = subprocess.run(["gh", *args], cwd=ROOT, capture_output=True, text=True,
+                             check=True, timeout=60).stdout
+        return json.loads(out)
+    except Exception:
+        return None
+
+
+def gh_job_log_tail(job_id: int) -> str:
+    try:
+        return subprocess.run(
+            ["gh", "api", f"repos/{GH_REPO}/actions/jobs/{job_id}/logs"],
+            cwd=ROOT, capture_output=True, text=True, check=True, timeout=90).stdout
+    except Exception:
+        return ""
+
+
+def gh_runs(workflow: str, limit: int = 12) -> list[dict] | None:
+    """某个 workflow 最近完成（非取消）的运行，每条带各任务和各步骤的结论；读不到返回 None。
+    运行结束后记录不会再变，所以按 run id 缓存。"""
+    cache = jload(RUNS_CACHE) or {}
+    runs = gh_json("run", "list", "-R", GH_REPO, "-w", workflow, "-L", str(limit),
+                   "--json", "databaseId,createdAt,conclusion,status,headBranch")
+    if runs is None:
+        return None
+    out = []
+    for r in runs:
+        if r["status"] != "completed" or r["conclusion"] == "cancelled":
+            continue
+        rid = str(r["databaseId"])
+        c = cache.get(rid)
+        if not c or "steps" not in c:
+            info = gh_json("run", "view", rid, "-R", GH_REPO, "--json", "jobs") or {"jobs": []}
+            c = {"createdAt": r["createdAt"], "branch": r["headBranch"], "workflow": workflow,
+                 "jobs": {}, "steps": {}}
+            for j in info["jobs"]:
+                c["jobs"][j["name"]] = j["conclusion"]
+                for st in j.get("steps", []):
+                    c["steps"][f"{j['name']}/{st['name']}"] = st["conclusion"]
+                log = ""
+                if j["name"] == "Backend Tests" and j["conclusion"] in ("success", "failure"):
+                    log = gh_job_log_tail(j["databaseId"])
+                    m = re.findall(r"(?:(\d+) failed, )?(\d+) passed[^\n]* in [\d.]+s", log)
+                    if m:
+                        c["pytest"] = {"failed": int(m[-1][0] or 0), "passed": int(m[-1][1])}
+                elif j["name"] == "Frontend Build" and j["conclusion"] in ("success", "failure"):
+                    log = gh_job_log_tail(j["databaseId"])
+                    ps, fs = re.findall(r"# pass (\d+)", log), re.findall(r"# fail (\d+)", log)
+                    if ps:
+                        c["fe"] = {"passed": int(ps[-1]), "failed": int(fs[-1]) if fs else 0}
+            cache[rid] = c
+        out.append(c)
+    try:
+        RUNS_CACHE.write_text(json.dumps(cache, ensure_ascii=False), encoding="utf-8")
+    except OSError:
+        pass
+    return out
+
+
+def ci_rows(runs, pick_fn, n: int = RESULT_N) -> list[dict]:
+    """pick_fn(run) -> (conclusion, rate, 说明) 或 None（这次运行里没有这一项）。"""
+    rows = []
+    for c in runs or []:
+        got = pick_fn(c)
+        if not got or got[0] in (None, "skipped"):
+            continue
+        ok = got[0] == "success"
+        rows.append(res(c["createdAt"], ok, f"GitHub · {c['workflow']} · {c['branch']}", got[1],
+                        got[2] if ok or not got[2] else got[2]))
+        if len(rows) == n:
+            break
+    return rows
+
+
+def step_of(job: str, step: str, detail_ok="成功", detail_bad="失败", counts=None):
+    def f(c):
+        concl = c["steps"].get(f"{job}/{step}")
+        if concl is None:
+            return None
+        rate, det = "", detail_ok if concl == "success" else detail_bad
+        if counts and c.get(counts):
+            k = c[counts]
+            rate = f"{k['passed']}/{k['passed'] + k['failed']}"
+            det = "全部通过" if not k["failed"] else f"{k['failed']} 个失败"
+        return concl, rate, det
+    return f
+
+
+def job_of(job: str, **kw):
+    def f(c):
+        concl = c["jobs"].get(job)
+        return None if concl is None else (concl, "", "成功" if concl == "success" else "失败")
+    return f
+
+
+def github_ci_jobs(n: int = RESULT_N) -> dict[str, list[dict]]:
+    """主页面用：pytest 与 PR 门禁在 GitHub 上最近几次的结果。"""
+    runs = gh_runs("CI")
+    if runs is None:
+        return {"pytest": [], "pr": [], "_offline": True}
+    return {
+        "pytest": ci_rows(runs, step_of("Backend Tests", "Run full backend test suite", counts="pytest"), n),
+        "pr": ci_rows(runs, step_of("Agent PR Quality Gate",
+                                    "Replay fixed 100-case Baseline with Mock Provider",
+                                    "门禁任务成功", "门禁任务失败"), n),
+    }
+
+
+def other_results() -> dict[str, list[dict]]:
+    """其他检查页：能从 GitHub CI / 部署后冒烟记录里取到结果的项目；取不到的页面上写明没有记录。"""
+    ci = gh_runs("CI")
+    smoke = gh_runs("Post-Deploy Smoke")
+    if ci is None and smoke is None:
+        return {"_offline": True}
+
+    def multi(*fns):
+        """几个步骤都成功才算通过（编译与构建）。"""
+        def f(c):
+            got = [fn(c) for fn in fns]
+            got = [g for g in got if g]
+            if not got:
+                return None
+            bad = [g for g in got if g[0] != "success"]
+            return (bad[0][0] if bad else "success", "", "编译、前端构建、镜像构建" + ("均成功" if not bad else "有失败"))
+        return f
+
+    return {
+        "前端测试": ci_rows(ci, step_of("Frontend Build", "Test frontend filters", counts="fe")),
+        "PromptOps 对比实验": ci_rows(ci, step_of("Agent PR Quality Gate", "Verify paired PromptOps experiment with Mock Provider")),
+        "编译与构建检查": ci_rows(ci, multi(
+            step_of("Backend Tests", "Compile"), step_of("Frontend Build", "Build frontend"),
+            step_of("Container Build", "Verify production image builds"))),
+        "PostgreSQL 故障演练": ci_rows(ci, step_of("PostgreSQL Tool Governance Fault Drill", "Run isolated multi-process fault drill")),
+        "参考 OMS 持久化演练": ci_rows(ci, step_of("PostgreSQL Tool Governance Fault Drill", "Run PostgreSQL reference OMS persistence drill")),
+        "部署后冒烟": ci_rows(smoke, job_of("Live Smoke (with chat)")),
+        "_offline": False,
+    }
+
+
+def baseline_snapshots(rd: Path | None, mock: bool, n: int = RESULT_N) -> list[dict]:
+    """本机 100 条考卷的历次报告：mock=True 取 Mock 回放，False 取真实模型。"""
+    if rd is None:
+        return []
+    paths = []
+    if mock:
+        paths = list((rd / "ci_quality_gate" / "baseline").glob("baseline_v1_2*.json"))
+        paths += [q for q in (rd / "baseline_v1").glob("baseline_v1_2*.json")]
+    else:
+        paths = list((rd / "baseline_v1").glob("baseline_v1_2*.json"))
+    rows = []
+    for p in paths:
+        d = jload(p)
+        if not d or d.get("case_count") != 100:
+            continue
+        e, b = d["execution"], d["behavior_summary"]
+        is_mock = e.get("mode") == "ci_offline_workflow_replay"
+        if is_mock != mock:
+            continue
+        failed = b["failed_cases"]
+        det = f"意图 {b['intent_accuracy']:.0%} · 转人工 {b['hitl_accuracy']:.0%} · 审批 {b['approval_accuracy']:.0%}"
+        if not mock:
+            det = f"{e.get('llm_model', '')} · " + det
+        rows.append(res(d["generated_at"], failed == 0, "本机运行",
+                        f"{b['passed_cases']}/{d['case_count']}（{b['case_pass_rate']:.0%}）",
+                        (f"{failed} 条未过 · " if failed else "") + det))
+    rows.sort(key=lambda r: r["time"], reverse=True)
+    seen, out = set(), []
+    for r in rows:
+        if r["time"][:16] not in seen:
+            seen.add(r["time"][:16])
+            out.append(r)
+    return out[:n]
+
+
+def history_add(key: str, row: dict) -> list[dict]:
+    """把当前最新报告并入历史（本机只保留最新一份，靠每次生成页面来累积）。"""
+    hist = jload(HISTORY) or {}
+    rows = hist.get(key, [])
+    if row and all(r["time"] != row["time"] for r in rows):
+        rows.append(row)
+    rows.sort(key=lambda r: r["time"], reverse=True)
+    hist[key] = rows[:20]
+    try:
+        HISTORY.write_text(json.dumps(hist, ensure_ascii=False, indent=1), encoding="utf-8")
+    except OSError:
+        pass
+    return rows[:RESULT_N]
+
+
+def regression_result(rd: Path | None) -> list[dict]:
+    row = None
+    d = jload(rd / "real_llm" / "evaluation_latest.json") if rd else None
+    if d and d.get("execution", {}).get("suite") == "regression":
+        ev = d["agent_evaluation"]
+        failed = [c["id"] for c in d["cases"] if not c.get("agent_evaluation", {}).get("passed", True)]
+        n = d["case_count"]
+        sec = d.get("security_evaluation", {}).get("case_pass_rate")
+        det = f"{d['execution'].get('llm_model', '')}"
+        if sec is not None:
+            det += f" · 安全判定 {sec:.0%}"
+        if failed:
+            det += " · 未过：" + "、".join(failed[:3]) + ("…" if len(failed) > 3 else "")
+        row = res(d["generated_at"], not failed, "本机运行",
+                  f"{n - len(failed)}/{n}（{ev['pass_rate']:.0%}）", det)
+    return history_add("regression", row)
+
+
+def online_result(rd: Path | None) -> list[dict]:
+    row = None
+    p = rd / "online_reply_check" / "online_reply_check_latest.json" if rd else None
+    d = jload(p) if p else None
+    if d:
+        failed = [c["id"] for c in d["cases"] if not c.get("passed")]
+        t = datetime.fromtimestamp(p.stat().st_mtime).astimezone().isoformat()
+        det = "撤回残留 " + str(len(d.get("leftover_ticket_ids", []))) + " 张测试工单"
+        if failed:
+            det = "未过：" + "、".join(failed[:3]) + " · " + det
+        row = res(t, d["passed"] == d["total"], "线上服务",
+                  f"{d['passed']}/{d['total']}（{d['passed'] / max(d['total'], 1):.0%}）", det)
+    return history_add("online", row)
+
+
+def gate_verdict(rd: Path | None) -> dict | None:
+    d = jload(rd / "quality_gate" / "quality_gate.json") if rd else None
+    if not d:
+        return None
+    return res(d["generated_at"], d["passed"], "发布门禁判定",
+               f"{d['check_count'] - d['failed_check_count']}/{d['check_count']} 项",
+               f"{'真实模型' if d['candidate'].get('execution_mode') == 'real_llm_regression' else 'Mock'}跑 "
+               f"{d['candidate'].get('case_count', '')} 条 · {d['profile']} 档策略{'全部满足' if d['passed'] else '有项目不满足'}")
+
+
+def results_block(rows: list[dict], empty: str = "") -> str:
+    """卡片里的“最近测试结果”表格；rows 已按时间倒序。"""
+    if not rows:
+        return f"<h3>最近测试结果</h3><p class='small muted'>{esc(empty or '没有找到测试记录。')}</p>"
+    body = ""
+    for r in rows:
+        mark = {True: "<span class='ok'>通过</span>", False: f"<span class='bad'>{'未全过' if r['rate'] else '未通过'}</span>",
+                None: "<span class='muted'>未完成</span>"}[r["ok"]]
+        body += (f"<tr><td>{esc(local_time(r['time']))}</td><td>{mark}</td><td>{esc(r['rate'] or '—')}</td>"
+                 f"<td class='muted'>{esc(r['source'])}　{esc(r['detail'])}</td></tr>")
+    return ("<h3>最近测试结果</h3><table class='rs'><tr><th>时间</th><th>结果</th><th>通过</th><th>来源与说明</th></tr>"
+            f"{body}</table>")
+
+
+def result_badge(rows: list[dict]) -> str:
+    """卡片折叠时显示的一行：最近几次的结果点 + 最新一次的通过率。"""
+    if not rows:
+        return "<span class='res muted'>最近测试：暂无记录</span>"
+    rows = rows[:RESULT_N]
+    dots = "".join(
+        f"<i class='dot {'g' if r['ok'] else 'r' if r['ok'] is False else 'n'}'></i>" for r in reversed(rows))
+    r = rows[0]
+    txt = f"{local_time(r['time'])} {'通过' if r['ok'] else '未全过' if r['rate'] else '未通过'}" + (f" {r['rate']}" if r["rate"] else "")
+    return f"<span class='res'>{dots}<span>最近 {len(rows)} 次 · 最新 {esc(txt)}</span></span>"
+
+
+def collect_results() -> dict[str, list[dict]]:
+    rd = reports_dir()
+    gh = github_ci_jobs()
+    pr = gh["pr"] + baseline_snapshots(rd, mock=True)  # GitHub 上的任务结果 + 本机跑出的通过率
+    rel = baseline_snapshots(rd, mock=False)
+    verdict = gate_verdict(rd)
+    return {
+        "pytest": gh["pytest"],
+        "pr": pr,
+        "release": rel,
+        "release_verdict": [verdict] if verdict else [],
+        "regress": regression_result(rd),
+        "online": online_result(rd),
+        "_offline": gh.get("_offline", False),
+        "_reports": str(rd) if rd else "",
+    }
+
+
 CSS = """
 :root{--bg:#f6f6f4;--fg:#1f1f1e;--muted:#8a8a85;--line:#e4e4e0;--card:#fff;--acc:#2f5bd8;--free:#1a7f37;--paid:#b45309}
 @media (prefers-color-scheme:dark){:root{--bg:#171716;--fg:#ececea;--muted:#8d8d88;--line:#2e2e2c;--card:#222221;--acc:#8aa9ff;--free:#56d364;--paid:#f0a050}}
@@ -186,6 +501,13 @@ code{background:var(--bg);padding:1px 6px;border-radius:4px;font-size:12.5px}
 .intro p{margin:4px 0;font-size:14px}
 .when{display:grid;grid-template-columns:auto 1fr;gap:4px 14px;font-size:14px;margin:4px 0}
 .when b{font-weight:600;white-space:nowrap}
+.res{grid-column:1/3;font-size:12.5px;margin-top:8px;display:flex;align-items:center;gap:6px}
+.dot{width:9px;height:9px;border-radius:50%;display:inline-block;background:var(--muted)}
+.dot.g{background:var(--free)}.dot.r{background:#c62828}
+.ok{color:var(--free);font-weight:600}
+table.rs{width:100%;border-collapse:collapse;font-size:13px}
+.rs th{text-align:left;color:var(--muted);font-weight:500;padding:3px 8px 3px 0}
+.rs td{padding:4px 8px 4px 0;border-top:1px solid var(--line);vertical-align:top}
 """
 
 JS = """
@@ -255,13 +577,14 @@ def changes(rows: list[tuple], n: int = 5) -> str:
     return f"<h3>最近变动</h3><ul class='ch'>{items}</ul>"
 
 
-def card(name, what, tags, num, unit, last, body) -> str:
+def card(name, what, tags, num, unit, last, body, badge="") -> str:
     return (
         f"<details class='card'><summary>"
         f"<span class='name'>{esc(name)}</span>"
         f"<span class='num'>{num}<small>{esc(unit)}</small></span>"
         f"<span class='what'>{esc(what)}</span>"
         f"<span class='tags'>{tags}</span>"
+        f"{badge}"
         f"<span class='last'>{esc(last)}</span></summary>"
         f"<div class='body'>{body}</div></details>"
     )
@@ -575,6 +898,8 @@ def build() -> str:
         "online": {"简介": "对已部署的线上服务发请求，检查状态、意图、语言、关键词，手动跑，花钱", "用例数": len(checks), "最近提交": rows_facts(dataset_changes(REPLY_CHECKS, 5), [REPLY_CHECKS])},
     }
     notes = ai_notes(facts)
+    R = collect_results()
+    rel_rows = sorted(R['release'] + R['release_verdict'], key=lambda r: r['time'], reverse=True)
 
     L = lambda key, fb: note_L(notes, key, fb)
     S = lambda key: note_body(notes, key)
@@ -584,7 +909,8 @@ def build() -> str:
 <title>SupportGPT 测试分类</title><style>{CSS}</style></head><body><main>
 <header><h1>SupportGPT 测试分类</h1><a class="lk" href="test_catalog_other.html">其他检查 →</a><span class="sp"></span>
 <span id="rmsg" class="muted small"></span><button id="rbtn" onclick="refreshCatalog()">更新</button></header>
-<p class="muted small">更新于 {datetime.now().strftime("%Y-%m-%d %H:%M")}，每天 05:00 自动更新。点卡片展开详情。</p>
+<p class="muted small">更新于 {datetime.now().strftime("%Y-%m-%d %H:%M")}，每天 05:00 自动更新。点卡片展开详情；每张卡片显示最近 3 次测试结果。</p>
+<p class="muted small">结果来源：pytest 和 PR 门禁取 GitHub CI 记录（PR 门禁另加本机运行）；其余取本机评测报告。本机只留最新一份的项目（真实问题回归、线上回复检查）从首次生成页面起逐次累积。{"<b class=bad>GitHub 记录读取失败，已略过。</b>" if R["_offline"] else ""}</p>
 <div class="intro">
 <h3>一共 5 项测试，分两层</h3>
 <p><b>不花钱，Mock 模型，改代码就能跑</b>：pytest 测代码逻辑；PR Mock 门禁用 100 条固定考卷测整条处理流程（分类、调 Tool、转人工、审批）。</p>
@@ -600,22 +926,22 @@ def build() -> str:
 
 <h2>代码测试</h2>
 {card("pytest", "代码逻辑对不对：状态机、权限、Risk Engine、安全检测、RAG、API。全部 Mock。",
-      tag("Mock") + tag("免费", "free") + tag("每次 PR / 本地随时"), ptotal, "个用例", L("pytest", t_last(pt_rows)), S("pytest") + pt_body)}
+      tag("Mock") + tag("免费", "free") + tag("每次 PR / 本地随时"), ptotal, "个用例", L("pytest", t_last(pt_rows)), S("pytest") + results_block(R["pytest"], "读不到 GitHub 记录（gh 未登录或没联网）。") + pt_body, result_badge(R["pytest"]))}
 
 <h2>同一份 100 条考卷（Baseline）</h2>
 <div class="group">
 <p class="gt muted small">下面两项用的是同一份数据，只是模型不同，所以“PR 绿”不等于“真实门禁绿”。</p>
 {card("PR Mock 门禁", "用 Mock 模型和 Jev 录音跑 100 条，检查分类、Tool、转人工、审批。",
-      tag("Mock + 录音") + tag("免费", "free") + tag("每次 PR 自动"), len(bcases), "条", L("pr", t_last(base_changes)), S("pr") + pr_body)}
+      tag("Mock + 录音") + tag("免费", "free") + tag("每次 PR 自动"), len(bcases), "条", L("pr", t_last(base_changes)), S("pr") + results_block(R["pr"]) + pr_body, result_badge(R["pr"]))}
 {card("手动真实门禁", "同样 100 条，用真实模型跑。发版前的最后一关。",
-      tag("真实模型") + tag("花钱", "paid") + tag("发版前手动"), len(bcases), "条", L("release", t_last(recent_commits([".github/workflows/release-quality-gate.yml"], 1))), S("release") + rel_body)}
+      tag("真实模型") + tag("花钱", "paid") + tag("发版前手动"), len(bcases), "条", L("release", t_last(recent_commits([".github/workflows/release-quality-gate.yml"], 1))), S("release") + results_block(rel_rows, "没有找到真实模型跑 100 条的记录。") + rel_body, result_badge(rel_rows))}
 </div>
 
 <h2>补充用例（不属于考卷）</h2>
 {card("真实问题回归", "线上真实出过问题的用例，加上精选的考卷用例，用真实模型验证改动没有退化。",
-      tag("真实模型") + tag("花钱", "paid") + tag("改 Prompt/Agent 后手动"), reg_base + reg_online, "条", L("regress", t_last(dataset_changes(ONLINE_REG, 1))), S("regress") + reg_body)}
+      tag("真实模型") + tag("花钱", "paid") + tag("改 Prompt/Agent 后手动"), reg_base + reg_online, "条", L("regress", t_last(dataset_changes(ONLINE_REG, 1))), S("regress") + results_block(R["regress"], "没有找到真实问题回归的报告。") + reg_body, result_badge(R["regress"]))}
 {card("线上回复检查", "对已部署的线上服务发请求，检查状态、意图、语言和关键词。",
-      tag("线上真实模型") + tag("花钱", "paid") + tag("部署后手动"), len(checks), "条", L("online", t_last(dataset_changes(REPLY_CHECKS, 1))), S("online") + onl_body)}
+      tag("线上真实模型") + tag("花钱", "paid") + tag("部署后手动"), len(checks), "条", L("online", t_last(dataset_changes(REPLY_CHECKS, 1))), S("online") + results_block(R["online"], "没有找到线上回复检查的报告。") + onl_body, result_badge(R["online"]))}
 
 {note_foot(AI_CACHE) if notes else ''}
 <script>{JS}</script></main></body></html>
@@ -631,6 +957,7 @@ def _render_other(notes: dict, facts: dict) -> str:
 
     fe = count(r"^\s*test\(", sorted((ROOT / "frontend/tests").glob("*.test.js")))
     mcp = count(r"def test_", sorted((ROOT / "tests/mcp").glob("test_*.py")))
+    OR = other_results()
 
     def row(name, what, tags, num, unit, paths, cmd, where, note=""):
         last = note_L(notes, name, last_line(recent_commits(paths, 1)) if paths else "最近变动：—")
@@ -639,14 +966,22 @@ def _render_other(notes: dict, facts: dict) -> str:
             **({"用例数": num} if num != "" else {}),
             "最近提交": rows_facts(recent_commits(paths, 5), paths) if paths else [],
         }
+        rows = OR.get(name, [])
+        if OR.get("_offline"):
+            none = "读不到 GitHub 记录（gh 未登录或没联网）。"
+        elif name in OR:
+            none = "最近的 GitHub 运行里没有这一项。"
+        else:
+            none = "没有自动记录：这项只在本机手动运行，结果不会留存。"
         body = (
             note_body(notes, name)
+            + results_block(rows, none)
             + f"<h3>命令</h3><p class='small'><code>{esc(cmd)}</code></p>"
             f"<h3>位置</h3><p class='small'>{esc(where)}</p>"
             + (f"<p class='small muted'>{esc(note)}</p>" if note else "")
             + changes(recent_commits(paths, 5) if paths else [])
         )
-        return card(name, what, tags, num, unit, last, body)
+        return card(name, what, tags, num, unit, last, body, result_badge(rows))
 
     free, paid = tag("免费", "free"), tag("花钱", "paid")
     code = (
@@ -712,7 +1047,8 @@ def _render_other(notes: dict, facts: dict) -> str:
 <title>SupportGPT 其他检查</title><style>{CSS}</style></head><body><main>
 <header><h1>其他检查</h1><a class="lk" href="test_catalog.html">← 测试分类</a><span class="sp"></span>
 <span id="rmsg" class="muted small"></span><button id="rbtn" onclick="refreshCatalog()">更新</button></header>
-<p class="muted small">更新于 {datetime.now().strftime("%Y-%m-%d %H:%M")}。这一页放主页面之外的检查：前端、MCP、演练、冒烟、压测、评测脚本。点卡片展开详情。</p>
+<p class="muted small">更新于 {datetime.now().strftime("%Y-%m-%d %H:%M")}。这一页放主页面之外的检查：前端、MCP、演练、冒烟、压测、评测脚本。点卡片展开详情；每张卡片显示最近 3 次测试结果。</p>
+<p class="muted small">结果来源：GitHub 上 CI 和部署后冒烟的运行记录（前端测试、PromptOps、编译与构建、两个 PostgreSQL 演练、部署后冒烟）。MCP、压测和三个评测脚本只在本机手动跑，没有留存结果，卡片上标“暂无记录”。</p>
 <div class="intro">
 <h3>这一页是什么</h3>
 <p>主页面的 5 项，判断的是“客服 Agent 答得对不对、流程走得对不对”。这一页的 11 项判断的是<b>工程本身是否正常</b>：前端能不能用、部署后线上活不活、写 Tool 出故障时数据会不会错。</p>
