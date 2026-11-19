@@ -22,6 +22,10 @@ from datetime import datetime
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
+# launchd 启动时 PATH 只有系统目录，找不到 gh、codex；补上 Homebrew 和常见位置
+os.environ["PATH"] = os.pathsep.join(
+    ["/opt/homebrew/bin", "/usr/local/bin", os.environ.get("PATH", "/usr/bin:/bin")]
+)
 OUT = ROOT / "docs" / "test_catalog.html"
 OUT_OTHER = ROOT / "docs" / "test_catalog_other.html"
 BASELINE = "evaluation/baseline/supportgpt_baseline_100.json"
@@ -501,6 +505,11 @@ code{background:var(--bg);padding:1px 6px;border-radius:4px;font-size:12.5px}
 .intro p{margin:4px 0;font-size:14px}
 .when{display:grid;grid-template-columns:auto 1fr;gap:4px 14px;font-size:14px;margin:4px 0}
 .when b{font-weight:600;white-space:nowrap}
+dialog{border:1px solid var(--line);border-radius:12px;background:var(--card);color:var(--fg);max-width:420px;padding:18px 22px}
+dialog::backdrop{background:rgba(0,0,0,.35)}
+dialog h3{margin:0 0 8px;font-size:16px}dialog ul{margin:0;padding-left:18px;font-size:14px}
+.dl{display:flex;justify-content:flex-end;gap:8px;margin-top:16px}
+button.pri{background:var(--acc);color:#fff;border-color:var(--acc)}
 .res{grid-column:1/3;font-size:12.5px;margin-top:8px;display:flex;align-items:center;gap:6px}
 .dot{width:9px;height:9px;border-radius:50%;display:inline-block;background:var(--muted)}
 .dot.g{background:var(--free)}.dot.r{background:#c62828}
@@ -511,10 +520,19 @@ table.rs{width:100%;border-collapse:collapse;font-size:13px}
 """
 
 JS = """
+function askRefresh(){
+  return new Promise(res=>{
+    const d=document.createElement('dialog');
+    d.innerHTML='<h3>重新生成两个页面？</h3><ul><li>读取 GitHub 上最近的 CI 和冒烟记录（只读）。</li><li>提交或数据有变化时，会调用一次 GPT 重写说明，消耗额度；没变化就用缓存。</li><li>约几十秒到两分钟，期间页面不可用，完成后自动刷新。</li></ul><div class="dl"><button data-v="0">取消</button><button data-v="1" class="pri">确认更新</button></div>';
+    d.onclose=()=>{res(d.returnValue==='1');d.remove();};
+    d.addEventListener('click',e=>{const v=e.target.dataset&&e.target.dataset.v;if(v!==undefined)d.close(v);});
+    document.body.appendChild(d);d.showModal();
+  });
+}
 async function refreshCatalog(){
   const b=document.getElementById('rbtn'),m=document.getElementById('rmsg');
-  if(location.protocol==='file:'){m.textContent='需先运行 python3 scripts/test_catalog_server.py，再打开 http://127.0.0.1:8765';return;}
-  if(!confirm('重新生成两个页面？会读 GitHub 记录；提交或数据有变时还会调用一次 GPT（用额度），约几十秒到两分钟。'))return;
+  if(location.protocol==='file:'){m.textContent='请打开 http://127.0.0.1:8765 再点更新';return;}
+  if(!await askRefresh())return;
   b.disabled=true;m.textContent='更新中…';
   try{const r=await fetch('/refresh',{method:'POST'});if(!r.ok)throw new Error(r.status);location.reload();}
   catch(e){m.textContent='更新失败：'+e.message;b.disabled=false;}
