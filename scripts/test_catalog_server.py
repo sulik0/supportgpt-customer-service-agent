@@ -28,6 +28,7 @@ class Handler(BaseHTTPRequestHandler):
             "/": catalog.OUT,
             "/test_catalog.html": catalog.OUT,
             "/test_catalog_other.html": catalog.OUT_OTHER,
+            "/test_baseline.html": catalog.OUT_BASELINE,
         }
         target = pages.get(self.path.split("?")[0])
         if target is None:
