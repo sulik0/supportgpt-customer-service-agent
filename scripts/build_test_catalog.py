@@ -269,24 +269,26 @@ def card(name, what, tags, num, unit, last, body) -> str:
 
 AI_CACHE = ROOT / "docs" / "test_catalog_ai.json"
 AI_MODEL = "gpt-6.2-sol"
-AI_PROMPT = """你在为一个“测试分类”页面写简短中文说明。下面 JSON 是 5 项测试各自的事实（数量、最近几次提交）。
-对每一项输出两个字段：
-- summary：最近变动对这项测试意味着什么，不超过 45 字。给出的每条提交都改动过该项测试的文件或数据，请概括这些提交对该项测试做了什么；没有提交时写“近期无改动”。
-- status：当前状态一句话，不超过 30 字，只能依据给定事实。
-要求：只用给定事实，不编造；直说事实，不用比喻和总结式的话；技术名词保留但要让不懂代码的人看得懂。
-只输出一个 JSON 对象，键与输入相同，值是 {"summary": "...", "status": "..."}，不要任何其他文字。
+AI_CACHE_OTHER = ROOT / "docs" / "test_catalog_ai_other.json"
+AI_PROMPT = """你在给一个不懂代码的项目负责人写“测试分类”页面的说明。下面 JSON 里每一项是一类测试/检查的事实（简介、数量、最近几次提交）。
+对每一项输出三个字段：
+- summary（最近变动）：这些提交让这项测试发生了什么变化、对测试结果有什么影响，60 到 120 字。给出的每条提交都改动过该项测试的文件或数据；没有提交时写“近期无改动”。
+- status（现状）：这项测试现在是什么状态，80 字以内，只依据给定事实。
+- blind（测不到什么）：这项测试发现不了哪类问题，40 到 80 字；可结合简介和常识推断，但不要编造具体数字。
+写法要求：用大白话，像当面解释；技术名词（Mock、Workflow、哈希、Tool、CI、Jev 等）第一次出现时用括号简单说明它是什么；只用给定事实，不编造；直说事实，不用比喻、金句和总结式收尾。
+只输出一个 JSON 对象，键与输入相同，值是 {"summary": "...", "status": "...", "blind": "..."}，不要任何其他文字。
 
 事实：
 """
 
 
-def ai_notes(facts: dict) -> dict:
+def ai_notes(facts: dict, cache_path: Path = AI_CACHE) -> dict:
     """用本机 codex 把最近变动写成人话；事实没变就用缓存。失败时返回空，页面退回原始提交说明。"""
     key = hashlib.sha256(
         json.dumps([AI_MODEL, AI_PROMPT, facts], ensure_ascii=False, sort_keys=True).encode()
     ).hexdigest()
     try:
-        cache = json.loads(AI_CACHE.read_text(encoding="utf-8"))
+        cache = json.loads(cache_path.read_text(encoding="utf-8"))
         if cache.get("key") == key:
             return cache["notes"]
     except Exception:
@@ -300,23 +302,46 @@ def ai_notes(facts: dict) -> dict:
                 [exe, "exec", "--ephemeral", "--skip-git-repo-check", "-s", "read-only",
                  "-m", AI_MODEL, "-C", tmp, "-o", str(out), "-"],
                 input=AI_PROMPT + json.dumps(facts, ensure_ascii=False, indent=1),
-                text=True, capture_output=True, timeout=240, env=env, check=True,
+                text=True, capture_output=True, timeout=300, env=env, check=True,
             )
             text = out.read_text(encoding="utf-8")
         notes = json.loads(text[text.index("{") : text.rindex("}") + 1])
         notes = {
-            k: {"summary": str(v.get("summary", "")), "status": str(v.get("status", ""))}
+            k: {f: str(v.get(f, "")) for f in ("summary", "status", "blind")}
             for k, v in notes.items()
             if k in facts and isinstance(v, dict)
         }
     except Exception as exc:
         print(f"codex 生成失败，页面使用原始提交说明：{exc}")
         return {}
-    AI_CACHE.write_text(
+    cache_path.write_text(
         json.dumps({"key": key, "model": AI_MODEL, "notes": notes}, ensure_ascii=False, indent=1),
         encoding="utf-8",
     )
     return notes
+
+
+def rows_facts(rows):
+    return [{"date": r[0], "msg": short(r[2]), **({"dataset_diff": r[3]} if len(r) > 3 else {})} for r in rows[:3]]
+
+
+def note_L(notes: dict, key: str, fallback: str) -> str:
+    n = notes.get(key, {}).get("summary")
+    return f"最近变动：{n}" if n else fallback
+
+
+def note_body(notes: dict, key: str) -> str:
+    """卡片展开后顶部的“当前状态”和“测不到什么”。"""
+    n = notes.get(key, {})
+    out = ""
+    if n.get("status"):
+        out += f"<h3>当前状态</h3><p class='small'>{esc(n['status'])}</p>"
+    if n.get("blind"):
+        out += f"<h3>测不到什么</h3><p class='small'>{esc(n['blind'])}</p>"
+    return out
+
+
+NOTE_FOOT = '<p class="muted small">“最近变动”“当前状态”“测不到什么”由 ' + AI_MODEL + " 根据提交记录和简介生成，仅供参考。</p>"
 
 
 def build() -> str:
@@ -398,27 +423,19 @@ def build() -> str:
 
     t_last = lambda rows: last_line(rows)
 
-    def rows_facts(rows):
-        return [{"date": r[0], "msg": short(r[2]), **({"dataset_diff": r[3]} if len(r) > 3 else {})} for r in rows[:3]]
-
     facts = {
-        "pytest": {"用例数": ptotal, "测试文件数": len(pfiles), "最近提交": rows_facts(pt_rows)},
-        "pr": {"考卷条数": len(bcases), "数据集哈希与策略一致": sha_ok, "Jev录音哈希与策略一致": rec_ok,
+        "pytest": {"简介": "代码逻辑对不对：状态机、权限、Risk Engine、安全检测、RAG、API，全部 Mock，不判断回答好坏", "用例数": ptotal, "测试文件数": len(pfiles), "最近提交": rows_facts(pt_rows)},
+        "pr": {"简介": "用 Mock 模型和 Jev 录音跑固定 100 条考卷，检查分类、Tool、转人工、审批，每次 PR 自动跑", "考卷条数": len(bcases), "数据集哈希与策略一致": sha_ok, "Jev录音哈希与策略一致": rec_ok,
                "考卷最近提交": rows_facts(base_changes),
                "门禁策略和录音最近提交": rows_facts(recent_commits([POLICY, RECORDING, "scripts/run_ci_quality_gate.py"], 3))},
-        "release": {"最近提交": rows_facts(recent_commits([".github/workflows/release-quality-gate.yml", "scripts/run_baseline_eval.py"], 3))},
-        "regress": {"用例数": reg_base + reg_online, "最近提交": rows_facts(dataset_changes(ONLINE_REG, 3))},
-        "online": {"用例数": len(checks), "最近提交": rows_facts(dataset_changes(REPLY_CHECKS, 3))},
+        "release": {"简介": "同样 100 条考卷换真实模型跑，发版前在 GitHub 手动触发，花钱", "最近提交": rows_facts(recent_commits([".github/workflows/release-quality-gate.yml", "scripts/run_baseline_eval.py"], 3))},
+        "regress": {"简介": "线上出过问题的用例加精选考卷用例，用真实模型验证改动没有退化，手动跑，花钱", "用例数": reg_base + reg_online, "最近提交": rows_facts(dataset_changes(ONLINE_REG, 3))},
+        "online": {"简介": "对已部署的线上服务发请求，检查状态、意图、语言、关键词，手动跑，花钱", "用例数": len(checks), "最近提交": rows_facts(dataset_changes(REPLY_CHECKS, 3))},
     }
     notes = ai_notes(facts)
 
-    def L(key, fallback):
-        n = notes.get(key, {}).get("summary")
-        return f"最近变动：{n}" if n else fallback
-
-    def S(key):
-        n = notes.get(key, {}).get("status")
-        return f"<h3>当前状态</h3><p class='small'>{esc(n)}</p>" if n else ""
+    L = lambda key, fb: note_L(notes, key, fb)
+    S = lambda key: note_body(notes, key)
     html_ = f"""<!doctype html>
 <html lang="zh-CN"><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
@@ -458,13 +475,13 @@ def build() -> str:
 {card("线上回复检查", "对已部署的线上服务发请求，检查状态、意图、语言和关键词。",
       tag("线上真实模型") + tag("花钱", "paid") + tag("部署后手动"), len(checks), "条", L("online", t_last(dataset_changes(REPLY_CHECKS, 1))), S("online") + onl_body)}
 
-{('<p class="muted small">“最近变动”和“当前状态”由 ' + AI_MODEL + ' 根据提交记录生成，仅供参考。</p>') if notes else ''}
+{NOTE_FOOT if notes else ''}
 <script>{JS}</script></main></body></html>
 """
     return html_
 
 
-def build_other() -> str:
+def _render_other(notes: dict, facts: dict) -> str:
     """第二页：主页面之外的检查（前端、MCP、演练、冒烟、压测、评测脚本）。"""
 
     def count(pattern: str, files) -> int:
@@ -474,9 +491,15 @@ def build_other() -> str:
     mcp = count(r"def test_", sorted((ROOT / "tests/mcp").glob("test_*.py")))
 
     def row(name, what, tags, num, unit, paths, cmd, where, note=""):
-        last = last_line(recent_commits(paths, 1)) if paths else "最近变动：—"
+        last = note_L(notes, name, last_line(recent_commits(paths, 1)) if paths else "最近变动：—")
+        facts[name] = {
+            "简介": what + (" " + note if note else ""),
+            **({"用例数": num} if num != "" else {}),
+            "最近提交": rows_facts(recent_commits(paths, 3)) if paths else [],
+        }
         body = (
-            f"<h3>命令</h3><p class='small'><code>{esc(cmd)}</code></p>"
+            note_body(notes, name)
+            + f"<h3>命令</h3><p class='small'><code>{esc(cmd)}</code></p>"
             f"<h3>位置</h3><p class='small'>{esc(where)}</p>"
             + (f"<p class='small muted'>{esc(note)}</p>" if note else "")
             + changes(recent_commits(paths, 3) if paths else [])
@@ -548,12 +571,30 @@ def build_other() -> str:
 <header><h1>其他检查</h1><a class="lk" href="test_catalog.html">← 测试分类</a><span class="sp"></span>
 <span id="rmsg" class="muted small"></span><button id="rbtn" onclick="refreshCatalog()">更新</button></header>
 <p class="muted small">更新于 {datetime.now().strftime("%Y-%m-%d %H:%M")}。这一页放主页面之外的检查：前端、MCP、演练、冒烟、压测、评测脚本。点卡片展开详情。</p>
+<div class="intro">
+<h3>这一页是什么</h3>
+<p>主页面的 5 项，判断的是“客服 Agent 答得对不对、流程走得对不对”。这一页的 11 项判断的是<b>工程本身是否正常</b>：前端能不能用、部署后线上活不活、写 Tool 出故障时数据会不会错。</p>
+<h3>怎么看</h3>
+<div class="when">
+<b>平时不用管</b><span>前端测试、编译与构建检查、PromptOps 对比实验：CI（GitHub 自动检查）每次推送都会跑，免费。</span>
+<b>本机跑不了</b><span>两个 PostgreSQL 演练：需要专用的 PG 库，只能看 CI 的结果。</span>
+<b>会花钱或动线上</b><span>部署后冒烟（每次推送 main 自动触发）和压测。</span>
+<b>只是工具</b><span>三个评测脚本：用来做对比分析，不是门禁，不影响发版。</span>
+</div></div>
 <h2>代码类检查</h2>{code}
 <h2>演练（需要 PostgreSQL）</h2>{drills}
 <h2>线上和性能</h2>{online}
 <h2>评测脚本（不是门禁）</h2>{scripts_}
+{NOTE_FOOT if notes else ''}
 <script>{JS}</script></main></body></html>
 """
+
+
+def build_other() -> str:
+    facts: dict = {}
+    _render_other({}, facts)  # 第一遍只为收集事实
+    notes = ai_notes(facts, AI_CACHE_OTHER)
+    return _render_other(notes, {})
 
 
 def main() -> None:
