@@ -34,6 +34,7 @@ import { parseDemoAccounts } from "./demoAccounts";
 import {
   Activity,
   ArrowLeft,
+  ClipboardCheck,
   GitBranch,
   LibraryBig,
   Inbox,
@@ -276,6 +277,18 @@ export default function App() {
         <MessagesSquare size={16} />
         用户咨询
       </NavLink>
+      {/* 测试说明页是本机服务（127.0.0.1:8765），只在本机打开后台时显示，线上不放死链接 */}
+      {["localhost", "127.0.0.1"].includes(window.location.hostname) && (
+        <a
+          className="sidebar-support"
+          href="http://127.0.0.1:8765/test_baseline.html"
+          target="_blank"
+          rel="noreferrer"
+        >
+          <ClipboardCheck size={16} />
+          测试考卷说明
+        </a>
+      )}
       <div className="sidebar-footer">
         <div className={`sidebar-runtime runtime-${serviceStatus}`}>
           <span className="service-dot" aria-hidden="true" />
