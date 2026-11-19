@@ -176,6 +176,11 @@ code{background:var(--bg);padding:1px 6px;border-radius:4px;font-size:12.5px}
 .group{border:1px dashed var(--line);border-radius:14px;padding:4px 14px 8px;margin:10px 0}
 .group>.gt{font-size:13px;margin:10px 0 0}
 .bad{color:#c62828;font-weight:600}
+.intro{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:6px 20px 14px;margin:14px 0}
+.intro h3{font-size:13px;color:var(--muted);font-weight:600;margin:14px 0 4px}
+.intro p{margin:4px 0;font-size:14px}
+.when{display:grid;grid-template-columns:auto 1fr;gap:4px 14px;font-size:14px;margin:4px 0}
+.when b{font-weight:600;white-space:nowrap}
 """
 
 JS = """
@@ -342,6 +347,18 @@ def build() -> str:
 <header><h1>SupportGPT 测试分类</h1><span class="sp"></span>
 <span id="rmsg" class="muted small"></span><button id="rbtn" onclick="refreshCatalog()">更新</button></header>
 <p class="muted small">更新于 {datetime.now().strftime("%Y-%m-%d %H:%M")}，每天 05:00 自动更新。点卡片展开详情。</p>
+<div class="intro">
+<h3>一共 5 项测试，分两层</h3>
+<p><b>不花钱，Mock 模型，改代码就能跑</b>：pytest 测代码逻辑；PR Mock 门禁用 100 条固定考卷测整条处理流程（分类、调 Tool、转人工、审批）。</p>
+<p><b>花钱，真实模型，手动跑</b>：手动真实门禁（同一份 100 条考卷）、真实问题回归（线上出过问题的用例）、线上回复检查（对已部署的服务发请求）。</p>
+<p class="muted small">Mock 测试全过，不代表真实模型下也过。这是需要后面三项的原因。</p>
+<h3>什么时候跑哪个</h3>
+<div class="when">
+<b>改了代码逻辑</b><span>pytest；PR 时 PR Mock 门禁自动跑</span>
+<b>改了 Prompt / Agent / 意图</b><span>以上两项，再加真实问题回归</span>
+<b>准备发版</b><span>手动真实门禁</span>
+<b>部署之后</b><span>线上回复检查</span>
+</div></div>
 
 <h2>代码测试</h2>
 {card("pytest", "代码逻辑对不对：状态机、权限、Risk Engine、安全检测、RAG、API。全部 Mock。",
