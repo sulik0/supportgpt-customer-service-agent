@@ -302,7 +302,7 @@ def ai_notes(facts: dict, cache_path: Path = AI_CACHE) -> dict:
                 [exe, "exec", "--ephemeral", "--skip-git-repo-check", "-s", "read-only",
                  "-m", AI_MODEL, "-C", tmp, "-o", str(out), "-"],
                 input=AI_PROMPT + json.dumps(facts, ensure_ascii=False, indent=1),
-                text=True, capture_output=True, timeout=300, env=env, check=True,
+                text=True, capture_output=True, timeout=420, env=env, check=True,
             )
             text = out.read_text(encoding="utf-8")
         notes = json.loads(text[text.index("{") : text.rindex("}") + 1])
@@ -321,7 +321,7 @@ def ai_notes(facts: dict, cache_path: Path = AI_CACHE) -> dict:
     return notes
 
 
-DIFF_CAP = 1800  # 每次提交最多给模型看的 diff 字符数
+DIFF_CAP = 5000  # 每次提交最多给模型看的 diff 字符数
 
 
 def commit_diff(h: str, paths: list[str]) -> str:
@@ -334,7 +334,7 @@ def commit_diff(h: str, paths: list[str]) -> str:
             continue
         if ln[:1] in "+-" and ln[1:].strip():
             lines.append(ln[:160])
-    text = "\n".join(stat[:12]) + "\n" + "\n".join(lines)
+    text = "\n".join(stat[:20]) + "\n" + "\n".join(lines)
     return text if len(text) <= DIFF_CAP else text[:DIFF_CAP] + "\n…（已截断）"
 
 
