@@ -150,9 +150,16 @@ def run(args: argparse.Namespace) -> int:
         failures = [f"HTTP {code}"] if code != 201 else evaluate_case(case, data, insight)
         cleaned = "保留"
         if run_id and token and not args.keep:
-            wcode, _ = client.call(
-                "POST", f"/support/runs/{run_id}/withdraw", headers={"X-Feedback-Token": token}
-            )
+            # 部署重启期间网关会返回 502，隔 20 秒重试，最多 3 次。
+            for attempt in range(3):
+                wcode, _ = client.call(
+                    "POST", f"/support/runs/{run_id}/withdraw",
+                    headers={"X-Feedback-Token": token},
+                )
+                if wcode == 200 or (wcode and wcode < 500):
+                    break
+                if attempt < 2:
+                    time.sleep(20)
             cleaned = "已撤回" if wcode == 200 else f"撤回失败 HTTP {wcode}"
             if wcode != 200:
                 leftovers.append(data.get("ticket_id"))
