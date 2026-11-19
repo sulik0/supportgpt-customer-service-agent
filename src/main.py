@@ -11,6 +11,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
 from src.config import settings
+from src.config_summary import config_warnings, effective_config
 from src.observability.logging_config import configure_logging
 
 configure_logging(settings.LOG_LEVEL)
@@ -74,6 +75,10 @@ async def lifespan(app: FastAPI):
     # 确保 Uvicorn 初始化后业务日志仍使用应用配置。
     # 初始化统一 OpenTelemetry Trace 与 Metrics。
     init_tracing()
+    # 把关键设置的实际生效值写进日志，方便对照本地和线上是否一致（不含密钥）。
+    logger.info("Effective LLM config: %s", effective_config(settings))
+    for warning in config_warnings(settings):
+        logger.warning("Config warning: %s", warning)
     # Create DB schemas (SQLite or PostgreSQL)
     await init_db()
     async with AsyncSessionLocal() as db:

@@ -1,9 +1,11 @@
 """真实 LLM 回归测试的配置校验、用例选择与成本保护。"""
 
 import os
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import Any, Mapping, Sequence
 from urllib.parse import urlparse
+
+from src.config_summary import effective_config
 
 
 REAL_LLM_PROVIDERS = frozenset({"openai", "azure"})
@@ -46,6 +48,7 @@ class RealLLMRunPlan:
     suite: str
     case_ids: tuple[str, ...]
     estimated_workflow_llm_calls: int
+    effective_config: dict[str, Any] = field(default_factory=dict)
 
     def report_metadata(self) -> dict[str, Any]:
         """输出不含密钥和 Prompt 原文的报告来源信息。"""
@@ -57,6 +60,7 @@ class RealLLMRunPlan:
             "suite": self.suite,
             "selected_case_count": len(self.case_ids),
             "estimated_workflow_llm_calls": self.estimated_workflow_llm_calls,
+            "effective_config": self.effective_config,
         }
 
 
@@ -91,6 +95,7 @@ def build_real_llm_run_plan(
         suite=suite if not explicit_case_ids else "explicit",
         case_ids=tuple(case_ids),
         estimated_workflow_llm_calls=estimated_calls,
+        effective_config=effective_config(settings),
     )
 
 

@@ -49,7 +49,12 @@ def test_real_llm_plan_selects_stratified_regression_suite_and_records_safe_meta
     assert plan.case_ids == REGRESSION_CASE_IDS
     assert plan.estimated_workflow_llm_calls == 27
     assert plan.endpoint_host == "llm.example.com"
-    assert plan.report_metadata() == {
+    metadata = plan.report_metadata()
+    # 生效设置只用于对照，缺失的项为 None，思考模式未设置会明确标注。
+    config = metadata.pop("effective_config")
+    assert config["LLM_ENDPOINT_HOST"] == "llm.example.com"
+    assert config["LLM_THINKING"] == "unset(provider default)"
+    assert metadata == {
         "mode": "real_llm_regression",
         "llm_provider": "openai",
         "llm_model": "compatible-chat-model",
