@@ -30,14 +30,26 @@ from src.evaluation.offline_rag import (
 from src.promptops.runtime import active_bundle, prompt_scope
 
 TOTAL_NOTE = "题数会变，不用于比较和门禁"
+def online_layers(manifest: Mapping[str, Any]) -> List[str]:
+    """线上层（kind=online）：测已部署的服务，不能在本地回放，部署后用单独脚本跑。"""
+    return [n for n, v in manifest["layers"].items() if v.get("kind") == "online"]
+
+
 def select_layers(manifest: Mapping[str, Any], names: Sequence[str] | str) -> List[str]:
-    """names 为层名列表，或字符串 'all'。"""
-    available = list(manifest["layers"])
+    """names 为层名列表，或字符串 'all'（不含线上层）。"""
+    online = online_layers(manifest)
+    available = [n for n in manifest["layers"] if n not in online]
     if names == "all":
         return available
-    unknown = [name for name in names if name not in available]
+    unknown = [name for name in names if name not in manifest["layers"]]
     if unknown:
         raise ValueError(f"清单里没有这些层：{', '.join(unknown)}")
+    wrong = [name for name in names if name in online]
+    if wrong:
+        raise ValueError(
+            f"{', '.join(wrong)} 是线上层，不能本地回放；部署后用 "
+            "scripts/run_online_reply_check.py 跑"
+        )
     return list(names)
 
 

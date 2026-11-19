@@ -465,6 +465,37 @@ python -m pip install -r requirements/load.txt
 locust -f tests/load_test.py
 ```
 
+## 评测题集分层与加新题
+
+题集分六层（五层本地回放，一层线上检查），清单在 `evaluation/manifest.json`（每层的文件、题数、SHA256 指纹），套件在 `evaluation/suites.json`。
+
+| 层 | 文件 | 题数 | 能否改 |
+| --- | --- | --- | --- |
+| core | `evaluation/baseline/supportgpt_baseline_100.json` | 100 | 冻结。改动校验失败，没有更新命令 |
+| regression | `evaluation/online_regression/supportgpt_online_regression.json` | 9 | 可加题 |
+| injection | `evaluation/covert_injection/supportgpt_covert_injection.json` | 76 | 可加题 |
+| golden | `evaluation/golden/support_qa_golden.json` | 13 | 可加题（问答质量） |
+| tool_coverage | `evaluation/tool_coverage/supportgpt_tool_coverage.json` | 30 | 可加题（工具覆盖） |
+| online_checks | `evaluation/online_checks/reply_checks.json` | 27 | 可加题；线上层（`kind: online`），格式是“发一句话，回复含关键词”，不在本地回放 |
+
+加新发现的问题：
+1. 把题放进对应层的文件（业务回归 regression、隐蔽注入 injection、问答质量 golden、工具覆盖 tool_coverage、线上回复 online_checks），题号全局不能重复，只用中文和英文。
+2. `python scripts/eval_manifest.py update <层名>`，只刷新这一层的题数和指纹。核心层不会被碰到。
+3. `python scripts/eval_manifest.py check` 校验所有层（CI 也会跑）。
+4. 新题涉及 Jev 分类时，用 `python scripts/record_jev_decisions.py --layers <层名> --dry-run` 看计划，确认后加 `--confirm-live`（付费）补录音。
+
+运行：
+
+```bash
+python scripts/run_layered_eval.py --suite pr --output-dir <目录>          # 核心层，Mock + Jev 录音，免费，PR 门禁用
+python scripts/run_layered_eval.py --suite release --dry-run               # 全部层，真实模型，先看预估调用次数
+python scripts/run_layered_eval.py --layers core,injection                 # 指定层，默认 Mock
+python scripts/compare_layered_runs.py <结果A> <结果B>                      # 对比两次运行
+python scripts/run_covert_injection_eval.py --dry-run                      # 注入层专用脚本，--repeat N 多轮
+```
+
+门禁按层判断，目前只有 core 要求 1.0；任何一层低于阈值退出码为 1。合计分数只展示，不参与门禁，也不能跨两次运行比较（题集组成不同）。注意：真实模型回归脚本的 `--suite regression`（21 条）和 regression 层（9 条）是两套题，不要混用。`--layers all` 和 release 套件只回放五个本地层；online_checks 要部署后用 `python scripts/run_online_reply_check.py --api-url <Railway 域名> --confirm-live` 单独跑（每题新建 1 张线上工单，约 2-3 次模型调用）。golden 层在 Mock 无 Jev 时只有 5/13（其余 8 条期望“只读咨询不转人工”，依赖 Jev 分类），要看真实结果得用真实模型加 Jev 跑；PR 门禁不含该层。PR 门禁一直只含 core。
+
 ## 评测命令
 
 管道烟测：

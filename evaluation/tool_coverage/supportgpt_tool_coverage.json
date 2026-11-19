@@ -1,0 +1,798 @@
+{
+  "name": "supportgpt-tool-coverage",
+  "version": "v1",
+  "description": "漏调诊断题集：判断 react 模式漏调订单历史时，最终回复是否仍然正确（必需工具是否过严）。G0 是 baseline 里漏调的 10 题，G1 纯政策，G2 必须看订单数据，G3 数据已在问题里。事实检查是确定性的，只对关键数字和关键词判断。不登记进题集清单，不参与门禁。仅中英文。",
+  "cases": [
+    {
+      "id": "coverage-g0-refund-v2-fee",
+      "query": "What processing fee is deducted from a refund under corporate policy v2?",
+      "reference_answer": "Refund policy v2 deducts a 5% processing fee from all refund requests.",
+      "expected_sources": [],
+      "category": "billing",
+      "risk_level": "medium",
+      "kb_version": "v2",
+      "customer_id": "cust_103",
+      "tags": [
+        "tool_coverage",
+        "G0_baseline_missed"
+      ],
+      "agent_expectations": {
+        "need_order_data": false,
+        "reply_facts": [
+          [
+            "5%",
+            "5 percent"
+          ]
+        ],
+        "max_workflow_errors": 1
+      }
+    },
+    {
+      "id": "coverage-g0-rag-version-isolation-v1",
+      "query": "Under refund policy v1, what is the maximum filing window?",
+      "reference_answer": "Refund policy v1 allows filing within 30 days of the initial subscription payment.",
+      "expected_sources": [],
+      "category": "billing",
+      "risk_level": "medium",
+      "kb_version": "v1",
+      "customer_id": "cust_101",
+      "tags": [
+        "tool_coverage",
+        "G0_baseline_missed"
+      ],
+      "agent_expectations": {
+        "need_order_data": false,
+        "reply_facts": [
+          [
+            "30 days",
+            "30-day",
+            "30 day"
+          ]
+        ],
+        "max_workflow_errors": 1
+      }
+    },
+    {
+      "id": "coverage-g0-rag-version-isolation-v2",
+      "query": "Under refund policy v2, what is the maximum filing window?",
+      "reference_answer": "Refund policy v2 allows filing up to 60 days from purchase.",
+      "expected_sources": [],
+      "category": "billing",
+      "risk_level": "medium",
+      "kb_version": "v2",
+      "customer_id": "cust_103",
+      "tags": [
+        "tool_coverage",
+        "G0_baseline_missed"
+      ],
+      "agent_expectations": {
+        "need_order_data": false,
+        "reply_facts": [
+          [
+            "60 days",
+            "60-day",
+            "60 day"
+          ]
+        ],
+        "max_workflow_errors": 1
+      }
+    },
+    {
+      "id": "coverage-g0-refund-v1-settlement-maximum",
+      "query": "What is the maximum stated settlement time for an approved refund in policy v1?",
+      "reference_answer": "The maximum stated time is 5 business days; the full range is 3 to 5 business days.",
+      "expected_sources": [],
+      "category": "billing",
+      "risk_level": "medium",
+      "kb_version": "v1",
+      "customer_id": "cust_102",
+      "tags": [
+        "tool_coverage",
+        "G0_baseline_missed"
+      ],
+      "agent_expectations": {
+        "need_order_data": false,
+        "reply_facts": [
+          [
+            "5 business days",
+            "five business days"
+          ]
+        ],
+        "max_workflow_errors": 1
+      }
+    },
+    {
+      "id": "coverage-g0-refund-v1-window-anchor",
+      "query": "Does the v1 refund window start from the initial subscription payment or from a later invoice?",
+      "reference_answer": "Policy v1 anchors the 30-day window to the initial subscription payment.",
+      "expected_sources": [],
+      "category": "billing",
+      "risk_level": "medium",
+      "kb_version": "v1",
+      "customer_id": "cust_103",
+      "tags": [
+        "tool_coverage",
+        "G0_baseline_missed"
+      ],
+      "agent_expectations": {
+        "need_order_data": false,
+        "reply_facts": [
+          [
+            "initial"
+          ]
+        ],
+        "max_workflow_errors": 1
+      }
+    },
+    {
+      "id": "coverage-g0-refund-v2-fee-calculation",
+      "query": "For a 100 dollar refund under v2, what processing fee percentage applies?",
+      "reference_answer": "Policy v2 deducts a 5% processing fee, which is 5 dollars on a 100 dollar refund.",
+      "expected_sources": [],
+      "category": "billing",
+      "risk_level": "medium",
+      "kb_version": "v2",
+      "customer_id": "cust_101",
+      "tags": [
+        "tool_coverage",
+        "G0_baseline_missed"
+      ],
+      "agent_expectations": {
+        "need_order_data": false,
+        "reply_facts": [
+          [
+            "5%",
+            "5 percent"
+          ],
+          [
+            "\\$5\\b",
+            "5 dollars",
+            "5 USD",
+            "5\\.00"
+          ]
+        ],
+        "max_workflow_errors": 1
+      }
+    },
+    {
+      "id": "coverage-g0-refund-v2-clearing-range",
+      "query": "How long does a refund to the original payment card take to clear under v2?",
+      "reference_answer": "Policy v2 states that the refund takes 3 to 5 business days to clear.",
+      "expected_sources": [],
+      "category": "billing",
+      "risk_level": "medium",
+      "kb_version": "v2",
+      "customer_id": "cust_102",
+      "tags": [
+        "tool_coverage",
+        "G0_baseline_missed"
+      ],
+      "agent_expectations": {
+        "need_order_data": false,
+        "reply_facts": [
+          [
+            "3 to 5",
+            "3-5",
+            "3–5",
+            "three to five"
+          ]
+        ],
+        "max_workflow_errors": 1
+      }
+    },
+    {
+      "id": "coverage-g0-refund-v2-version-isolation-dispute",
+      "query": "Does the seeded v2 refund policy say that an active dispute makes the account ineligible?",
+      "reference_answer": "The seeded v2 policy does not state an active-dispute eligibility rule; that rule appears in v1 and must not be imported into v2.",
+      "expected_sources": [],
+      "category": "billing",
+      "risk_level": "medium",
+      "kb_version": "v2",
+      "customer_id": "cust_103",
+      "tags": [
+        "tool_coverage",
+        "G0_baseline_missed"
+      ],
+      "agent_expectations": {
+        "need_order_data": false,
+        "reply_facts": [
+          [
+            "not state",
+            "does not",
+            "doesn't",
+            "not specif",
+            "not mention",
+            "no active-dispute",
+            "no active dispute",
+            "not include"
+          ]
+        ],
+        "max_workflow_errors": 1
+      }
+    },
+    {
+      "id": "coverage-g0-refund-v2-chinese-fee",
+      "query": "按照 v2 退款政策，处理手续费是多少？",
+      "reference_answer": "v2 政策规定所有退款申请扣除 5% 的处理费。",
+      "expected_sources": [],
+      "category": "billing",
+      "risk_level": "medium",
+      "kb_version": "v2",
+      "customer_id": "cust_103",
+      "tags": [
+        "tool_coverage",
+        "G0_baseline_missed"
+      ],
+      "agent_expectations": {
+        "need_order_data": false,
+        "reply_facts": [
+          [
+            "5%",
+            "百分之五"
+          ]
+        ],
+        "max_workflow_errors": 1
+      }
+    },
+    {
+      "id": "coverage-g0-refund-v1-chinese-settlement",
+      "query": "按照 v1 政策，退款批准后多久能到账？",
+      "reference_answer": "退款获批后，通常需要 3 到 5 个工作日显示在银行账单上。",
+      "expected_sources": [],
+      "category": "billing",
+      "risk_level": "medium",
+      "kb_version": "v1",
+      "customer_id": "cust_101",
+      "tags": [
+        "tool_coverage",
+        "G0_baseline_missed"
+      ],
+      "agent_expectations": {
+        "need_order_data": false,
+        "reply_facts": [
+          [
+            "3"
+          ],
+          [
+            "5"
+          ]
+        ],
+        "max_workflow_errors": 1
+      }
+    },
+    {
+      "id": "coverage-g1-en-v1-window",
+      "query": "What is the maximum filing window for a refund under policy v1?",
+      "reference_answer": "见 reply_facts",
+      "expected_sources": [],
+      "category": "billing",
+      "risk_level": "medium",
+      "kb_version": "v1",
+      "customer_id": "cust_101",
+      "tags": [
+        "tool_coverage",
+        "G1_pure_policy"
+      ],
+      "agent_expectations": {
+        "need_order_data": false,
+        "reply_facts": [
+          [
+            "30 days",
+            "30-day",
+            "30 day"
+          ]
+        ],
+        "max_workflow_errors": 1
+      }
+    },
+    {
+      "id": "coverage-g1-zh-v2-window",
+      "query": "v2 退款政策的最长申请期限是多少？",
+      "reference_answer": "见 reply_facts",
+      "expected_sources": [],
+      "category": "billing",
+      "risk_level": "medium",
+      "kb_version": "v2",
+      "customer_id": "cust_101",
+      "tags": [
+        "tool_coverage",
+        "G1_pure_policy"
+      ],
+      "agent_expectations": {
+        "need_order_data": false,
+        "reply_facts": [
+          [
+            "60"
+          ]
+        ],
+        "max_workflow_errors": 1
+      }
+    },
+    {
+      "id": "coverage-g1-en-v2-fee",
+      "query": "Is there any processing fee on refunds under policy v2, and how much?",
+      "reference_answer": "见 reply_facts",
+      "expected_sources": [],
+      "category": "billing",
+      "risk_level": "medium",
+      "kb_version": "v2",
+      "customer_id": "cust_101",
+      "tags": [
+        "tool_coverage",
+        "G1_pure_policy"
+      ],
+      "agent_expectations": {
+        "need_order_data": false,
+        "reply_facts": [
+          [
+            "5%",
+            "5 percent"
+          ]
+        ],
+        "max_workflow_errors": 1
+      }
+    },
+    {
+      "id": "coverage-g1-zh-v1-dispute",
+      "query": "v1 退款政策下，如果账户有未结争议，还能申请退款吗？",
+      "reference_answer": "见 reply_facts",
+      "expected_sources": [],
+      "category": "billing",
+      "risk_level": "medium",
+      "kb_version": "v1",
+      "customer_id": "cust_101",
+      "tags": [
+        "tool_coverage",
+        "G1_pure_policy"
+      ],
+      "agent_expectations": {
+        "need_order_data": false,
+        "reply_facts": [
+          [
+            "不符合",
+            "不能",
+            "无法",
+            "不可",
+            "不予",
+            "不得"
+          ]
+        ],
+        "max_workflow_errors": 1
+      }
+    },
+    {
+      "id": "coverage-g1-en-v2-clear",
+      "query": "How many business days does a refund take to reach the original card under v2?",
+      "reference_answer": "见 reply_facts",
+      "expected_sources": [],
+      "category": "billing",
+      "risk_level": "medium",
+      "kb_version": "v2",
+      "customer_id": "cust_101",
+      "tags": [
+        "tool_coverage",
+        "G1_pure_policy"
+      ],
+      "agent_expectations": {
+        "need_order_data": false,
+        "reply_facts": [
+          [
+            "3 to 5",
+            "3-5",
+            "3–5",
+            "three to five"
+          ]
+        ],
+        "max_workflow_errors": 1
+      }
+    },
+    {
+      "id": "coverage-g1-zh-v2-fee",
+      "query": "v2 政策退款手续费怎么算？",
+      "reference_answer": "见 reply_facts",
+      "expected_sources": [],
+      "category": "billing",
+      "risk_level": "medium",
+      "kb_version": "v2",
+      "customer_id": "cust_101",
+      "tags": [
+        "tool_coverage",
+        "G1_pure_policy"
+      ],
+      "agent_expectations": {
+        "need_order_data": false,
+        "reply_facts": [
+          [
+            "5%",
+            "百分之五"
+          ]
+        ],
+        "max_workflow_errors": 1
+      }
+    },
+    {
+      "id": "coverage-g2-en-fee-7001",
+      "query": "I want to refund order ORD-7001 under policy v2. How much processing fee would be deducted, and how much would I get back?",
+      "reference_answer": "见 reply_facts",
+      "expected_sources": [],
+      "category": "billing",
+      "risk_level": "medium",
+      "kb_version": "v2",
+      "customer_id": "cust_101",
+      "tags": [
+        "tool_coverage",
+        "G2_needs_order"
+      ],
+      "agent_expectations": {
+        "need_order_data": true,
+        "reply_facts": [
+          [
+            "7\\.5\\b",
+            "7\\.50"
+          ],
+          [
+            "142\\.5\\b",
+            "142\\.50"
+          ]
+        ],
+        "max_workflow_errors": 1
+      }
+    },
+    {
+      "id": "coverage-g2-zh-fee-7001",
+      "query": "ORD-7001 如果按 v2 政策退款，手续费扣多少？我实际能拿回多少？",
+      "reference_answer": "见 reply_facts",
+      "expected_sources": [],
+      "category": "billing",
+      "risk_level": "medium",
+      "kb_version": "v2",
+      "customer_id": "cust_101",
+      "tags": [
+        "tool_coverage",
+        "G2_needs_order"
+      ],
+      "agent_expectations": {
+        "need_order_data": true,
+        "reply_facts": [
+          [
+            "7\\.5\\b",
+            "7\\.50"
+          ],
+          [
+            "142\\.5\\b",
+            "142\\.50"
+          ]
+        ],
+        "max_workflow_errors": 1
+      }
+    },
+    {
+      "id": "coverage-g2-en-fee-9003",
+      "query": "How much would the v2 processing fee be if I refund order ORD-9003, and what is the net refund?",
+      "reference_answer": "见 reply_facts",
+      "expected_sources": [],
+      "category": "billing",
+      "risk_level": "medium",
+      "kb_version": "v2",
+      "customer_id": "cust_103",
+      "tags": [
+        "tool_coverage",
+        "G2_needs_order"
+      ],
+      "agent_expectations": {
+        "need_order_data": true,
+        "reply_facts": [
+          [
+            "\\b270\\b",
+            "270\\.00"
+          ],
+          [
+            "5,?130"
+          ]
+        ],
+        "max_workflow_errors": 1
+      }
+    },
+    {
+      "id": "coverage-g2-zh-fee-9003",
+      "query": "订单 ORD-9003 按 v2 退款要扣多少手续费？",
+      "reference_answer": "见 reply_facts",
+      "expected_sources": [],
+      "category": "billing",
+      "risk_level": "medium",
+      "kb_version": "v2",
+      "customer_id": "cust_103",
+      "tags": [
+        "tool_coverage",
+        "G2_needs_order"
+      ],
+      "agent_expectations": {
+        "need_order_data": true,
+        "reply_facts": [
+          [
+            "\\b270\\b",
+            "270\\.00"
+          ]
+        ],
+        "max_workflow_errors": 1
+      }
+    },
+    {
+      "id": "coverage-g2-en-fee-8002",
+      "query": "What would the v2 fee be on a refund of order ORD-8002?",
+      "reference_answer": "见 reply_facts",
+      "expected_sources": [],
+      "category": "billing",
+      "risk_level": "medium",
+      "kb_version": "v2",
+      "customer_id": "cust_102",
+      "tags": [
+        "tool_coverage",
+        "G2_needs_order"
+      ],
+      "agent_expectations": {
+        "need_order_data": true,
+        "reply_facts": [
+          [
+            "1\\.25"
+          ]
+        ],
+        "max_workflow_errors": 1
+      }
+    },
+    {
+      "id": "coverage-g2-zh-window-7001",
+      "query": "我的订单 ORD-7001 是多久前下的单？按 v1 还在退款窗口内吗？",
+      "reference_answer": "见 reply_facts",
+      "expected_sources": [],
+      "category": "billing",
+      "risk_level": "medium",
+      "kb_version": "v1",
+      "customer_id": "cust_101",
+      "tags": [
+        "tool_coverage",
+        "G2_needs_order"
+      ],
+      "agent_expectations": {
+        "need_order_data": true,
+        "reply_facts": [
+          [
+            "20"
+          ],
+          [
+            "30"
+          ]
+        ],
+        "max_workflow_errors": 1
+      }
+    },
+    {
+      "id": "coverage-g2-en-window-9003",
+      "query": "I placed order ORD-9003 recently. How many days ago was it, and am I within the v2 refund window?",
+      "reference_answer": "见 reply_facts",
+      "expected_sources": [],
+      "category": "billing",
+      "risk_level": "medium",
+      "kb_version": "v2",
+      "customer_id": "cust_103",
+      "tags": [
+        "tool_coverage",
+        "G2_needs_order"
+      ],
+      "agent_expectations": {
+        "need_order_data": true,
+        "reply_facts": [
+          [
+            "5 days",
+            "5 day",
+            "five days"
+          ],
+          [
+            "60"
+          ]
+        ],
+        "max_workflow_errors": 1
+      }
+    },
+    {
+      "id": "coverage-g2-en-items-7001",
+      "query": "What items are in my order ORD-7001 and what was the total? I need it for a refund calculation.",
+      "reference_answer": "见 reply_facts",
+      "expected_sources": [],
+      "category": "billing",
+      "risk_level": "medium",
+      "kb_version": "v1",
+      "customer_id": "cust_101",
+      "tags": [
+        "tool_coverage",
+        "G2_needs_order"
+      ],
+      "agent_expectations": {
+        "need_order_data": true,
+        "reply_facts": [
+          [
+            "SaaS"
+          ],
+          [
+            "150"
+          ]
+        ],
+        "max_workflow_errors": 1
+      }
+    },
+    {
+      "id": "coverage-g2-zh-items-9003",
+      "query": "订单 ORD-9003 里买了什么？总金额多少？",
+      "reference_answer": "见 reply_facts",
+      "expected_sources": [],
+      "category": "billing",
+      "risk_level": "medium",
+      "kb_version": "v1",
+      "customer_id": "cust_103",
+      "tags": [
+        "tool_coverage",
+        "G2_needs_order"
+      ],
+      "agent_expectations": {
+        "need_order_data": true,
+        "reply_facts": [
+          [
+            "AWS"
+          ],
+          [
+            "5400",
+            "5,400"
+          ]
+        ],
+        "max_workflow_errors": 1
+      }
+    },
+    {
+      "id": "coverage-g2-en-status-8002",
+      "query": "Has my order ORD-8002 been delivered yet, and how much did I pay?",
+      "reference_answer": "见 reply_facts",
+      "expected_sources": [],
+      "category": "billing",
+      "risk_level": "medium",
+      "kb_version": "v1",
+      "customer_id": "cust_102",
+      "tags": [
+        "tool_coverage",
+        "G2_needs_order"
+      ],
+      "agent_expectations": {
+        "need_order_data": true,
+        "reply_facts": [
+          [
+            "shipped",
+            "not yet",
+            "in transit",
+            "on its way",
+            "not been delivered"
+          ],
+          [
+            "25"
+          ]
+        ],
+        "max_workflow_errors": 1
+      }
+    },
+    {
+      "id": "coverage-g3-en-20d-v1",
+      "query": "My subscription payment was 20 days ago. Can I still request a refund under policy v1?",
+      "reference_answer": "见 reply_facts",
+      "expected_sources": [],
+      "category": "billing",
+      "risk_level": "medium",
+      "kb_version": "v1",
+      "customer_id": "cust_101",
+      "tags": [
+        "tool_coverage",
+        "G3_data_in_question"
+      ],
+      "agent_expectations": {
+        "need_order_data": false,
+        "reply_facts": [
+          [
+            "30"
+          ]
+        ],
+        "max_workflow_errors": 1
+      }
+    },
+    {
+      "id": "coverage-g3-zh-45d-v1",
+      "query": "我的订阅付款是 45 天前的，按 v1 还能申请退款吗？",
+      "reference_answer": "见 reply_facts",
+      "expected_sources": [],
+      "category": "billing",
+      "risk_level": "medium",
+      "kb_version": "v1",
+      "customer_id": "cust_101",
+      "tags": [
+        "tool_coverage",
+        "G3_data_in_question"
+      ],
+      "agent_expectations": {
+        "need_order_data": false,
+        "reply_facts": [
+          [
+            "30"
+          ],
+          [
+            "不能",
+            "超",
+            "已过",
+            "无法",
+            "不符合",
+            "不在",
+            "之外"
+          ]
+        ],
+        "max_workflow_errors": 1
+      }
+    },
+    {
+      "id": "coverage-g3-en-61d-v2",
+      "query": "My purchase was 61 days ago. Is a refund still possible under policy v2?",
+      "reference_answer": "见 reply_facts",
+      "expected_sources": [],
+      "category": "billing",
+      "risk_level": "medium",
+      "kb_version": "v2",
+      "customer_id": "cust_101",
+      "tags": [
+        "tool_coverage",
+        "G3_data_in_question"
+      ],
+      "agent_expectations": {
+        "need_order_data": false,
+        "reply_facts": [
+          [
+            "60"
+          ],
+          [
+            "not",
+            "no ",
+            "outside",
+            "beyond",
+            "exceed",
+            "cannot",
+            "can't",
+            "past"
+          ]
+        ],
+        "max_workflow_errors": 1
+      }
+    },
+    {
+      "id": "coverage-g3-zh-40d-v2",
+      "query": "我 40 天前下的单，按 v2 还能退款吗？",
+      "reference_answer": "见 reply_facts",
+      "expected_sources": [],
+      "category": "billing",
+      "risk_level": "medium",
+      "kb_version": "v2",
+      "customer_id": "cust_101",
+      "tags": [
+        "tool_coverage",
+        "G3_data_in_question"
+      ],
+      "agent_expectations": {
+        "need_order_data": false,
+        "reply_facts": [
+          [
+            "60"
+          ],
+          [
+            "可以",
+            "在",
+            "符合",
+            "内"
+          ]
+        ],
+        "max_workflow_errors": 1
+      }
+    }
+  ]
+}
