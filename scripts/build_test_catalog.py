@@ -243,7 +243,7 @@ def last_line(rows: list[tuple]) -> str:
     return f"最近变动 {r[0]}：{short(r[2])}{extra}"
 
 
-def changes(rows: list[tuple], n: int = 3) -> str:
+def changes(rows: list[tuple], n: int = 5) -> str:
     if not rows:
         return ""
     items = "".join(
@@ -269,6 +269,7 @@ def card(name, what, tags, num, unit, last, body) -> str:
 
 AI_CACHE = ROOT / "docs" / "test_catalog_ai.json"
 AI_MODEL = "gpt-6.2-sol"
+AI_EFFORT = "medium"  # 推理强度，显式指定，不随 ~/.codex/config.toml 变化
 AI_CACHE_OTHER = ROOT / "docs" / "test_catalog_ai_other.json"
 AI_PROMPT = """你在给一个不懂代码的项目负责人写“测试分类”页面的说明。下面 JSON 里每一项是一类测试/检查的事实（简介、数量、最近几次提交）。
 对每一项输出三个字段：
@@ -285,7 +286,7 @@ AI_PROMPT = """你在给一个不懂代码的项目负责人写“测试分类�
 def ai_notes(facts: dict, cache_path: Path = AI_CACHE) -> dict:
     """用本机 codex 把最近变动写成人话；事实没变就用缓存。失败时返回空，页面退回原始提交说明。"""
     key = hashlib.sha256(
-        json.dumps([AI_MODEL, AI_PROMPT, facts], ensure_ascii=False, sort_keys=True).encode()
+        json.dumps([AI_MODEL, AI_EFFORT, AI_PROMPT, facts], ensure_ascii=False, sort_keys=True).encode()
     ).hexdigest()
     try:
         cache = json.loads(cache_path.read_text(encoding="utf-8"))
@@ -298,13 +299,21 @@ def ai_notes(facts: dict, cache_path: Path = AI_CACHE) -> dict:
     try:
         with tempfile.TemporaryDirectory() as tmp:  # 空目录运行，模型读不到仓库
             out = Path(tmp) / "out.txt"
-            subprocess.run(
+            proc = subprocess.run(
                 [exe, "exec", "--ephemeral", "--skip-git-repo-check", "-s", "read-only",
-                 "-m", AI_MODEL, "-C", tmp, "-o", str(out), "-"],
+                 "-m", AI_MODEL, "-c", f'model_reasoning_effort="{AI_EFFORT}"', "--json", "-C", tmp, "-o", str(out), "-"],
                 input=AI_PROMPT + json.dumps(facts, ensure_ascii=False, indent=1),
                 text=True, capture_output=True, timeout=420, env=env, check=True,
             )
             text = out.read_text(encoding="utf-8")
+        usage = {}
+        for line in proc.stdout.splitlines():
+            try:
+                ev = json.loads(line)
+            except ValueError:
+                continue
+            if ev.get("type") == "turn.completed":
+                usage = ev.get("usage", {})
         notes = json.loads(text[text.index("{") : text.rindex("}") + 1])
         notes = {
             k: {f: str(v.get(f, "")) for f in ("summary", "status", "blind")}
@@ -315,7 +324,8 @@ def ai_notes(facts: dict, cache_path: Path = AI_CACHE) -> dict:
         print(f"codex 生成失败，页面使用原始提交说明：{exc}")
         return {}
     cache_path.write_text(
-        json.dumps({"key": key, "model": AI_MODEL, "notes": notes}, ensure_ascii=False, indent=1),
+        json.dumps({"key": key, "model": AI_MODEL, "effort": AI_EFFORT, "usage": usage,
+                    "generated": datetime.now().strftime("%Y-%m-%d %H:%M"), "notes": notes}, ensure_ascii=False, indent=1),
         encoding="utf-8",
     )
     return notes
@@ -346,7 +356,7 @@ def rows_facts(rows, paths):
             **({"dataset_diff": r[3]} if len(r) > 3 else {}),
             "diff": commit_diff(r[1], paths),
         }
-        for r in rows[:3]
+        for r in rows[:5]
     ]
 
 
@@ -366,7 +376,27 @@ def note_body(notes: dict, key: str) -> str:
     return out
 
 
-NOTE_FOOT = '<p class="muted small">“最近变动”“当前状态”“测不到什么”由 ' + AI_MODEL + " 根据提交记录和简介生成，仅供参考。</p>"
+def note_foot(cache_path: Path) -> str:
+    """页面底部：说明由哪个模型、什么推理强度、依据什么生成，以及上次调用的 token 用量。"""
+    try:
+        c = json.loads(cache_path.read_text(encoding="utf-8"))
+    except Exception:
+        return ""
+    u = c.get("usage") or {}
+    used = (
+        f"上次调用用量：输入 {u.get('input_tokens', 0):,} token，输出 {u.get('output_tokens', 0):,} token。"
+        if u else ""
+    )
+    return (
+        "<div class='intro'><h3>关于页面里的 AI 说明</h3>"
+        "<p class='small'>“最近变动”“当前状态”“测不到什么”三类文字由本机 codex 调用 "
+        f"<b>{esc(c.get('model', AI_MODEL))}</b>（推理强度 <b>{esc(c.get('effort', AI_EFFORT))}</b>）生成，仅供参考。</p>"
+        f"<p class='small muted'>依据：每项最近 5 次提交里、只属于该项测试自己文件的改动行（每次提交最多 {DIFF_CAP} 字符）和一句简介。"
+        "模型在空目录里只读运行，看不到仓库其他内容。"
+        f"一次调用生成本页全部说明；提交和数据没变时直接用缓存，不再调用。{used}"
+        f"生成于 {esc(c.get('generated', ''))}。</p></div>"
+    )
+
 
 
 def build() -> str:
@@ -396,7 +426,7 @@ def build() -> str:
     )
 
     # pytest
-    pt_rows = recent_commits(["tests"], 3)
+    pt_rows = recent_commits(["tests"], 5)
     pt_body = (
         "<h3>怎么跑</h3><p class='small'><code>python -m pytest -q</code>　单文件："
         "<code>python -m pytest tests/test_xxx.py -q</code></p>"
@@ -418,7 +448,7 @@ def build() -> str:
         "测不到真实模型下的表现。</p>"
         "<h3>命令</h3><p class='small'><code>python scripts/run_ci_quality_gate.py</code></p>"
         + warn + base_ex
-        + changes(recent_commits([POLICY, RECORDING, "scripts/run_ci_quality_gate.py"], 3))
+        + changes(recent_commits([POLICY, RECORDING, "scripts/run_ci_quality_gate.py"], 5))
     )
 
     rel_body = (
@@ -426,7 +456,7 @@ def build() -> str:
         "额外要求延迟、Token 用量在限额内，转人工/审批/通过率不低于 99%。</p>"
         "<h3>怎么触发</h3><p class='small'>GitHub Actions 的 Release Quality Gate，手动勾选 confirm_live 并设调用上限（默认 300）。"
         "本地：<code>python scripts/run_baseline_eval.py --dry-run</code> 先看预估。</p>"
-        + changes(recent_commits([".github/workflows/release-quality-gate.yml", "scripts/run_baseline_eval.py"], 3))
+        + changes(recent_commits([".github/workflows/release-quality-gate.yml", "scripts/run_baseline_eval.py"], 5))
     )
 
     reg_body = (
@@ -452,10 +482,10 @@ def build() -> str:
         "pytest": {"简介": "代码逻辑对不对：状态机、权限、Risk Engine、安全检测、RAG、API，全部 Mock，不判断回答好坏", "用例数": ptotal, "测试文件数": len(pfiles), "最近提交": rows_facts(pt_rows, ["tests"])},
         "pr": {"简介": "用 Mock 模型和 Jev 录音跑固定 100 条考卷，检查分类、Tool、转人工、审批，每次 PR 自动跑", "考卷条数": len(bcases), "数据集哈希与策略一致": sha_ok, "Jev录音哈希与策略一致": rec_ok,
                "考卷最近提交": rows_facts(base_changes, [BASELINE]),
-               "门禁策略和录音最近提交": rows_facts(recent_commits([POLICY, RECORDING, "scripts/run_ci_quality_gate.py"], 3), [POLICY, RECORDING, "scripts/run_ci_quality_gate.py"])},
-        "release": {"简介": "同样 100 条考卷换真实模型跑，发版前在 GitHub 手动触发，花钱", "最近提交": rows_facts(recent_commits([".github/workflows/release-quality-gate.yml", "scripts/run_baseline_eval.py"], 3), [".github/workflows/release-quality-gate.yml", "scripts/run_baseline_eval.py"])},
-        "regress": {"简介": "线上出过问题的用例加精选考卷用例，用真实模型验证改动没有退化，手动跑，花钱", "用例数": reg_base + reg_online, "最近提交": rows_facts(dataset_changes(ONLINE_REG, 3), [ONLINE_REG])},
-        "online": {"简介": "对已部署的线上服务发请求，检查状态、意图、语言、关键词，手动跑，花钱", "用例数": len(checks), "最近提交": rows_facts(dataset_changes(REPLY_CHECKS, 3), [REPLY_CHECKS])},
+               "门禁策略和录音最近提交": rows_facts(recent_commits([POLICY, RECORDING, "scripts/run_ci_quality_gate.py"], 5), [POLICY, RECORDING, "scripts/run_ci_quality_gate.py"])},
+        "release": {"简介": "同样 100 条考卷换真实模型跑，发版前在 GitHub 手动触发，花钱", "最近提交": rows_facts(recent_commits([".github/workflows/release-quality-gate.yml", "scripts/run_baseline_eval.py"], 5), [".github/workflows/release-quality-gate.yml", "scripts/run_baseline_eval.py"])},
+        "regress": {"简介": "线上出过问题的用例加精选考卷用例，用真实模型验证改动没有退化，手动跑，花钱", "用例数": reg_base + reg_online, "最近提交": rows_facts(dataset_changes(ONLINE_REG, 5), [ONLINE_REG])},
+        "online": {"简介": "对已部署的线上服务发请求，检查状态、意图、语言、关键词，手动跑，花钱", "用例数": len(checks), "最近提交": rows_facts(dataset_changes(REPLY_CHECKS, 5), [REPLY_CHECKS])},
     }
     notes = ai_notes(facts)
 
@@ -500,7 +530,7 @@ def build() -> str:
 {card("线上回复检查", "对已部署的线上服务发请求，检查状态、意图、语言和关键词。",
       tag("线上真实模型") + tag("花钱", "paid") + tag("部署后手动"), len(checks), "条", L("online", t_last(dataset_changes(REPLY_CHECKS, 1))), S("online") + onl_body)}
 
-{NOTE_FOOT if notes else ''}
+{note_foot(AI_CACHE) if notes else ''}
 <script>{JS}</script></main></body></html>
 """
     return html_
@@ -520,14 +550,14 @@ def _render_other(notes: dict, facts: dict) -> str:
         facts[name] = {
             "简介": what + (" " + note if note else ""),
             **({"用例数": num} if num != "" else {}),
-            "最近提交": rows_facts(recent_commits(paths, 3), paths) if paths else [],
+            "最近提交": rows_facts(recent_commits(paths, 5), paths) if paths else [],
         }
         body = (
             note_body(notes, name)
             + f"<h3>命令</h3><p class='small'><code>{esc(cmd)}</code></p>"
             f"<h3>位置</h3><p class='small'>{esc(where)}</p>"
             + (f"<p class='small muted'>{esc(note)}</p>" if note else "")
-            + changes(recent_commits(paths, 3) if paths else [])
+            + changes(recent_commits(paths, 5) if paths else [])
         )
         return card(name, what, tags, num, unit, last, body)
 
@@ -610,7 +640,7 @@ def _render_other(notes: dict, facts: dict) -> str:
 <h2>演练（需要 PostgreSQL）</h2>{drills}
 <h2>线上和性能</h2>{online}
 <h2>评测脚本（不是门禁）</h2>{scripts_}
-{NOTE_FOOT if notes else ''}
+{note_foot(AI_CACHE_OTHER) if notes else ''}
 <script>{JS}</script></main></body></html>
 """
 
