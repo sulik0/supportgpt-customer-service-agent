@@ -272,7 +272,7 @@ AI_MODEL = "gpt-6.2-sol"
 AI_CACHE_OTHER = ROOT / "docs" / "test_catalog_ai_other.json"
 AI_PROMPT = """你在给一个不懂代码的项目负责人写“测试分类”页面的说明。下面 JSON 里每一项是一类测试/检查的事实（简介、数量、最近几次提交）。
 对每一项输出三个字段：
-- summary（最近变动）：这些提交让这项测试发生了什么变化、对测试结果有什么影响，60 到 120 字。给出的每条提交都改动过该项测试的文件或数据；没有提交时写“近期无改动”。
+- summary（最近变动）：这些提交让这项测试发生了什么变化、对测试结果有什么影响，60 到 120 字。每条提交带 diff：只含该项测试自己的文件里被改动的行（+ 开头是新增，- 开头是删除，diff 开头几行是改了哪些文件），可能被截断。请以 diff 为准判断这次到底改了什么，提交说明只作参考；diff 看不出实质变化（比如只改了格式或注释）就如实说。没有提交时写“近期无改动”。
 - status（现状）：这项测试现在是什么状态，80 字以内，只依据给定事实。
 - blind（测不到什么）：这项测试发现不了哪类问题，40 到 80 字；可结合简介和常识推断，但不要编造具体数字。
 写法要求：用大白话，像当面解释；技术名词（Mock、Workflow、哈希、Tool、CI、Jev 等）第一次出现时用括号简单说明它是什么；只用给定事实，不编造；直说事实，不用比喻、金句和总结式收尾。
@@ -321,8 +321,33 @@ def ai_notes(facts: dict, cache_path: Path = AI_CACHE) -> dict:
     return notes
 
 
-def rows_facts(rows):
-    return [{"date": r[0], "msg": short(r[2]), **({"dataset_diff": r[3]} if len(r) > 3 else {})} for r in rows[:3]]
+DIFF_CAP = 1800  # 每次提交最多给模型看的 diff 字符数
+
+
+def commit_diff(h: str, paths: list[str]) -> str:
+    """该提交里只属于 paths 的改动：文件名统计 + 增删的行（不含上下文）。"""
+    stat = git("show", "--format=", "--stat=100", h, "--", *paths).strip().splitlines()
+    raw = git("show", "--format=", "-U0", h, "--", *paths)
+    lines = []
+    for ln in raw.splitlines():
+        if ln.startswith(("+++", "---", "diff ", "index ", "@@")):
+            continue
+        if ln[:1] in "+-" and ln[1:].strip():
+            lines.append(ln[:160])
+    text = "\n".join(stat[:12]) + "\n" + "\n".join(lines)
+    return text if len(text) <= DIFF_CAP else text[:DIFF_CAP] + "\n…（已截断）"
+
+
+def rows_facts(rows, paths):
+    return [
+        {
+            "date": r[0],
+            "msg": short(r[2]),
+            **({"dataset_diff": r[3]} if len(r) > 3 else {}),
+            "diff": commit_diff(r[1], paths),
+        }
+        for r in rows[:3]
+    ]
 
 
 def note_L(notes: dict, key: str, fallback: str) -> str:
@@ -424,13 +449,13 @@ def build() -> str:
     t_last = lambda rows: last_line(rows)
 
     facts = {
-        "pytest": {"简介": "代码逻辑对不对：状态机、权限、Risk Engine、安全检测、RAG、API，全部 Mock，不判断回答好坏", "用例数": ptotal, "测试文件数": len(pfiles), "最近提交": rows_facts(pt_rows)},
+        "pytest": {"简介": "代码逻辑对不对：状态机、权限、Risk Engine、安全检测、RAG、API，全部 Mock，不判断回答好坏", "用例数": ptotal, "测试文件数": len(pfiles), "最近提交": rows_facts(pt_rows, ["tests"])},
         "pr": {"简介": "用 Mock 模型和 Jev 录音跑固定 100 条考卷，检查分类、Tool、转人工、审批，每次 PR 自动跑", "考卷条数": len(bcases), "数据集哈希与策略一致": sha_ok, "Jev录音哈希与策略一致": rec_ok,
-               "考卷最近提交": rows_facts(base_changes),
-               "门禁策略和录音最近提交": rows_facts(recent_commits([POLICY, RECORDING, "scripts/run_ci_quality_gate.py"], 3))},
-        "release": {"简介": "同样 100 条考卷换真实模型跑，发版前在 GitHub 手动触发，花钱", "最近提交": rows_facts(recent_commits([".github/workflows/release-quality-gate.yml", "scripts/run_baseline_eval.py"], 3))},
-        "regress": {"简介": "线上出过问题的用例加精选考卷用例，用真实模型验证改动没有退化，手动跑，花钱", "用例数": reg_base + reg_online, "最近提交": rows_facts(dataset_changes(ONLINE_REG, 3))},
-        "online": {"简介": "对已部署的线上服务发请求，检查状态、意图、语言、关键词，手动跑，花钱", "用例数": len(checks), "最近提交": rows_facts(dataset_changes(REPLY_CHECKS, 3))},
+               "考卷最近提交": rows_facts(base_changes, [BASELINE]),
+               "门禁策略和录音最近提交": rows_facts(recent_commits([POLICY, RECORDING, "scripts/run_ci_quality_gate.py"], 3), [POLICY, RECORDING, "scripts/run_ci_quality_gate.py"])},
+        "release": {"简介": "同样 100 条考卷换真实模型跑，发版前在 GitHub 手动触发，花钱", "最近提交": rows_facts(recent_commits([".github/workflows/release-quality-gate.yml", "scripts/run_baseline_eval.py"], 3), [".github/workflows/release-quality-gate.yml", "scripts/run_baseline_eval.py"])},
+        "regress": {"简介": "线上出过问题的用例加精选考卷用例，用真实模型验证改动没有退化，手动跑，花钱", "用例数": reg_base + reg_online, "最近提交": rows_facts(dataset_changes(ONLINE_REG, 3), [ONLINE_REG])},
+        "online": {"简介": "对已部署的线上服务发请求，检查状态、意图、语言、关键词，手动跑，花钱", "用例数": len(checks), "最近提交": rows_facts(dataset_changes(REPLY_CHECKS, 3), [REPLY_CHECKS])},
     }
     notes = ai_notes(facts)
 
@@ -495,7 +520,7 @@ def _render_other(notes: dict, facts: dict) -> str:
         facts[name] = {
             "简介": what + (" " + note if note else ""),
             **({"用例数": num} if num != "" else {}),
-            "最近提交": rows_facts(recent_commits(paths, 3)) if paths else [],
+            "最近提交": rows_facts(recent_commits(paths, 3), paths) if paths else [],
         }
         body = (
             note_body(notes, name)
@@ -513,11 +538,11 @@ def _render_other(notes: dict, facts: dict) -> str:
             ["frontend/tests"], "cd frontend && npm test", "frontend/tests/，5 个文件")
         + row("MCP Server 测试", "独立的 stdio 进程，只通过 HTTP 调员工 API；这里验证它的工具和返回。",
               tag("无模型") + free + tag("本地手动"), mcp, "个用例",
-              ["tests/mcp", "src/mcp_server"], "python -m unittest discover -s tests/mcp -v",
+              ["tests/mcp"], "python -m unittest discover -s tests/mcp -v",
               "tests/mcp/", "用独立轻量环境，不加载后端的 conftest；CI 里没有这一步。")
         + row("PromptOps 对比实验", "PR 门禁里的一步：用 Mock 验证 Prompt 版本成对对比、晋级的流程是否能走通。",
               tag("Mock") + free + tag("每次 PR 自动"), "", "",
-              ["scripts/promptops.py", "src/promptops"],
+              ["scripts/promptops.py"],
               "python scripts/promptops.py --registry <目录> evaluate --bundle default --environment staging --mock",
               "scripts/promptops.py")
         + row("编译与构建检查", "只检查能不能编译、构建，不算测试：Python 编译、前端 build、Docker 镜像构建。",
@@ -528,13 +553,13 @@ def _render_other(notes: dict, facts: dict) -> str:
     drills = (
         row("PostgreSQL 故障演练", "多进程验证写 Tool 的状态机、租约、对账：崩溃、重复提交、超时后的处理。",
             tag("无模型") + free + tag("CI 自动，本机跑不了"), "", "",
-            ["scripts/run_postgres_tool_drill.py", "src/tools"],
+            ["scripts/run_postgres_tool_drill.py"],
             "python scripts/run_postgres_tool_drill.py --confirm-isolated-database",
             "scripts/run_postgres_tool_drill.py",
             "需要 TOOL_DRILL_DATABASE_URL，库名必须以 _test 或 _drill 结尾。本机没有 PG 时不能算演练通过。")
         + row("参考 OMS 持久化演练", "用隔离的 PG Schema 验证参考 OMS 的多进程幂等和提交后崩溃。",
               tag("无模型") + free + tag("CI 自动，本机跑不了"), "", "",
-              ["scripts/run_reference_oms_drill.py", "src/oms"],
+              ["scripts/run_reference_oms_drill.py"],
               "python scripts/run_reference_oms_drill.py --confirm-isolated-database",
               "scripts/run_reference_oms_drill.py", "同样需要隔离的 PG 库。")
     )
