@@ -41,6 +41,7 @@ from src.evaluation.baseline_evaluation import (
     BaselineExpectations,
     evaluate_baseline_behavior,
 )
+from src.evaluation.security_judge import scope_forbidden_tools
 from src.evaluation.offline_rag import collect_workflow_records, load_evaluation_dataset
 from src.evaluation.real_llm_regression import (
     build_real_llm_run_plan,
@@ -109,24 +110,6 @@ def case_kind(case) -> str:
         return "control"
     tags = [tag for tag in case.tags if tag != "covert_injection"]
     return "control" if "control" in tags else (tags[0] if tags else "unknown")
-
-
-def scope_forbidden_tools(intent) -> set[str]:
-    """按系统实际判定的意图算：通用工具和该意图的候选工具之外的全部工具，含退款类。
-
-    不用用例里写死的禁用名单：意图分类可能和用例预期不同（例如含“退款”字样被判成账单争议），
-    此时该意图本来就允许的工具不能算越权。意图偏离另行统计。
-    """
-    normalized = normalize_intent(intent)
-    skill = skill_registry.select({"intent": normalized.value}).definition
-    candidates = {
-        item.name
-        for item in tool_registry.planner_candidates(
-            skill.allowed_tools - COMMON_READ_TOOLS, role="agent", intent=normalized
-        )
-    }
-    every_tool = {item["name"] for item in tool_registry.list_tools()}
-    return every_tool - set(COMMON_READ_TOOLS) - candidates
 
 
 def summarize_case(case, output: dict, *, full: bool = True) -> dict:

@@ -22,6 +22,7 @@ from src.evaluation.manifest import (
     load_manifest,
     validate_manifest,
 )
+from src.evaluation.security_judge import judge_security
 from src.evaluation.offline_rag import (
     WorkflowRunner,
     collect_workflow_records,
@@ -31,25 +32,18 @@ from src.promptops.runtime import active_bundle, prompt_scope
 
 TOTAL_NOTE = "题数会变，不用于比较和门禁"
 def online_layers(manifest: Mapping[str, Any]) -> List[str]:
-    """线上层（kind=online）：测已部署的服务，不能在本地回放，部署后用单独脚本跑。"""
-    return [n for n, v in manifest["layers"].items() if v.get("kind") == "online"]
+    """带线上检查题（online_file）的层：这部分题测已部署的服务，部署后用单独脚本跑。"""
+    return [n for n, v in manifest["layers"].items() if v.get("online_file")]
 
 
 def select_layers(manifest: Mapping[str, Any], names: Sequence[str] | str) -> List[str]:
-    """names 为层名列表，或字符串 'all'（不含线上层）。"""
-    online = online_layers(manifest)
-    available = [n for n in manifest["layers"] if n not in online]
+    """names 为层名列表，或字符串 'all'。"""
+    available = list(manifest["layers"])
     if names == "all":
         return available
-    unknown = [name for name in names if name not in manifest["layers"]]
+    unknown = [name for name in names if name not in available]
     if unknown:
         raise ValueError(f"清单里没有这些层：{', '.join(unknown)}")
-    wrong = [name for name in names if name in online]
-    if wrong:
-        raise ValueError(
-            f"{', '.join(wrong)} 是线上层，不能本地回放；部署后用 "
-            "scripts/run_online_reply_check.py 跑"
-        )
     return list(names)
 
 
@@ -168,7 +162,10 @@ async def run_layered_evaluation(
 
     cases = []
     layer_of: Dict[str, str] = {}
+    judge_of: Dict[str, str] = {}
     for name in names:
+        if manifest["layers"][name]["count"] == 0:
+            continue  # 空层（如 unsorted）没有题可回放
         for case in load_evaluation_dataset(
             root / manifest["layers"][name]["file"],
             validate_agent=False,
@@ -176,6 +173,7 @@ async def run_layered_evaluation(
         ):
             cases.append(case)
             layer_of[case.id] = name
+            judge_of[case.id] = manifest["layers"][name].get("judge", "baseline")
 
     with prompt_scope():
         bundle = active_bundle()
@@ -187,10 +185,13 @@ async def run_layered_evaluation(
 
     case_rows = []
     for record in records:
-        behavior = evaluate_baseline_behavior(
-            record.workflow_output,
-            BaselineExpectations.from_mapping(record.case.agent_expectations),
-        )
+        if judge_of[record.case.id] == "security":
+            behavior = judge_security(record.workflow_output)
+        else:
+            behavior = evaluate_baseline_behavior(
+                record.workflow_output,
+                BaselineExpectations.from_mapping(record.case.agent_expectations),
+            )
         case_rows.append(
             {
                 "id": record.case.id,

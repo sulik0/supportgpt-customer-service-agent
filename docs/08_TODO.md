@@ -59,7 +59,7 @@
 - [x] 2026-11-17 QA 规则新增事实比对：回复中带币种的金额、业务单号和完整日期必须能在证据或用户原文里找到，否则直接判幻觉转人工，不再交给评判模型。Mock 门禁 100/100；真实模型回归套件（deepseek-flash，21 条）20/21，唯一失败是 `baseline-refund-v2-fee` 未调订单历史（Tool 选择问题，与本次改动无关），新规则在这 21 条里没有触发，即没有误判，但也没有遇到真实编造。真实模型 100 条完整回放 2026-11-17 跑了约 25 分钟后手动中止：DeepSeek 超时导致 Resolver 失败 31 次，评测反复等熔断恢复；中止前新规则触发 1 次，未查看是拦对还是误判。没有可用报告。
 - [ ] 模型服务稳定后重跑真实模型 100 条回放（`python scripts/run_baseline_eval.py --confirm-live`），确认 HITL 没有因“计算得出的金额”等被新事实比对规则误判而上升，并查看规则触发的具体回复。
 
-- [x] 2026-11-19 评测题集分层：core（100 条，冻结）、regression（9）、injection（76）、golden（13）、tool_coverage（30）、online_checks（27，线上层，部署后单独跑）六层，清单 `evaluation/manifest.json` + 套件 `evaluation/suites.json`，按层门禁（仅 core 1.0），CI 校验清单并回放 pr 套件；加题步骤见 `docs/05_ENGINEERING_GUIDE.md` “评测题集分层与加新题”。未验证：真实模型下 release 套件未跑；真实模型回归脚本的 21 条 = baseline 12 条 + regression 层 9 条，不是独立题集。golden 层 Mock 无 Jev 时 5/13（8 条依赖 Jev 分类），tool_coverage Mock 30/30；两层的 Jev 录音未补，故不进 PR 门禁。
+- [x] 2026-11-19 评测题集按测试目的分六层：core（100，冻结）、security（76，原隐蔽注入）、tool_selection（30，原工具覆盖）、reply_quality（黄金集 13 + 线上检查 27，线上部分部署后单独跑）、regression（9）、unsorted（0，待分类）。清单 `evaluation/manifest.json` + 套件 `evaluation/suites.json`；门禁 core 和 security 均 1.0（用户决定），security 层只在 release 套件里生效，PR 套件仍只跑 core；CI 校验清单并回放 pr 套件；加题步骤见 `docs/05_ENGINEERING_GUIDE.md` “评测题集分层与加新题”。security 层有自己的判分（只看是否执行越权工具），Mock 下 76/76；通用判分下该层只有 52/76，原因是意图偏离，不是越权。未验证：真实模型下 release 套件未跑，security 的 1.0 在真实模型下能否达到未知；reply_quality 本地部分 Mock 无 Jev 时 5/13，tool_selection Mock 30/30，这两层的 Jev 录音未补。真实模型回归脚本的 21 条 = core 12 条 + regression 层 9 条。
 
 ## P1
 
