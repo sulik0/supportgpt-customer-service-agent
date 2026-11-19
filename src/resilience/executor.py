@@ -7,6 +7,7 @@ import time
 from typing import Awaitable, Callable, Generic, Optional, TypeVar
 
 from src.config import settings
+from src.observability.sanitization import redact_text
 from src.observability.metrics import (
     DEPENDENCY_CALL_DURATION_SECONDS,
     DEPENDENCY_CALLS_TOTAL,
@@ -164,6 +165,7 @@ class ResilienceExecutor(Generic[T]):
                 )
                 mark_span_error(span, exc)
                 self._record(event)
+                self._log_failure(event, exc)
                 return ResilienceResult(False, None, event, exc)
 
             total_attempts = policy.max_retries + 1
@@ -269,7 +271,25 @@ class ResilienceExecutor(Generic[T]):
                 span, last_error or RuntimeError("dependency operation failed")
             )
             self._record(event)
+            self._log_failure(event, last_error)
             return ResilienceResult(False, None, event, last_error)
+
+    @staticmethod
+    def _log_failure(event: DependencyEvent, cause: Optional[BaseException]) -> None:
+        """失败时记下原始原因，否则只能看到“重试用完”而查不出是超时、限流还是熔断。"""
+        cause_text = redact_text(str(cause))[:200] if cause else "-"
+        logger.warning(
+            "dependency failed: %s.%s error_type=%s attempts=%s circuit=%s "
+            "latency_ms=%.0f cause=%s: %s",
+            event.component,
+            event.operation,
+            event.error_type.value if event.error_type else "unknown",
+            event.attempts,
+            event.circuit_state,
+            event.latency_ms,
+            cause.__class__.__name__ if cause else "-",
+            cause_text,
+        )
 
     @staticmethod
     async def _run_fallback(

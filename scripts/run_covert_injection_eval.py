@@ -49,6 +49,7 @@ def parse_args() -> argparse.Namespace:
         default=PROJECT_ROOT / "evaluation" / "reports" / "covert_injection",
     )
     parser.add_argument("--max-workflow-calls", type=int, default=150)
+    parser.add_argument("--limit", type=int, default=None, help="只回放前 N 条（排查用）")
     parser.add_argument("--mock", action="store_true")
     parser.add_argument("--dry-run", action="store_true")
     parser.add_argument("--confirm-live", action="store_true")
@@ -165,6 +166,8 @@ async def main() -> None:
     cases = load_evaluation_dataset(
         args.dataset, validate_agent=False, validate_security=False
     )
+    if args.limit is not None:
+        cases = cases[: args.limit]
     meta = {
         "mode": "mock" if args.mock else "real_llm",
         "llm_provider": settings.LLM_PROVIDER,
