@@ -12,7 +12,10 @@ import ast
 import hashlib
 import html
 import json
+import os
 import random
+import shutil
+import tempfile
 import subprocess
 from datetime import datetime
 from pathlib import Path
@@ -262,6 +265,58 @@ def card(name, what, tags, num, unit, last, body) -> str:
     )
 
 
+AI_CACHE = ROOT / "docs" / "test_catalog_ai.json"
+AI_MODEL = "gpt-6.2-sol"
+AI_PROMPT = """你在为一个“测试分类”页面写简短中文说明。下面 JSON 是 5 项测试各自的事实（数量、最近几次提交）。
+对每一项输出两个字段：
+- summary：最近变动对这项测试意味着什么，不超过 45 字。给出的每条提交都改动过该项测试的文件或数据，请概括这些提交对该项测试做了什么；没有提交时写“近期无改动”。
+- status：当前状态一句话，不超过 30 字，只能依据给定事实。
+要求：只用给定事实，不编造；直说事实，不用比喻和总结式的话；技术名词保留但要让不懂代码的人看得懂。
+只输出一个 JSON 对象，键与输入相同，值是 {"summary": "...", "status": "..."}，不要任何其他文字。
+
+事实：
+"""
+
+
+def ai_notes(facts: dict) -> dict:
+    """用本机 codex 把最近变动写成人话；事实没变就用缓存。失败时返回空，页面退回原始提交说明。"""
+    key = hashlib.sha256(
+        json.dumps([AI_MODEL, AI_PROMPT, facts], ensure_ascii=False, sort_keys=True).encode()
+    ).hexdigest()
+    try:
+        cache = json.loads(AI_CACHE.read_text(encoding="utf-8"))
+        if cache.get("key") == key:
+            return cache["notes"]
+    except Exception:
+        pass
+    exe = shutil.which("codex") or "/opt/homebrew/bin/codex"
+    env = {**os.environ, "PATH": os.environ.get("PATH", "") + ":/opt/homebrew/bin:/usr/local/bin"}
+    try:
+        with tempfile.TemporaryDirectory() as tmp:  # 空目录运行，模型读不到仓库
+            out = Path(tmp) / "out.txt"
+            subprocess.run(
+                [exe, "exec", "--ephemeral", "--skip-git-repo-check", "-s", "read-only",
+                 "-m", AI_MODEL, "-C", tmp, "-o", str(out), "-"],
+                input=AI_PROMPT + json.dumps(facts, ensure_ascii=False, indent=1),
+                text=True, capture_output=True, timeout=240, env=env, check=True,
+            )
+            text = out.read_text(encoding="utf-8")
+        notes = json.loads(text[text.index("{") : text.rindex("}") + 1])
+        notes = {
+            k: {"summary": str(v.get("summary", "")), "status": str(v.get("status", ""))}
+            for k, v in notes.items()
+            if k in facts and isinstance(v, dict)
+        }
+    except Exception as exc:
+        print(f"codex 生成失败，页面使用原始提交说明：{exc}")
+        return {}
+    AI_CACHE.write_text(
+        json.dumps({"key": key, "model": AI_MODEL, "notes": notes}, ensure_ascii=False, indent=1),
+        encoding="utf-8",
+    )
+    return notes
+
+
 def build() -> str:
     baseline = load(BASELINE)
     bcases = baseline["cases"]
@@ -340,6 +395,28 @@ def build() -> str:
     )
 
     t_last = lambda rows: last_line(rows)
+
+    def rows_facts(rows):
+        return [{"date": r[0], "msg": short(r[2]), **({"dataset_diff": r[3]} if len(r) > 3 else {})} for r in rows[:3]]
+
+    facts = {
+        "pytest": {"用例数": ptotal, "测试文件数": len(pfiles), "最近提交": rows_facts(pt_rows)},
+        "pr": {"考卷条数": len(bcases), "数据集哈希与策略一致": sha_ok, "Jev录音哈希与策略一致": rec_ok,
+               "考卷最近提交": rows_facts(base_changes),
+               "门禁策略和录音最近提交": rows_facts(recent_commits([POLICY, RECORDING, "scripts/run_ci_quality_gate.py"], 3))},
+        "release": {"最近提交": rows_facts(recent_commits([".github/workflows/release-quality-gate.yml", "scripts/run_baseline_eval.py"], 3))},
+        "regress": {"用例数": reg_base + reg_online, "最近提交": rows_facts(dataset_changes(ONLINE_REG, 3))},
+        "online": {"用例数": len(checks), "最近提交": rows_facts(dataset_changes(REPLY_CHECKS, 3))},
+    }
+    notes = ai_notes(facts)
+
+    def L(key, fallback):
+        n = notes.get(key, {}).get("summary")
+        return f"最近变动：{n}" if n else fallback
+
+    def S(key):
+        n = notes.get(key, {}).get("status")
+        return f"<h3>当前状态</h3><p class='small'>{esc(n)}</p>" if n else ""
     html_ = f"""<!doctype html>
 <html lang="zh-CN"><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
@@ -362,23 +439,24 @@ def build() -> str:
 
 <h2>代码测试</h2>
 {card("pytest", "代码逻辑对不对：状态机、权限、Risk Engine、安全检测、RAG、API。全部 Mock。",
-      tag("Mock") + tag("免费", "free") + tag("每次 PR / 本地随时"), ptotal, "个用例", t_last(pt_rows), pt_body)}
+      tag("Mock") + tag("免费", "free") + tag("每次 PR / 本地随时"), ptotal, "个用例", L("pytest", t_last(pt_rows)), S("pytest") + pt_body)}
 
 <h2>同一份 100 条考卷（Baseline）</h2>
 <div class="group">
 <p class="gt muted small">下面两项用的是同一份数据，只是模型不同，所以“PR 绿”不等于“真实门禁绿”。</p>
 {card("PR Mock 门禁", "用 Mock 模型和 Jev 录音跑 100 条，检查分类、Tool、转人工、审批。",
-      tag("Mock + 录音") + tag("免费", "free") + tag("每次 PR 自动"), len(bcases), "条", t_last(base_changes), pr_body)}
+      tag("Mock + 录音") + tag("免费", "free") + tag("每次 PR 自动"), len(bcases), "条", L("pr", t_last(base_changes)), S("pr") + pr_body)}
 {card("手动真实门禁", "同样 100 条，用真实模型跑。发版前的最后一关。",
-      tag("真实模型") + tag("花钱", "paid") + tag("发版前手动"), len(bcases), "条", t_last(recent_commits([".github/workflows/release-quality-gate.yml"], 1)), rel_body)}
+      tag("真实模型") + tag("花钱", "paid") + tag("发版前手动"), len(bcases), "条", L("release", t_last(recent_commits([".github/workflows/release-quality-gate.yml"], 1))), S("release") + rel_body)}
 </div>
 
 <h2>补充用例（不属于考卷）</h2>
 {card("真实问题回归", "线上真实出过问题的用例，加上精选的考卷用例，用真实模型验证改动没有退化。",
-      tag("真实模型") + tag("花钱", "paid") + tag("改 Prompt/Agent 后手动"), reg_base + reg_online, "条", t_last(dataset_changes(ONLINE_REG, 1)), reg_body)}
+      tag("真实模型") + tag("花钱", "paid") + tag("改 Prompt/Agent 后手动"), reg_base + reg_online, "条", L("regress", t_last(dataset_changes(ONLINE_REG, 1))), S("regress") + reg_body)}
 {card("线上回复检查", "对已部署的线上服务发请求，检查状态、意图、语言和关键词。",
-      tag("线上真实模型") + tag("花钱", "paid") + tag("部署后手动"), len(checks), "条", t_last(dataset_changes(REPLY_CHECKS, 1)), onl_body)}
+      tag("线上真实模型") + tag("花钱", "paid") + tag("部署后手动"), len(checks), "条", L("online", t_last(dataset_changes(REPLY_CHECKS, 1))), S("online") + onl_body)}
 
+{('<p class="muted small">“最近变动”和“当前状态”由 ' + AI_MODEL + ' 根据提交记录生成，仅供参考。</p>') if notes else ''}
 <script>{JS}</script></main></body></html>
 """
     return html_
