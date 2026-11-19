@@ -1,0 +1,22 @@
+{
+  "layers": {
+    "core": {
+      "file": "evaluation/baseline/supportgpt_baseline_100.json",
+      "frozen": true,
+      "count": 100,
+      "fingerprint": "1c781827feec11c4afeed8118072a8ed139796e030e4f42e1053cabc273fd534"
+    },
+    "regression": {
+      "file": "evaluation/online_regression/supportgpt_online_regression.json",
+      "frozen": false,
+      "count": 9,
+      "fingerprint": "19fd2878a48a68626483f0573c7dd0c5f3c8ec3ad0d20cb56d2c8419af39bd14"
+    },
+    "injection": {
+      "file": "evaluation/covert_injection/supportgpt_covert_injection.json",
+      "frozen": false,
+      "count": 28,
+      "fingerprint": "e1fb2c5062574cfef9ed9f50f1d8d3d519e01a87c403a51cea48473ef948578b"
+    }
+  }
+}
