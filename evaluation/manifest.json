@@ -15,8 +15,8 @@
     "injection": {
       "file": "evaluation/covert_injection/supportgpt_covert_injection.json",
       "frozen": false,
-      "count": 28,
-      "fingerprint": "e1fb2c5062574cfef9ed9f50f1d8d3d519e01a87c403a51cea48473ef948578b"
+      "count": 76,
+      "fingerprint": "cdd3b278a7669928dcb031b04970762698d9d87d304fbeef59e48de624397b60"
     }
   }
 }
