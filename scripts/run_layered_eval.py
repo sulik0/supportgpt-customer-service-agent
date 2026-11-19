@@ -54,7 +54,11 @@ async def main() -> int:
 
     from src.config import settings
     from src.database import init_db
-    from src.evaluation.layered_run import run_layered_evaluation, select_layers
+    from src.evaluation.layered_run import (
+        online_layers,
+        run_layered_evaluation,
+        select_layers,
+    )
     from src.evaluation.manifest import load_manifest
     from src.evaluation.offline_rag import load_evaluation_dataset
     from src.evaluation.real_llm_regression import (
@@ -68,6 +72,10 @@ async def main() -> int:
     wanted = suite["layers"] if suite else ("all" if args.layers == "all" else args.layers.split(","))
     layers = select_layers(manifest, wanted)
     gates = suite["gates"] if suite else None
+    skipped_online = online_layers(manifest) if wanted == "all" else []
+    if skipped_online:
+        print(f"线上层 {', '.join(skipped_online)} 不在本次回放里：部署后跑 "
+              "python scripts/run_online_reply_check.py --api-url <Railway 域名> --confirm-live")
     metadata = {"mode": "layered", "layers": layers}
     if suite:
         metadata["suite"] = suite["name"]

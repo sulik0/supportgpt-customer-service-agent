@@ -123,7 +123,9 @@ def test_suites_config_matches_manifest():
     manifest = load_manifest()
     pr, release = load_suite("pr"), load_suite("release")
     assert select_layers(manifest, pr["layers"]) == ["core"] and pr["mode"] == "replay"
-    assert select_layers(manifest, release["layers"]) == list(manifest["layers"])
+    replayable = [n for n, v in manifest["layers"].items() if v.get("kind") != "online"]
+    assert select_layers(manifest, release["layers"]) == replayable
+    assert "online_checks" not in replayable
     assert pr["gates"] == {"core": 1.0}
 
 
@@ -136,3 +138,16 @@ async def test_unselected_layer_being_edited_does_not_block_the_run(tmp_path):
         workflow_runner=_runner(set()),
     )
     assert [row["layer"] for row in result["cases"]] == ["core"]
+
+
+def test_online_layer_is_excluded_from_all_and_rejected_when_named(tmp_path):
+    from src.evaluation.layered_run import online_layers, select_layers
+
+    manifest = {"layers": {
+        "core": {}, "inj": {}, "live": {"kind": "online"},
+    }}
+    assert online_layers(manifest) == ["live"]
+    assert select_layers(manifest, "all") == ["core", "inj"]
+    assert select_layers(manifest, ["core"]) == ["core"]
+    with pytest.raises(ValueError, match="线上层"):
+        select_layers(manifest, ["live"])
