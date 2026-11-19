@@ -514,6 +514,7 @@ JS = """
 async function refreshCatalog(){
   const b=document.getElementById('rbtn'),m=document.getElementById('rmsg');
   if(location.protocol==='file:'){m.textContent='需先运行 python3 scripts/test_catalog_server.py，再打开 http://127.0.0.1:8765';return;}
+  if(!confirm('重新生成两个页面？会读 GitHub 记录；提交或数据有变时还会调用一次 GPT（用额度），约几十秒到两分钟。'))return;
   b.disabled=true;m.textContent='更新中…';
   try{const r=await fetch('/refresh',{method:'POST'});if(!r.ok)throw new Error(r.status);location.reload();}
   catch(e){m.textContent='更新失败：'+e.message;b.disabled=false;}
