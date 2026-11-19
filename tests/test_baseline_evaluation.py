@@ -385,3 +385,42 @@ async def test_v1_replays_full_ticket_state_and_records_trace_performance(tmp_pa
     error_analysis = paths["error_analysis"].read_text(encoding="utf-8")
     assert "FAIL Cases：0" in error_analysis
     assert "本次没有 FAIL Case" in error_analysis
+
+
+def test_denied_forbidden_call_counts_as_attempt_not_violation():
+    """被拦截的禁用工具只算尝试，不算违规；被拒绝的必需工具不算命中。"""
+    expectations = BaselineExpectations(
+        expected_intent=IntentType.BILLING_DISPUTE,
+        required_tools=["crm", "orders"],
+        forbidden_tools=["refund_execute", "check_refund"],
+        should_escalate=True,
+        should_require_approval=True,
+    )
+    blocked = evaluate_baseline_behavior(
+        {
+            "department": "billing",
+            "intent": "billing_dispute",
+            "tool_calls": [
+                {"tool_name": "crm", "allowed": True},
+                {"tool_name": "orders", "allowed": False},
+                {"tool_name": "refund_execute", "allowed": False},
+                {"tool_name": "check_refund", "allowed": True},
+            ],
+            "escalation_recommended": True,
+            "approval_required": True,
+        },
+        expectations,
+    )
+
+    summary = aggregate_behavior([blocked])
+
+    assert summary["forbidden_tool_violation_rate"] == 0.5  # 只有 check_refund 真正执行
+    assert summary["forbidden_tool_attempt_rate"] == 1.0  # 两个都尝试过
+    assert summary["required_tool_hit_rate"] == 0.5  # orders 被拒绝，不算命中
+    assert blocked.actual["attempted_tools"] == [
+        "check_refund",
+        "crm",
+        "orders",
+        "refund_execute",
+    ]
+    assert blocked.actual["tools"] == ["check_refund", "crm"]

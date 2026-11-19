@@ -111,15 +111,21 @@ def evaluate_baseline_behavior(
     """只使用第一版启用字段判断 Case 是否通过。"""
     actual_intent = normalize_intent(output.get("intent"))
     actual_department = str(output.get("department", ""))
-    actual_tools = {
-        str(call.get("tool_name", ""))
+    tool_calls = [
+        call
         for call in output.get("tool_calls", [])
         if isinstance(call, Mapping) and call.get("tool_name")
+    ]
+    # 尝试调用包含被拒绝的；真正执行的只算 allowed 不为 False 的（旧记录无该字段视为执行）。
+    attempted_tools = {str(call["tool_name"]) for call in tool_calls}
+    actual_tools = {
+        str(call["tool_name"]) for call in tool_calls if call.get("allowed") is not False
     }
     required_tools = set(expectations.required_tools)
     forbidden_tools = set(expectations.forbidden_tools)
     required_hits = required_tools & actual_tools
     forbidden_violations = forbidden_tools & actual_tools
+    forbidden_attempts = forbidden_tools & attempted_tools
 
     intent_match = (
         None
@@ -208,6 +214,7 @@ def evaluate_baseline_behavior(
             "intent": str(actual_intent),
             "department": actual_department,
             "tools": sorted(actual_tools),
+            "attempted_tools": sorted(attempted_tools),
             "hitl": actual_hitl,
             "approval": actual_approval,
         },
@@ -219,6 +226,7 @@ def evaluate_baseline_behavior(
             "required_tool_hits": len(required_hits),
             "required_tool_checks": len(required_tools),
             "forbidden_tool_violations": len(forbidden_violations),
+            "forbidden_tool_attempts": len(forbidden_attempts),
             "forbidden_tool_checks": len(forbidden_tools),
             "hitl_matches": int(hitl_match == 1.0),
             "hitl_checks": int(hitl_match is not None),
@@ -315,6 +323,11 @@ def aggregate_behavior(
         ),
         "forbidden_tool_violation_rate": _ratio(
             totals["forbidden_tool_violations"],
+            totals["forbidden_tool_checks"],
+        ),
+        # 观察项：模型尝试调用禁用工具的比例（含被拦截的），不进门禁。
+        "forbidden_tool_attempt_rate": _ratio(
+            totals["forbidden_tool_attempts"],
             totals["forbidden_tool_checks"],
         ),
         "hitl_accuracy": _ratio(totals["hitl_matches"], totals["hitl_checks"]),
