@@ -4,7 +4,7 @@
       "file": "evaluation/baseline/supportgpt_baseline_100.json",
       "frozen": true,
       "count": 100,
-      "fingerprint": "1c781827feec11c4afeed8118072a8ed139796e030e4f42e1053cabc273fd534"
+      "fingerprint": "5a22f3bbd0013e106b58a6bdca1269e85947da41aaa71458289d78d42dbf8dd8"
     },
     "regression": {
       "file": "evaluation/online_regression/supportgpt_online_regression.json",

@@ -170,6 +170,7 @@
 - [x] 回复语言收拢到 `src/models/language.py`：原来 7 处用 4 种规则，只有范围外说明认“请用英语回答”，降级回复、安全拦截文案、公开状态说明都只看原文是否含中文。现在都先认显式要求。
 - [x] QA 用的权威依据判断从 `src/models/intents.py` 移到 `src/agents/authority.py`；删除没有读取方的 `model_sees_action` 字段；`/customer-context` 的 `last_interaction` 不再写死为“两天前”，改为最近一张历史工单的创建时间；清理 `src` 下（除 `evaluation/`）pyflakes 报出的未使用导入和变量。仅 Mock 测试验证。
 - [x] 2026-11-19 投诉类词汇只由投诉规则判断（用户决定）：`ACTION_OR_DISPUTE` 去掉“投诉/举报/曝光/起诉/律师/消协/12315”和 complain/lawsuit/lawyer/sue；Analyzer 投诉规则改为出现“投诉/complain”即算，再排除“怎么投诉、投诉电话/渠道/流程”等流程咨询，并补上“律师、举报、lawsuit、sue”。“请问怎么投诉扣费的问题”不再按第 5 条转人工；“我要找律师”从只在写操作类别转人工改为任何类别都按第 16 条转人工。Mock 门禁 100/100；真实模型回归套件（deepseek-flash + Jev，21 条）20/21，唯一失败仍是 `baseline-refund-v2-fee` 未调订单历史，与本次无关。线上回复检查新增 `complaint-how-to-zh`、`complaint-lawyer-zh`。 部署后线上回复检查 27 条：首轮 24/27，2 条 HTTP 502 是检查期间另一会话推送触发 Railway 重新部署，`refund-as-question-zh` 因 QA 0.55 显示 quality_review（同样转人工）；这 3 条重跑 3/3 通过。新增 2 条均通过。工单 409（已自动回答、带测试标记）撤回时遇 502 未撤回；脚本已加撤回重试。
+- [x] 2026-11-19 Baseline 升到 v2.7（用户决定）：10 条纯政策问题（退款手续费、到账时长、版本隔离等，不涉及客户自己的订单或付款记录）不再要求调用订单历史。依据：ReAct 模式下模型按提示词“涉及客户自己的订单才核对记录”跳过订单历史，回复仍正确；规则模式固定调用，所以此前 `baseline-refund-v2-fee` 在 react 回归里反复失败（11-17 起），在 rules 下通过。含“我的订单/我的退款”的问题没动。这是纠正过严的期望，不是模型变好；数据集 SHA256 已同步到门禁策略和清单。真实模型下尚未用新期望重跑。
 - [ ] `errors` 仍是字符串通道，长期应改为结构化字段（安全拦截、QA 告警、处理异常分开存）；要兼容旧 Checkpoint。
 - [ ] 线上没有旧 Checkpoint 后，删除 Risk Engine 的 `_legacy_input_signals` 和 `read_only_inquiry` 兼容字段。
 - [ ] `src/agents/graph.py`（1087 行）、`src/tools/governance.py`（1222 行）偏大；`src/evaluation/` 的 pyflakes 告警未清理。
