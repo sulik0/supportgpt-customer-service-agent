@@ -282,6 +282,68 @@ AI_PROMPT = """你在给一个不懂代码的项目负责人写“测试分类�
 事实：
 """
 
+AI_LOG = ROOT / "docs" / "test_catalog_ai_log.jsonl"
+CODEX_HOME = Path(os.environ.get("CODEX_HOME", Path.home() / ".codex"))
+
+
+def _last_rate_limits(session_file: Path) -> dict | None:
+    """读 session 文件里最后一条带额度的 token_count 事件，返回 {窗口分钟数: {used, resets_at}}。"""
+    try:
+        lines = session_file.read_text(encoding="utf-8").splitlines()
+    except OSError:
+        return None
+    for line in reversed(lines):
+        if '"token_count"' not in line or '"rate_limits":{' not in line:
+            continue
+        try:
+            rl = json.loads(line)["payload"]["rate_limits"]
+        except (ValueError, KeyError, TypeError):
+            continue
+        out = {}
+        for k in ("primary", "secondary"):
+            w = (rl or {}).get(k)
+            if w:
+                out[int(w["window_minutes"])] = {"used": w["used_percent"], "resets_at": w["resets_at"]}
+        if out:
+            return out
+    return None
+
+
+def codex_quota_now(skip: str = "") -> dict | None:
+    """最近一次 codex 调用留下的额度快照（调用前取一次，作为“之前”）。"""
+    files = sorted(CODEX_HOME.glob("sessions/*/*/*/rollout-*.jsonl"), key=lambda f: f.stat().st_mtime, reverse=True)
+    for f in files[:8]:
+        if skip and skip in f.name:
+            continue
+        q = _last_rate_limits(f)
+        if q:
+            return q
+    return None
+
+
+def codex_quota_of(thread_id: str) -> dict | None:
+    for f in CODEX_HOME.glob(f"sessions/*/*/*/rollout-*{thread_id}.jsonl"):
+        return _last_rate_limits(f)
+    return None
+
+
+def quota_delta(before: dict | None, after: dict | None) -> dict:
+    """5 小时(300)和每周(10080)窗口的已用百分比前后对比；窗口中途重置了就不算差值。"""
+    out = {}
+    for minutes, name in ((300, "5h"), (10080, "week")):
+        b, a = (before or {}).get(minutes), (after or {}).get(minutes)
+        if not a:
+            continue
+        item = {"after": a["used"]}
+        if b:
+            item["before"] = b["used"]
+            if b["resets_at"] == a["resets_at"]:
+                item["delta"] = round(a["used"] - b["used"], 1)
+            else:
+                item["reset"] = True
+        out[name] = item
+    return out
+
 
 def ai_notes(facts: dict, cache_path: Path = AI_CACHE) -> dict:
     """用本机 codex 把最近变动写成人话；事实没变就用缓存。失败时返回空，页面退回原始提交说明。"""
@@ -294,26 +356,30 @@ def ai_notes(facts: dict, cache_path: Path = AI_CACHE) -> dict:
             return cache["notes"]
     except Exception:
         pass
+    quota_before = codex_quota_now()
     exe = shutil.which("codex") or "/opt/homebrew/bin/codex"
     env = {**os.environ, "PATH": os.environ.get("PATH", "") + ":/opt/homebrew/opt/node@20/bin:/opt/homebrew/bin:/usr/local/bin"}
     try:
         with tempfile.TemporaryDirectory() as tmp:  # 空目录运行，模型读不到仓库
             out = Path(tmp) / "out.txt"
             proc = subprocess.run(
-                [exe, "exec", "--ephemeral", "--skip-git-repo-check", "-s", "read-only",
+                [exe, "exec", "--skip-git-repo-check", "-s", "read-only",
                  "-m", AI_MODEL, "-c", f'model_reasoning_effort="{AI_EFFORT}"', "--json", "-C", tmp, "-o", str(out), "-"],
                 input=AI_PROMPT + json.dumps(facts, ensure_ascii=False, indent=1),
                 text=True, capture_output=True, timeout=420, env=env, check=True,
             )
             text = out.read_text(encoding="utf-8")
-        usage = {}
+        usage, thread_id = {}, ""
         for line in proc.stdout.splitlines():
             try:
                 ev = json.loads(line)
             except ValueError:
                 continue
+            if ev.get("type") == "thread.started":
+                thread_id = ev.get("thread_id", "")
             if ev.get("type") == "turn.completed":
                 usage = ev.get("usage", {})
+        quota = quota_delta(quota_before, codex_quota_of(thread_id) if thread_id else None)
         notes = json.loads(text[text.index("{") : text.rindex("}") + 1])
         notes = {
             k: {f: str(v.get(f, "")) for f in ("summary", "status", "blind")}
@@ -324,10 +390,17 @@ def ai_notes(facts: dict, cache_path: Path = AI_CACHE) -> dict:
         print(f"codex 生成失败，页面使用原始提交说明：{exc}")
         return {}
     cache_path.write_text(
-        json.dumps({"key": key, "model": AI_MODEL, "effort": AI_EFFORT, "usage": usage,
+        json.dumps({"key": key, "model": AI_MODEL, "effort": AI_EFFORT, "usage": usage, "quota": quota,
                     "generated": datetime.now().strftime("%Y-%m-%d %H:%M"), "notes": notes}, ensure_ascii=False, indent=1),
         encoding="utf-8",
     )
+    try:
+        with AI_LOG.open("a", encoding="utf-8") as fh:
+            fh.write(json.dumps({"time": datetime.now().strftime("%Y-%m-%d %H:%M:%S"), "page": cache_path.stem,
+                                 "model": AI_MODEL, "effort": AI_EFFORT, "usage": usage, "quota": quota},
+                                ensure_ascii=False) + "\n")
+    except OSError:
+        pass
     return notes
 
 
@@ -387,13 +460,27 @@ def note_foot(cache_path: Path) -> str:
         f"上次调用用量：输入 {u.get('input_tokens', 0):,} token，输出 {u.get('output_tokens', 0):,} token。"
         if u else ""
     )
+    q = c.get("quota") or {}
+
+    def qtxt(name, label):
+        i = q.get(name)
+        if not i:
+            return ""
+        if "delta" in i:
+            return f"{label}窗口已用 {i['before']:g}% → {i['after']:g}%（本次约 +{i['delta']:g}%）；"
+        if i.get("reset"):
+            return f"{label}窗口在调用期间重置过，已用 {i['after']:g}%；"
+        return f"{label}窗口已用 {i['after']:g}%；"
+
+    quota = qtxt("5h", "5 小时") + qtxt("week", "每周")
+    quota = f"额度：{quota.rstrip('；')}。额度百分比只精确到整数，一次调用常显示 0% 或 1%。" if quota else ""
     return (
         "<div class='intro'><h3>关于页面里的 AI 说明</h3>"
         "<p class='small'>“最近变动”“当前状态”“测不到什么”三类文字由本机 codex 调用 "
         f"<b>{esc(c.get('model', AI_MODEL))}</b>（推理强度 <b>{esc(c.get('effort', AI_EFFORT))}</b>）生成，仅供参考。</p>"
         f"<p class='small muted'>依据：每项最近 5 次提交里、只属于该项测试自己文件的改动行（每次提交最多 {DIFF_CAP} 字符）和一句简介。"
         "模型在空目录里只读运行，看不到仓库其他内容。"
-        f"一次调用生成本页全部说明；提交和数据没变时直接用缓存，不再调用。{used}"
+        f"一次调用生成本页全部说明；提交和数据没变时直接用缓存，不再调用。{used}{quota}"
         f"生成于 {esc(c.get('generated', ''))}。</p></div>"
     )
 
