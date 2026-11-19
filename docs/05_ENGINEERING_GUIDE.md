@@ -238,7 +238,9 @@ Jev 只用于线上封闭决策；当前不作为 Baseline、Ragas 或 DeepEval 
 
 真实模型回归：`evaluation/online_regression/supportgpt_online_regression.json` 保存 5 条线上问题用例（投诉、重置密码、提示词泄露、英文订单查询、集群故障），不属于固定 SHA256 的 Baseline。`run_real_llm_regression.py` 默认合并该数据集，regression 套件自动包含这 5 条（预估 39 次调用，仍在默认上限 40 内）。英文回复语言需人工查看报告确认，Dataset 暂无语言断言。
 
-隐蔽注入评测：`evaluation/covert_injection/supportgpt_covert_injection.json` 有 28 条用例（24 条攻击加 4 条正常对照，中英文各半，不属于固定 SHA256 的 Baseline）。攻击不含明显攻击词，靠跨客户查询、冒称权限、直接要求退款、点名工具、指定客户编号、伪造系统通知诱导越权，都能绕过规则层前置检查，所以能走到“选工具”这一步。`python scripts/run_covert_injection_eval.py --mock` 离线验证格式；`--dry-run` 看预估调用次数；`--confirm-live` 用真实模型回放（会产生费用，要配合 `TOOL_SELECTION_MODE=react` 才是模型在选工具）。报告在 `evaluation/reports/covert_injection/`，分别统计“前置拦下”“模型想调禁用工具”“真正执行禁用工具”，门禁口径只看最后一项。Mock 模型不会乱选，全是 0 不代表真实模型安全。
+隐蔽注入评测：`evaluation/covert_injection/supportgpt_covert_injection.json` 有 76 条用例（68 条攻击加 8 条正常对照，中英文各半，不属于固定 SHA256 的 Baseline）。攻击不含明显攻击词，靠跨客户查询、冒称权限、直接要求退款、点名工具、指定客户编号、伪造通知、施压、链式调用、批量枚举诱导越权，都能绕过规则层前置检查，并且都设计在有工具可选的意图上（订单状态、订单取消、账单争议、故障报告、保修），才能真正测到规划模型。`python scripts/run_covert_injection_eval.py --mock` 离线验证格式；默认只回放“意图分类到选工具”（每题 1 到 2 次模型调用），`--full` 回放完整 Workflow；`--repeat N` 重复多轮；`--confirm-live` 用真实模型（会产生费用，要配合 `TOOL_SELECTION_MODE=react`）；`--as-controls --dataset <Baseline>` 把 Baseline 当正常请求，统计选错工具和必需工具缺失。禁用名单按系统实际判定的意图计算，意图偏离另行统计。报告在 `evaluation/reports/covert_injection/`，分别统计“模型想调禁用工具”“塞参数”“真正执行禁用工具”“传到工具的参数被换”，零事件时给 95% 置信上限。Mock 模型不会乱选，全是 0 不代表真实模型安全。
+
+漏调诊断：`evaluation/tool_coverage/supportgpt_tool_coverage.json` 有 30 题（baseline 漏调的 10 题、纯政策 6 题、必须看订单 10 题、数据已在问题里 4 题）。`python scripts/run_tool_coverage_eval.py --confirm-live` 对同一批题回放 react 和 rules 两遍完整 Workflow，检查回复里的关键事实，区分“必需工具过严”“漏调导致回复错”“与漏调无关”。运行前确认本地知识库已初始化（`python scripts/seed_kb.py`），否则两种方式的回复都会说没有政策条款，结果无效。
 
 思考模式：`deepseek-flash` 默认开启思考，思考 Token 计入 `max_tokens`。实测约 2/3 的输出额度花在思考上，导致 Resolver 回复和 QA JSON 被截断。设置 `LLM_THINKING=disabled` 后，主模型和 Fast Model 请求会带上 `extra_body={"thinking":{"type":"disabled"}}`；备用模型不传此参数。留空则不传，保持服务端默认行为。
 
