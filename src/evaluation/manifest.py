@@ -2,15 +2,33 @@
 
 指纹是文件字节的 SHA-256，和 quality_gate_policy.json 里核心题集的算法一致。
 核心层（frozen）指纹不一致只会校验失败，没有更新入口；补充层加题后用 update_layer 更新。
+
+注意：本模块只用标准库，运行脚本要在导入 src.config 之前读取套件，不能依赖配置。
 """
 
 import hashlib
 import json
 from pathlib import Path
-from typing import Any, Dict, List
+from typing import Any, Dict, List, Optional, Sequence
 
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
 MANIFEST_PATH = PROJECT_ROOT / "evaluation" / "manifest.json"
+SUITES_PATH = PROJECT_ROOT / "evaluation" / "suites.json"
+
+
+def load_suite(name: str, suites_path: Path = SUITES_PATH) -> Dict[str, Any]:
+    """读取套件：返回层列表（或 'all'）、运行模式，以及适用的门禁阈值。"""
+    config = json.loads(suites_path.read_text(encoding="utf-8"))
+    suite = config["suites"].get(name)
+    if suite is None:
+        raise ValueError(f"suites 里没有这个套件：{name}")
+    return {
+        "name": name,
+        "layers": suite["layers"],
+        "mode": suite["mode"],
+        "gates": dict(config.get("gates", {})),
+    }
+
 
 
 class FrozenLayerError(RuntimeError):
@@ -34,11 +52,15 @@ def read_cases(path: Path) -> List[Dict[str, Any]]:
 
 
 def validate_manifest(
-    manifest_path: Path = MANIFEST_PATH, root: Path = PROJECT_ROOT
+    manifest_path: Path = MANIFEST_PATH,
+    root: Path = PROJECT_ROOT,
+    only: Optional[Sequence[str]] = None,
 ) -> List[str]:
-    """返回所有校验错误；空列表表示通过。"""
+    """返回校验错误；空列表表示通过。only 指定时只校验这些层（运行评测用）。"""
     errors: List[str] = []
     layers = load_manifest(manifest_path).get("layers", {})
+    if only is not None:
+        layers = {name: layers[name] for name in only}
     seen_ids: Dict[str, str] = {}
     for name, layer in layers.items():
         path = root / layer["file"]

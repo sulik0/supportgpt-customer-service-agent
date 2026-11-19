@@ -94,3 +94,45 @@ def test_gate_is_per_layer_and_total_does_not_matter():
     assert gate["passed"] is False
     # 没跑的层不判断；没配阈值则不判断
     assert evaluate_gates(summarize(rows[:10], ["core"]), {"core": 0.95, "inj": 0.9})["passed"]
+
+
+def test_compare_runs_lists_regressed_fixed_and_new():
+    from src.evaluation.layered_compare import compare_runs
+
+    def run(rows, core_rate):
+        return {"cases": rows, "summary": {"layers": {"core": {"pass_rate": core_rate}}}}
+
+    previous = run(
+        [{"id": "a", "passed": True}, {"id": "b", "passed": False}, {"id": "c", "passed": True}], 0.67
+    )
+    current = run(
+        [{"id": "a", "passed": False}, {"id": "b", "passed": True},
+         {"id": "c", "passed": True}, {"id": "n", "passed": False}], 0.75
+    )
+
+    diff = compare_runs(previous, current)
+
+    assert diff["regressed"] == ["a"] and diff["fixed"] == ["b"] and diff["new"] == ["n"]
+    assert diff["core_pass_rate"] == {"previous": 0.67, "current": 0.75}
+
+
+def test_suites_config_matches_manifest():
+    from src.evaluation.layered_run import select_layers
+    from src.evaluation.manifest import load_manifest, load_suite
+
+    manifest = load_manifest()
+    pr, release = load_suite("pr"), load_suite("release")
+    assert select_layers(manifest, pr["layers"]) == ["core"] and pr["mode"] == "replay"
+    assert select_layers(manifest, release["layers"]) == list(manifest["layers"])
+    assert pr["gates"] == {"core": 1.0}
+
+
+@pytest.mark.asyncio
+async def test_unselected_layer_being_edited_does_not_block_the_run(tmp_path):
+    manifest_path = _setup(tmp_path, {"core": ["c1"], "inj": ["i1"]})
+    (tmp_path / "inj.json").write_text(json.dumps({"cases": [_case("i1"), _case("i2")]}))
+    result = await run_layered_evaluation(
+        ["core"], tmp_path / "out", manifest_path=manifest_path, root=tmp_path,
+        workflow_runner=_runner(set()),
+    )
+    assert [row["layer"] for row in result["cases"]] == ["core"]

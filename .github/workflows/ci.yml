@@ -159,6 +159,16 @@ jobs:
           python scripts/run_ci_quality_gate.py \
             --output-dir evaluation/reports/ci_quality_gate
 
+      - name: Verify eval manifest (layer counts and fingerprints)
+        run: python scripts/eval_manifest.py check
+
+      - name: Run layered pr suite (offline replay, per-layer gates)
+        env:
+          GIT_COMMIT_SHA: ${{ github.sha }}
+        run: |
+          python scripts/run_layered_eval.py --suite pr \
+            --output-dir evaluation/reports/ci_quality_gate/layered
+
       - name: Verify paired PromptOps experiment with Mock Provider
         run: |
           python scripts/promptops.py --registry evaluation/reports/ci_quality_gate/promptops \

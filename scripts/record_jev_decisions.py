@@ -40,6 +40,12 @@ def parse_args() -> argparse.Namespace:
         help="Ignore existing entries and record everything again.",
     )
     parser.add_argument("--max-calls", type=int, default=150)
+    parser.add_argument(
+        "--layers",
+        default="core",
+        help="要录的题集层，逗号分隔或 all。录音文件只保留所选层用到的条目，"
+        "所以套件要用到哪些层，就一起录哪些层。",
+    )
     return parser.parse_args()
 
 
@@ -92,11 +98,20 @@ async def run() -> int:
         )
         decision_service.provider = recorder
         await init_db()
-        await run_baseline_evaluation_v1(
-            BASELINE_PATH,
-            Path(runtime) / "reports",
-            execution_metadata={"mode": "jev_recording", "llm_provider": "mock"},
-        )
+        if args.layers == "core":
+            await run_baseline_evaluation_v1(
+                BASELINE_PATH,
+                Path(runtime) / "reports",
+                execution_metadata={"mode": "jev_recording", "llm_provider": "mock"},
+            )
+        else:
+            from src.evaluation.layered_run import run_layered_evaluation
+
+            await run_layered_evaluation(
+                "all" if args.layers == "all" else args.layers.split(","),
+                Path(runtime) / "reports",
+                execution_metadata={"mode": "jev_recording", "llm_provider": "mock"},
+            )
         await recorder.aclose()
 
     stats = recorder.stats

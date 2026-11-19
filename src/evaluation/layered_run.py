@@ -30,8 +30,6 @@ from src.evaluation.offline_rag import (
 from src.promptops.runtime import active_bundle, prompt_scope
 
 TOTAL_NOTE = "题数会变，不用于比较和门禁"
-
-
 def select_layers(manifest: Mapping[str, Any], names: Sequence[str] | str) -> List[str]:
     """names 为层名列表，或字符串 'all'。"""
     available = list(manifest["layers"])
@@ -149,11 +147,12 @@ async def run_layered_evaluation(
     workflow_runner: Optional[WorkflowRunner] = None,
     execution_metadata: Optional[Mapping[str, Any]] = None,
 ) -> Dict[str, Any]:
-    errors = validate_manifest(manifest_path, root)
-    if errors:
-        raise ValueError("题集清单校验失败，先处理：\n" + "\n".join(errors))
     manifest = load_manifest(manifest_path)
     names = select_layers(manifest, layers)
+    # 只校验本次要跑的层，别的层正在加题不影响这次运行。
+    errors = validate_manifest(manifest_path, root, only=names)
+    if errors:
+        raise ValueError("题集清单校验失败，先处理：\n" + "\n".join(errors))
 
     cases = []
     layer_of: Dict[str, str] = {}
