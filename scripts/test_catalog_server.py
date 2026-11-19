@@ -24,11 +24,17 @@ class Handler(BaseHTTPRequestHandler):
         self.wfile.write(body)
 
     def do_GET(self):
-        if self.path.split("?")[0] not in ("/", "/index.html"):
+        pages = {
+            "/": catalog.OUT,
+            "/test_catalog.html": catalog.OUT,
+            "/test_catalog_other.html": catalog.OUT_OTHER,
+        }
+        target = pages.get(self.path.split("?")[0])
+        if target is None:
             return self._send(404, b"not found")
-        if not catalog.OUT.exists():
+        if not target.exists():
             catalog.main()
-        self._send(200, catalog.OUT.read_bytes(), "text/html; charset=utf-8")
+        self._send(200, target.read_bytes(), "text/html; charset=utf-8")
 
     def do_POST(self):
         if self.path != "/refresh":

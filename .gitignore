@@ -41,3 +41,4 @@ pnpm-debug.log*
 Thumbs.db
 docs/test_catalog.html
 docs/test_catalog_ai.json
+docs/test_catalog_other.html

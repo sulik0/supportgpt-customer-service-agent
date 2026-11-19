@@ -13,6 +13,7 @@ import hashlib
 import html
 import json
 import os
+import re
 import random
 import shutil
 import tempfile
@@ -22,6 +23,7 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 OUT = ROOT / "docs" / "test_catalog.html"
+OUT_OTHER = ROOT / "docs" / "test_catalog_other.html"
 BASELINE = "evaluation/baseline/supportgpt_baseline_100.json"
 GOLDEN = "evaluation/golden/support_qa_golden.json"
 ONLINE_REG = "evaluation/online_regression/supportgpt_online_regression.json"
@@ -155,7 +157,7 @@ body{margin:0;background:var(--bg);color:var(--fg);font:15px/1.6 -apple-system,"
 main{max-width:860px;margin:0 auto;padding:32px 20px 60px}
 header{display:flex;align-items:baseline;gap:12px;flex-wrap:wrap;margin-bottom:6px}
 h1{font-size:24px;margin:0;font-weight:650}
-.sp{flex:1}.muted{color:var(--muted)}.small{font-size:13px}
+.sp{flex:1}.lk{font-size:13px;color:var(--acc);text-decoration:none}.muted{color:var(--muted)}.small{font-size:13px}
 button{font:inherit;font-size:13px;padding:4px 14px;border:1px solid var(--line);border-radius:8px;background:var(--card);color:var(--fg);cursor:pointer}
 button:hover{border-color:var(--acc)}
 h2{font-size:13px;font-weight:600;color:var(--muted);margin:32px 0 10px;letter-spacing:.04em}
@@ -421,7 +423,7 @@ def build() -> str:
 <html lang="zh-CN"><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>SupportGPT 测试分类</title><style>{CSS}</style></head><body><main>
-<header><h1>SupportGPT 测试分类</h1><span class="sp"></span>
+<header><h1>SupportGPT 测试分类</h1><a class="lk" href="test_catalog_other.html">其他检查 →</a><span class="sp"></span>
 <span id="rmsg" class="muted small"></span><button id="rbtn" onclick="refreshCatalog()">更新</button></header>
 <p class="muted small">更新于 {datetime.now().strftime("%Y-%m-%d %H:%M")}，每天 05:00 自动更新。点卡片展开详情。</p>
 <div class="intro">
@@ -462,9 +464,102 @@ def build() -> str:
     return html_
 
 
+def build_other() -> str:
+    """第二页：主页面之外的检查（前端、MCP、演练、冒烟、压测、评测脚本）。"""
+
+    def count(pattern: str, files) -> int:
+        return sum(len(re.findall(pattern, f.read_text(encoding="utf-8"), re.M)) for f in files)
+
+    fe = count(r"^\s*test\(", sorted((ROOT / "frontend/tests").glob("*.test.js")))
+    mcp = count(r"def test_", sorted((ROOT / "tests/mcp").glob("test_*.py")))
+
+    def row(name, what, tags, num, unit, paths, cmd, where, note=""):
+        last = last_line(recent_commits(paths, 1)) if paths else "最近变动：—"
+        body = (
+            f"<h3>命令</h3><p class='small'><code>{esc(cmd)}</code></p>"
+            f"<h3>位置</h3><p class='small'>{esc(where)}</p>"
+            + (f"<p class='small muted'>{esc(note)}</p>" if note else "")
+            + changes(recent_commits(paths, 3) if paths else [])
+        )
+        return card(name, what, tags, num, unit, last, body)
+
+    free, paid = tag("免费", "free"), tag("花钱", "paid")
+    code = (
+        row("前端测试", "界面里的筛选、设计系统、工具治理演示、公开页运行信息等逻辑。",
+            tag("无模型") + free + tag("CI 自动"), fe, "个用例",
+            ["frontend/tests"], "cd frontend && npm test", "frontend/tests/，5 个文件")
+        + row("MCP Server 测试", "独立的 stdio 进程，只通过 HTTP 调员工 API；这里验证它的工具和返回。",
+              tag("无模型") + free + tag("本地手动"), mcp, "个用例",
+              ["tests/mcp", "src/mcp_server"], "python -m unittest discover -s tests/mcp -v",
+              "tests/mcp/", "用独立轻量环境，不加载后端的 conftest；CI 里没有这一步。")
+        + row("PromptOps 对比实验", "PR 门禁里的一步：用 Mock 验证 Prompt 版本成对对比、晋级的流程是否能走通。",
+              tag("Mock") + free + tag("每次 PR 自动"), "", "",
+              ["scripts/promptops.py", "src/promptops"],
+              "python scripts/promptops.py --registry <目录> evaluate --bundle default --environment staging --mock",
+              "scripts/promptops.py")
+        + row("编译与构建检查", "只检查能不能编译、构建，不算测试：Python 编译、前端 build、Docker 镜像构建。",
+              tag("无模型") + free + tag("CI 自动"), "", "",
+              [".github/workflows/ci.yml"],
+              "python -m compileall -q src scripts tests；npm run build", ".github/workflows/ci.yml")
+    )
+    drills = (
+        row("PostgreSQL 故障演练", "多进程验证写 Tool 的状态机、租约、对账：崩溃、重复提交、超时后的处理。",
+            tag("无模型") + free + tag("CI 自动，本机跑不了"), "", "",
+            ["scripts/run_postgres_tool_drill.py", "src/tools"],
+            "python scripts/run_postgres_tool_drill.py --confirm-isolated-database",
+            "scripts/run_postgres_tool_drill.py",
+            "需要 TOOL_DRILL_DATABASE_URL，库名必须以 _test 或 _drill 结尾。本机没有 PG 时不能算演练通过。")
+        + row("参考 OMS 持久化演练", "用隔离的 PG Schema 验证参考 OMS 的多进程幂等和提交后崩溃。",
+              tag("无模型") + free + tag("CI 自动，本机跑不了"), "", "",
+              ["scripts/run_reference_oms_drill.py", "src/oms"],
+              "python scripts/run_reference_oms_drill.py --confirm-isolated-database",
+              "scripts/run_reference_oms_drill.py", "同样需要隔离的 PG 库。")
+    )
+    online = (
+        row("部署后冒烟", "确认线上服务活着、前后端接得上；带 --with-chat 时真实问答一次。",
+            tag("线上真实模型") + paid + tag("每次推送 main 自动"), "", "",
+            ["scripts/run_post_deploy_smoke.py", ".github/workflows/post-deploy-smoke.yml"],
+            "python scripts/run_post_deploy_smoke.py --api-url <Railway 域名> --frontend-url <Vercel 域名>",
+            "scripts/run_post_deploy_smoke.py；.github/workflows/post-deploy-smoke.yml",
+            "GitHub 上每次推送 main 都会触发：在线上建 1 张测试工单（结束后撤回）并调用 1 次模型。")
+        + row("压测", "用 Locust 模拟并发客户聊天和员工审批。",
+              tag("真实模型") + paid + tag("手动"), "", "",
+              ["tests/load_test.py"], "locust -f tests/load_test.py",
+              "tests/load_test.py；依赖 requirements/load.txt",
+              "需要预先创建的压测账号（LOAD_TEST_USERNAME / LOAD_TEST_PASSWORD）。性能数据要在机器空闲时测。")
+    )
+    scripts_ = (
+        row("run_agent_eval.py", "用 Golden 小数据集（13 条）跑 RAG 和 Agent 评测。不是门禁；用哪个模型取决于本地 .env。",
+            tag("按 .env 配置") + tag("手动"), 13, "条",
+            ["scripts/run_agent_eval.py", "evaluation/golden"], "python scripts/run_agent_eval.py",
+            "evaluation/golden/support_qa_golden.json")
+        + row("run_eval.py", "早期的评测脚本：4 条写死的问题，用 DeepEval 评判。", tag("按 .env 配置") + tag("手动"), 4, "条",
+              ["scripts/run_eval.py"], "python scripts/run_eval.py", "scripts/run_eval.py")
+        + row("compare_tool_selection.py", "离线对比 rules 与 react 两份 Baseline 报告的 Tool 选择效果和成本。",
+              tag("无模型") + free + tag("手动"), "", "",
+              ["scripts/compare_tool_selection.py"],
+              "python scripts/compare_tool_selection.py --help", "scripts/compare_tool_selection.py",
+              "读已有的报告文件，不重新跑测试。")
+    )
+    return f"""<!doctype html>
+<html lang="zh-CN"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>SupportGPT 其他检查</title><style>{CSS}</style></head><body><main>
+<header><h1>其他检查</h1><a class="lk" href="test_catalog.html">← 测试分类</a><span class="sp"></span>
+<span id="rmsg" class="muted small"></span><button id="rbtn" onclick="refreshCatalog()">更新</button></header>
+<p class="muted small">更新于 {datetime.now().strftime("%Y-%m-%d %H:%M")}。这一页放主页面之外的检查：前端、MCP、演练、冒烟、压测、评测脚本。点卡片展开详情。</p>
+<h2>代码类检查</h2>{code}
+<h2>演练（需要 PostgreSQL）</h2>{drills}
+<h2>线上和性能</h2>{online}
+<h2>评测脚本（不是门禁）</h2>{scripts_}
+<script>{JS}</script></main></body></html>
+"""
+
+
 def main() -> None:
     OUT.write_text(build(), encoding="utf-8")
-    print(f"已生成 {OUT.relative_to(ROOT)}")
+    OUT_OTHER.write_text(build_other(), encoding="utf-8")
+    print(f"已生成 {OUT.relative_to(ROOT)}、{OUT_OTHER.relative_to(ROOT)}")
 
 
 if __name__ == "__main__":
