@@ -295,6 +295,14 @@ export default function CustomerSupportPage({ onStaffEntry, onWorkflowEntry }) {
           </div>
         </div>
         <div className="customer-header-actions">
+          <a
+            className="staff-entry staff-entry-workflow"
+            href="https://github.com/sulik0/supportgpt-customer-service-agent"
+            target="_blank"
+            rel="noopener noreferrer"
+          >
+            GitHub
+          </a>
           {onWorkflowEntry && (
             <button
               type="button"

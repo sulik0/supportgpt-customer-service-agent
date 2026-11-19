@@ -447,6 +447,14 @@ export default function App() {
                 }
               </p>
             </div>
+            <a
+              className="topbar-support"
+              href="https://github.com/sulik0/supportgpt-customer-service-agent"
+              target="_blank"
+              rel="noopener noreferrer"
+            >
+              GitHub
+            </a>
             <NavLink href="#support" className="topbar-support">
               用户咨询
             </NavLink>
