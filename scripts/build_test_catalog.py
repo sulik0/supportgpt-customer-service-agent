@@ -290,7 +290,7 @@ def ai_notes(facts: dict) -> dict:
     except Exception:
         pass
     exe = shutil.which("codex") or "/opt/homebrew/bin/codex"
-    env = {**os.environ, "PATH": os.environ.get("PATH", "") + ":/opt/homebrew/bin:/usr/local/bin"}
+    env = {**os.environ, "PATH": os.environ.get("PATH", "") + ":/opt/homebrew/opt/node@20/bin:/opt/homebrew/bin:/usr/local/bin"}
     try:
         with tempfile.TemporaryDirectory() as tmp:  # 空目录运行，模型读不到仓库
             out = Path(tmp) / "out.txt"
