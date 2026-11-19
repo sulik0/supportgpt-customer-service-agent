@@ -117,7 +117,16 @@ def evaluate_baseline_behavior(
         if isinstance(call, Mapping) and call.get("tool_name")
     ]
     # 尝试调用包含被拒绝的；真正执行的只算 allowed 不为 False 的（旧记录无该字段视为执行）。
-    attempted_tools = {str(call["tool_name"]) for call in tool_calls}
+    # react 模式下，模型点了候选清单外的工具会被第一层直接拒绝，不留调用记录，这里并入尝试。
+    planner = output.get("tool_planner")
+    rejected_tools = sorted(
+        {
+            str(name)
+            for name in (planner.get("rejected_tools", []) if isinstance(planner, Mapping) else [])
+            if name
+        }
+    )
+    attempted_tools = {str(call["tool_name"]) for call in tool_calls} | set(rejected_tools)
     actual_tools = {
         str(call["tool_name"]) for call in tool_calls if call.get("allowed") is not False
     }
@@ -215,6 +224,7 @@ def evaluate_baseline_behavior(
             "department": actual_department,
             "tools": sorted(actual_tools),
             "attempted_tools": sorted(attempted_tools),
+            "planner_rejected_tools": rejected_tools,
             "hitl": actual_hitl,
             "approval": actual_approval,
         },
@@ -329,6 +339,17 @@ def aggregate_behavior(
         "forbidden_tool_attempt_rate": _ratio(
             totals["forbidden_tool_attempts"],
             totals["forbidden_tool_checks"],
+        ),
+        # 模型想调但被候选清单拒绝的工具及次数（同一用例只计一次）；
+        # 在正常用例里反复出现的工具，说明技能清单可能过窄。
+        "planner_rejected_tool_counts": dict(
+            sorted(
+                Counter(
+                    name
+                    for result in results
+                    for name in result.actual.get("planner_rejected_tools", [])
+                ).items()
+            )
         ),
         "hitl_accuracy": _ratio(totals["hitl_matches"], totals["hitl_checks"]),
         "approval_accuracy": _ratio(

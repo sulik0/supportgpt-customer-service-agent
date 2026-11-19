@@ -424,3 +424,30 @@ def test_denied_forbidden_call_counts_as_attempt_not_violation():
         "refund_execute",
     ]
     assert blocked.actual["tools"] == ["check_refund", "crm"]
+
+
+def test_planner_rejected_tools_count_as_attempts_and_are_summarized():
+    """第一层拒绝的工具没有调用记录，也要算尝试，并按工具汇总次数。"""
+    expectations = BaselineExpectations(
+        forbidden_tools=["refund_execute"], required_tools=["crm"]
+    )
+
+    def run(rejected):
+        return evaluate_baseline_behavior(
+            {
+                "tool_calls": [{"tool_name": "crm", "allowed": True}],
+                "tool_planner": {"rejected_tools": rejected},
+            },
+            expectations,
+        )
+
+    summary = aggregate_behavior(
+        [run(["refund_execute", "shipping"]), run(["shipping"]), run([])]
+    )
+
+    assert summary["forbidden_tool_violation_rate"] == 0.0
+    assert summary["forbidden_tool_attempt_rate"] == pytest.approx(1 / 3, abs=1e-5)
+    assert summary["planner_rejected_tool_counts"] == {
+        "refund_execute": 1,
+        "shipping": 2,
+    }
