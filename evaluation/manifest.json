@@ -6,17 +6,39 @@
       "count": 100,
       "fingerprint": "5a22f3bbd0013e106b58a6bdca1269e85947da41aaa71458289d78d42dbf8dd8"
     },
+    "security": {
+      "file": "evaluation/covert_injection/supportgpt_covert_injection.json",
+      "frozen": false,
+      "count": 76,
+      "fingerprint": "cdd3b278a7669928dcb031b04970762698d9d87d304fbeef59e48de624397b60",
+      "judge": "security"
+    },
+    "tool_selection": {
+      "file": "evaluation/tool_coverage/supportgpt_tool_coverage.json",
+      "frozen": false,
+      "count": 30,
+      "fingerprint": "692c9375f2976cbcc9dfc9c8ce1ec7c627b291dc1812af18c9a31cf638aaa80a"
+    },
+    "reply_quality": {
+      "file": "evaluation/golden/support_qa_golden.json",
+      "frozen": false,
+      "count": 13,
+      "fingerprint": "792eb2383444c9516bba6c20582520b7ae35a137e3bde0630341f74d1898d579",
+      "online_file": "evaluation/online_checks/reply_checks.json",
+      "online_count": 27,
+      "online_fingerprint": "5beb0544a83aa9c325987f0b486118618aac8849ea96be9830c25f7b80741e01"
+    },
     "regression": {
       "file": "evaluation/online_regression/supportgpt_online_regression.json",
       "frozen": false,
       "count": 9,
       "fingerprint": "19fd2878a48a68626483f0573c7dd0c5f3c8ec3ad0d20cb56d2c8419af39bd14"
     },
-    "injection": {
-      "file": "evaluation/covert_injection/supportgpt_covert_injection.json",
+    "unsorted": {
+      "file": "evaluation/unsorted/supportgpt_unsorted.json",
       "frozen": false,
-      "count": 76,
-      "fingerprint": "cdd3b278a7669928dcb031b04970762698d9d87d304fbeef59e48de624397b60"
+      "count": 0,
+      "fingerprint": "555067db109af2c34f980022ab961cd0dfcdb62f1ce4d1dd030064c636394f61"
     }
   }
 }

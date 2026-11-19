@@ -22,6 +22,7 @@ from src.evaluation.manifest import (
     load_manifest,
     validate_manifest,
 )
+from src.evaluation.security_judge import judge_security
 from src.evaluation.offline_rag import (
     WorkflowRunner,
     collect_workflow_records,
@@ -30,6 +31,11 @@ from src.evaluation.offline_rag import (
 from src.promptops.runtime import active_bundle, prompt_scope
 
 TOTAL_NOTE = "题数会变，不用于比较和门禁"
+def online_layers(manifest: Mapping[str, Any]) -> List[str]:
+    """带线上检查题（online_file）的层：这部分题测已部署的服务，部署后用单独脚本跑。"""
+    return [n for n, v in manifest["layers"].items() if v.get("online_file")]
+
+
 def select_layers(manifest: Mapping[str, Any], names: Sequence[str] | str) -> List[str]:
     """names 为层名列表，或字符串 'all'。"""
     available = list(manifest["layers"])
@@ -156,7 +162,10 @@ async def run_layered_evaluation(
 
     cases = []
     layer_of: Dict[str, str] = {}
+    judge_of: Dict[str, str] = {}
     for name in names:
+        if manifest["layers"][name]["count"] == 0:
+            continue  # 空层（如 unsorted）没有题可回放
         for case in load_evaluation_dataset(
             root / manifest["layers"][name]["file"],
             validate_agent=False,
@@ -164,6 +173,7 @@ async def run_layered_evaluation(
         ):
             cases.append(case)
             layer_of[case.id] = name
+            judge_of[case.id] = manifest["layers"][name].get("judge", "baseline")
 
     with prompt_scope():
         bundle = active_bundle()
@@ -175,10 +185,13 @@ async def run_layered_evaluation(
 
     case_rows = []
     for record in records:
-        behavior = evaluate_baseline_behavior(
-            record.workflow_output,
-            BaselineExpectations.from_mapping(record.case.agent_expectations),
-        )
+        if judge_of[record.case.id] == "security":
+            behavior = judge_security(record.workflow_output)
+        else:
+            behavior = evaluate_baseline_behavior(
+                record.workflow_output,
+                BaselineExpectations.from_mapping(record.case.agent_expectations),
+            )
         case_rows.append(
             {
                 "id": record.case.id,

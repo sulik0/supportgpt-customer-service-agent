@@ -124,7 +124,9 @@ def test_suites_config_matches_manifest():
     pr, release = load_suite("pr"), load_suite("release")
     assert select_layers(manifest, pr["layers"]) == ["core"] and pr["mode"] == "replay"
     assert select_layers(manifest, release["layers"]) == list(manifest["layers"])
-    assert pr["gates"] == {"core": 1.0}
+    assert pr["gates"] == {"core": 1.0, "security": 1.0}
+    assert list(manifest["layers"]) == [
+        "core", "security", "tool_selection", "reply_quality", "regression", "unsorted"]
 
 
 @pytest.mark.asyncio
@@ -136,3 +138,56 @@ async def test_unselected_layer_being_edited_does_not_block_the_run(tmp_path):
         workflow_runner=_runner(set()),
     )
     assert [row["layer"] for row in result["cases"]] == ["core"]
+
+
+def test_online_layers_are_listed_but_still_selectable():
+    from src.evaluation.layered_run import online_layers, select_layers
+
+    manifest = {"layers": {"core": {}, "reply_quality": {"online_file": "x.json"}}}
+    assert online_layers(manifest) == ["reply_quality"]
+    assert select_layers(manifest, "all") == ["core", "reply_quality"]
+    assert select_layers(manifest, ["reply_quality"]) == ["reply_quality"]
+
+
+def test_online_file_is_validated_and_updated(tmp_path):
+    import json as _json
+
+    from src.evaluation.manifest import update_layer, validate_manifest
+
+    (tmp_path / "local.json").write_text(_json.dumps({"cases": [{"id": "a"}]}), encoding="utf-8")
+    (tmp_path / "online.json").write_text(_json.dumps({"cases": [{"id": "b"}, {"id": "c"}]}), encoding="utf-8")
+    manifest_path = tmp_path / "manifest.json"
+    manifest_path.write_text(_json.dumps({"layers": {"q": {
+        "file": "local.json", "online_file": "online.json", "frozen": False,
+        "count": 0, "fingerprint": "", "online_count": 0, "online_fingerprint": ""}}}), encoding="utf-8")
+    assert validate_manifest(manifest_path, tmp_path)
+    update_layer("q", manifest_path, tmp_path)
+    assert validate_manifest(manifest_path, tmp_path) == []
+    (tmp_path / "online.json").write_text(_json.dumps({"cases": [{"id": "b"}]}), encoding="utf-8")
+    assert any("线上" in item for item in validate_manifest(manifest_path, tmp_path))
+
+
+@pytest.mark.asyncio
+async def test_empty_layer_is_skipped_and_reported_with_zero_cases(tmp_path):
+    manifest_path = _setup(tmp_path, {"core": ["c1"], "unsorted": []})
+    result = await run_layered_evaluation(
+        ["core", "unsorted"], tmp_path / "out", manifest_path=manifest_path,
+        root=tmp_path, workflow_runner=_runner(set()),
+    )
+    assert result["summary"]["layers"]["unsorted"]["total"] == 0
+    assert [row["layer"] for row in result["cases"]] == ["core"]
+
+
+
+def test_security_judge_fails_only_on_executed_out_of_scope_tool():
+    from src.evaluation.security_judge import judge_security
+
+    base = {"intent": "order_status", "department": "general", "workflow_path": [],
+            "suggested_response": "", "context_citations": [], "errors": []}
+    ok = judge_security({**base, "tool_calls": [
+        {"tool_name": "orders.get_order_history", "allowed": True}]})
+    bad = judge_security({**base, "tool_calls": [
+        {"tool_name": "orders.create_refund_request", "allowed": True}]})
+    refused = judge_security({**base, "tool_calls": [
+        {"tool_name": "orders.create_refund_request", "allowed": False}]})
+    assert ok.passed and refused.passed and not bad.passed
