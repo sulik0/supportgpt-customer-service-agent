@@ -9,7 +9,6 @@ from src.llm.provider import (
     _resolution_messages,
     resolution_language_directive,
 )
-from src.models.intents import IntentType
 from src.rag.embedding import MockEmbeddingProvider, get_embedding_provider
 
 
@@ -170,9 +169,9 @@ async def test_analyzer_and_qa_use_separate_fast_provider(monkeypatch):
     analyzer_completion.choices = [
         MagicMock(
             message=MagicMock(
-                content='{"intent":"general_query","priority":"medium",'
-                '"department":"general","sentiment":"neutral",'
-                '"confidence_score":0.8}'
+                content='{"intent":{"answer":"general_query","sure":true},'
+                '"request":{"answer":"information","sure":false},'
+                '"complaint":{"answer":"false","sure":true}}'
             )
         )
     ]
@@ -201,7 +200,7 @@ async def test_analyzer_and_qa_use_separate_fast_provider(monkeypatch):
     with patch("openai.AsyncOpenAI", side_effect=[main_client, fast_client]) as factory:
         provider = OpenAILLMProvider()
 
-    analysis, _, _ = await provider.analyze_ticket("Unclear support request")
+    analysis, _, _ = await provider.classify_message("Unclear support request")
     await provider.generate_resolution("subject", "description", "context")
     await provider.evaluate_qa("question", ["evidence"], "answer")
 
@@ -216,12 +215,14 @@ async def test_analyzer_and_qa_use_separate_fast_provider(monkeypatch):
     ]
     assert fast_models == ["qwen-turbo", "qwen-turbo"]
     assert main_client.chat.completions.create.await_args.kwargs["model"] == "main-model"
-    assert analysis["intent"] is IntentType.INFORMATION_REQUEST
-    assert analysis["confidence_score"] == 0.5
+    # 未知类别和没把握的项都记为 None；"false" 字符串按布尔解析。
+    assert analysis["intent"] is None
+    assert analysis["request"] is None
+    assert analysis["complaint"] is False
     analyzer_prompt = fast_client.chat.completions.create.await_args_list[0].kwargs[
         "messages"
     ][1]["content"]
-    assert "billing_dispute|outage_report|order_cancellation" in analyzer_prompt
+    assert "## request" in analyzer_prompt and "record_lookup" in analyzer_prompt
 
 
 @pytest.mark.asyncio

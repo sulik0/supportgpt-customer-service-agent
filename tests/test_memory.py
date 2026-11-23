@@ -55,7 +55,7 @@ async def test_memory_round_trip_and_contextual_intent(db_session):
     )
     assert result["intent"] == "order_cancellation"
     assert result["department"] == "shipping"
-    assert result["analyzer_strategy"] == "rule"
+    assert result["analyzer_strategy"] == "llm"
 
 
 @pytest.mark.asyncio

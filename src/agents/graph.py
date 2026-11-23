@@ -622,6 +622,15 @@ def _trace_attrs(state: Dict[str, Any], node: str) -> Dict[str, Any]:
             "principle"
         ),
         "agent.intent_mode": (state.get("classification") or {}).get("mode"),
+        "agent.classification_source": (state.get("classification") or {}).get(
+            "category_source"
+        ),
+        "agent.classification_review": (state.get("classification") or {}).get(
+            "review_status"
+        ),
+        "agent.classification_disagreement": ",".join(
+            (state.get("classification") or {}).get("disagreement") or []
+        ),
         "security.threat_detected": state.get("security_threat_detected"),
         "guardrail.semantic_label": state.get("semantic_guard_label", "not_run"),
         "guardrail.semantic_degraded": state.get("semantic_guard_degraded", False),

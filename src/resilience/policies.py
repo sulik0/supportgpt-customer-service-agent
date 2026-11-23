@@ -8,7 +8,7 @@ def llm_policy(operation: str) -> ResiliencePolicy:
     """生成 LLM 策略，回复与 QA 失败时强制人工介入。"""
     degradation = (
         DegradationLevel.PARTIAL
-        if operation == "analyze_ticket"
+        if operation == "classify_message"
         else DegradationLevel.HUMAN_REQUIRED
     )
     return ResiliencePolicy(

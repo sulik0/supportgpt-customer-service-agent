@@ -4,6 +4,8 @@ from unittest.mock import AsyncMock
 from types import SimpleNamespace
 
 import pytest
+
+from tests.classification_helpers import patch_llm
 from opentelemetry.sdk.trace import TracerProvider
 from opentelemetry.sdk.trace.export import SimpleSpanProcessor
 from opentelemetry.sdk.trace.export.in_memory_span_exporter import InMemorySpanExporter
@@ -28,7 +30,6 @@ def unavailable_business_dependencies(monkeypatch):
         "src.tools.registry.tool_registry.call_tool",
         "src.agents.retriever.vector_store.query_kb",
         "src.agents.resolver.llm_provider.generate_resolution",
-        "src.agents.analyzer.decision_service.classify_ticket",
         "src.agents.quality_assurance.decision_service.judge_response",
         "src.agents.quality_assurance.llm_provider.evaluate_qa",
     ):
@@ -199,7 +200,7 @@ async def test_short_capability_statement_needs_no_weather_evidence(
 
 
 @pytest.mark.asyncio
-async def test_jev_scope_decision_handles_another_benign_topic_without_extra_call(
+async def test_jev_scope_decision_confirmed_by_review_handles_another_benign_topic(
     monkeypatch, unavailable_business_dependencies
 ):
     provider = SimpleNamespace(
@@ -215,13 +216,22 @@ async def test_jev_scope_decision_handles_another_benign_topic_without_extra_cal
                     "intent": DecisionAnswer(
                         kind="choice", value="information_request", confidence=0.97
                     ),
-                    "operation_mode": DecisionAnswer(
+                    "request": DecisionAnswer(
                         kind="choice", value="information", confidence=0.97
                     ),
-                    "needs_clarification": DecisionAnswer(kind="noul", value=0.02),
                     "support_scope": DecisionAnswer(
-                        kind="choice", value="benign_out_of_scope", confidence=0.96
+                        kind="choice", value="out_of_scope", confidence=0.96
                     ),
+                    **{
+                        key: DecisionAnswer(kind="noul", value=0.02)
+                        for key in (
+                            "complaint",
+                            "account_security",
+                            "urgent_outage",
+                            "negative_emotion",
+                            "answerable_question",
+                        )
+                    },
                 },
             )
         )
@@ -229,6 +239,8 @@ async def test_jev_scope_decision_handles_another_benign_topic_without_extra_cal
     monkeypatch.setattr(
         "src.agents.analyzer.decision_service", DecisionService(provider)
     )
+    # Jev 判范围外要经 LLM 复核（第五节）；这里 LLM 同意。
+    patch_llm(monkeypatch, support_scope="out_of_scope")
     result = await run_agent_workflow(
         {"description": "推荐几个周末徒步路线", "customer_id": "cust_101"}
     )
@@ -243,47 +255,6 @@ async def test_jev_scope_decision_handles_another_benign_topic_without_extra_cal
         dependency.assert_not_awaited()
 
 
-@pytest.mark.asyncio
-@pytest.mark.parametrize(
-    ("intent", "mode", "confidence"),
-    [
-        ("information_request", "information", 0.2),
-        ("information_request", "action", 0.97),
-        ("billing_dispute", "information", 0.97),
-    ],
-)
-async def test_scope_result_cannot_override_action_business_or_low_confidence(
-    intent, mode, confidence
-):
-    provider = SimpleNamespace(
-        evaluate=AsyncMock(
-            return_value=DecisionResult(
-                enabled=True,
-                available=True,
-                provider="jev",
-                operation="intent_classification",
-                question_set_version="scope-test",
-                model="jev-test",
-                answers={
-                    "intent": DecisionAnswer(
-                        kind="choice", value=intent, confidence=0.97
-                    ),
-                    "operation_mode": DecisionAnswer(
-                        kind="choice", value=mode, confidence=0.97
-                    ),
-                    "needs_clarification": DecisionAnswer(kind="noul", value=0.02),
-                    "support_scope": DecisionAnswer(
-                        kind="choice",
-                        value="benign_out_of_scope",
-                        confidence=confidence,
-                    ),
-                },
-            )
-        )
-    )
-    decision = await DecisionService(provider).classify_ticket("current request")
-    assert decision.accepted
-    assert decision.analysis.get("request_scope") != "out_of_scope"
 
 
 @pytest.mark.asyncio

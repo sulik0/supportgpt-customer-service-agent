@@ -126,13 +126,18 @@ export function translateEscalationReason(value) {
   if (value === "Negative customer sentiment combined with high priority.") {
     return "客户表达了负面情绪，且该工单优先级较高。";
   }
+  // 新记录是“处理表第 N 行”，旧记录是“处理原则第 N 条”。
   const principle = value.match(
-    /^Handling principle (\d+) requires (answer then human review|human handling)\.$/,
+    /^Handling (principle|table row) (\d+) requires (answer then human review|human handling)\.$/,
   );
   if (principle) {
-    return principle[2] === "human handling"
-      ? `按处理原则第 ${principle[1]} 条，这类请求需要人工办理。`
-      : `按处理原则第 ${principle[1]} 条，先给客户初步答复，再由人工复核。`;
+    const source =
+      principle[1] === "table row"
+        ? `处理表第 ${principle[2]} 行`
+        : `处理原则第 ${principle[2]} 条`;
+    return principle[3] === "human handling"
+      ? `按${source}，这类请求需要人工办理。`
+      : `按${source}，先给客户初步答复，再由人工复核。`;
   }
   if (value === "AI quality assurance detected a hallucination.")
     return reasonLabels.hallucination_detected;

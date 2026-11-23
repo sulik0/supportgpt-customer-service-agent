@@ -117,10 +117,11 @@ def test_trace_sanitizer_redacts_secrets_and_pii():
 async def test_traced_llm_method_preserves_provider_contract():
     provider = MockLLMProvider()
 
-    result = await provider.analyze_ticket("I need a billing refund")
+    result = await provider.classify_message("I need a billing refund")
 
-    assert result[0]["department"] == "billing"
-    assert result[1:] == (150, 45)
+    assert result[0]["intent"] == "billing_dispute"
+    assert result[0]["request"] == "action"
+    assert result[1:] == (150, 60)
 
 
 @pytest.mark.asyncio

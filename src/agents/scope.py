@@ -97,11 +97,6 @@ def out_of_scope_reason(text: str) -> str | None:
     return None
 
 
-def has_support_topic(text: str) -> bool:
-    """保留业务请求和混合意图，不能用范围外分类绕过原业务判断。"""
-    return bool(_SUPPORT_TOPIC.search(text))
-
-
 def is_scope_boundary_request(state: Mapping[str, Any]) -> bool:
     """能力说明不能覆盖安全、依赖故障或已有人工处理要求。
 

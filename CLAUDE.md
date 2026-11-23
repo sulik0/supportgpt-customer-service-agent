@@ -75,7 +75,7 @@ python scripts/run_postgres_tool_drill.py --confirm-isolated-database   # 需要
 analyzer → skill_selector → context_enrichment（tooling ∥ retriever）→ resolver → qa → escalation → approval_gate
 ```
 
-- 分类每条消息只判一次（`src/agents/classification.py`，顶部有规则 / Jev / LLM 的优先级表），结论存进 `classification`；下游只读它，不要再对原文重跑规则。是否转人工由 `docs/10_HANDLING_PRINCIPLES.md` 的原则决定，只在 Risk Engine 一处判断，优先级只决定 SLA。
+- 分类每条消息只判一次（`src/agents/classification.py`）：Jev 回答 `src/decision/questions.py` 的分类问题，重要情况 LLM 用同一组问题复核并取更严格的结果，规则不做语义判断；结论存进 `classification`，下游只读它，不要再对原文重跑规则。是否转人工由 `docs/10_HANDLING_PRINCIPLES.md` 的原则决定，只在 Risk Engine 一处判断，优先级只决定 SLA。
 - Analyzer 先做安全检查。Prompt Injection / Jailbreak 强命中直接短路到 escalation，跳过 Tool、RAG、Resolver、QA。
 - 范围外请求从 Analyzer 直接进 Resolver，但仍经过 QA、Escalation 和 Approval Gate。
 - `skill_selector` 和 `approval_gate` 不调用 LLM。Skill 由统一 `IntentType`（`src/models/intents.py`）确定性选择，每个 Intent 只有一个主 Skill。

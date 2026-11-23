@@ -104,7 +104,7 @@ Prometheus + OpenTelemetry 覆盖 API、Agent、工具、RAG 和审批过程。
 
 | Agent | 这个节点负责什么 |
 |---|---|
-| Analyzer | 确定性 Prompt Injection/Jailbreak、PII 脱敏、Qwen3Guard 语义检测；每条消息只判一次分类：Jev 为主判断业务类别、用户意图和是否范围外，规则只在安全、明确范围外、明确办事说法三种情况说了算，Jev 不可用或没把握时规则/LLM 兜底；按处理原则得出处理结果后执行初始 Risk Engine 评估 |
+| Analyzer | 确定性 Prompt Injection/Jailbreak、PII 脱敏、Qwen3Guard 语义检测；每条消息只判一次分类：Jev 回答分类问题，涉及钱、订单、账户、设备、范围外或有项没把握时由 LLM 复核并取更严格的结果，Jev 不可用时 LLM 为主判断，规则只做安全和字段提取；按 7 行处理表得出处理结果后执行初始 Risk Engine 评估 |
 | Skill Selector（控制节点） | 根据统一 Intent 选择有版本的 Skill，并确定可用 Tool、RAG 类别和必填信息 |
 | Tooling | 调用受治理的业务工具，补充客户、订单和历史工单上下文，并检查工具返回的间接注入 |
 | Retriever | 按知识库版本与类别进行 Hybrid RAG 检索，返回 citation，并在生成前检查文档间接注入 |
@@ -196,7 +196,7 @@ CLI 可将当前/候选版本在相同 100 条 Baseline 上成对回放，生成
 
 | Prompt 阶段 | 当前约束 |
 |---|---|
-| Analyzer | 规则先生成高置信度候选（关键词零命中不算候选）；DecisionProvider 启用时由 Jev 优先输出封闭 `IntentType`，低置信度或故障时有候选则回退规则，无候选（零命中或多意图冲突）再调用原 LLM；各层统一使用 8 项 `IntentType` |
+| Analyzer | 安全检查后由 Jev 回答 8 个封闭分类问题；需要复核时 LLM 用同一组问题的 Prompt 输出 JSON（每项带 `sure`）；两边答案统一收敛到 8 项 `IntentType` 和固定选项，处理结果由代码查表 |
 | Resolver | 只依据 Top-2 citation 和必要 Tool 字段生成最终客服回复，限制输入字符数与输出 token |
 | QA | 确定性失败由规则短路，其中包括回复里的带币种金额、业务单号（如 `ORD-`、`INV-`）和完整日期必须能在证据或用户原文中找到，找不到即判幻觉转人工；规则的正向 Grounding 只是词面支持，不直接放行；其余可用 Jev 一次输出 Grounding、完成度、citation、未授权承诺和人工建议，低置信度或故障时回退轻量 LLM Judge |
 | 输出过滤 | 删除可能泄露内部角色、指令或工作流的内容 |
@@ -221,7 +221,7 @@ Prompt Injection 不再只是英文关键词检测，当前实现为确定性多
 
 确定性规则未命中时，可选调用独立 `Qwen3Guard-Gen-0.6B` OpenAI-compatible 端点。该 Adapter 已接入 `user_input`、`tool_result` 和 `rag_document`，并将 `Safe / Controversial / Unsafe`、Categories、延迟与降级状态写入 AgentState 和 OpenTelemetry。`Unsafe` 或 `Jailbreak` 类别阻断自动化；`Controversial` 默认进入 Risk Engine 并要求人工处理。Guard 服务默认关闭。
 
-是否转人工由 22 条处理原则（`docs/10_HANDLING_PRINCIPLES.md`）直接决定，优先级只决定处理时限。独立 `RiskEngine` 是唯一的转人工判断点，综合处理原则的结论、安全分数、依赖降级、QA、幻觉和 Workflow 错误；Escalation 只读它的结论。默认风险阈值为 `medium >= 0.4`、`high >= 0.7`、`critical >= 0.9`；Analyzer 低置信度阈值为 `0.65`，QA 阈值为 `0.8`。`high` / `critical` 要求人工处理，安全威胁额外阻断自动化。
+是否转人工由处理原则第二版（`docs/10_HANDLING_PRINCIPLES.md`）的 7 行处理表决定，优先级只决定处理时限。独立 `RiskEngine` 是唯一的转人工判断点，综合处理原则的结论、安全分数、依赖降级、QA、幻觉和 Workflow 错误；Escalation 只读它的结论。默认风险阈值为 `medium >= 0.4`、`high >= 0.7`、`critical >= 0.9`；Analyzer 低置信度阈值为 `0.65`，QA 阈值为 `0.8`。`high` / `critical` 要求人工处理，安全威胁额外阻断自动化。
 
 `/chat` 会返回 Analyzer 置信度、风险等级、分数和原因。Trace 和结构化日志记录风险字段，OpenTelemetry Metrics 记录最终风险评估数与分数分布。
 

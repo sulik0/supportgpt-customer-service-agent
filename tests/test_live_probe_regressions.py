@@ -4,43 +4,16 @@ import json
 
 import pytest
 
-from src.agents.analyzer import (
-    TicketAnalyzerAgent,
-    is_explicit_complaint,
-    ticket_analyzer_agent,
-)
+from src.agents.analyzer import ticket_analyzer_agent
 from src.agents.evidence import build_resolution_evidence
 from src.agents.public_text import strip_internal_citations
 from src.agents.record_queries import requested_record_tool
 from src.agents.retriever import knowledge_retriever_agent
 from src.agents.scope import out_of_scope_reason, scope_boundary_response
-from src.decision.models import DecisionResult, TicketIntentDecision
-from src.models.intents import IntentType
 from src.models.schemas import Citation
 from src.rag.vector_store import vector_store
 
 
-def _jev(monkeypatch, intent, confidence=0.95):
-    """模拟 Jev 给出与规则不同的分类。"""
-
-    async def decide(_text):
-        return TicketIntentDecision(
-            result=DecisionResult(
-                enabled=False, available=False, provider="x", operation="o",
-                question_set_version="v", model="m",
-            ),
-            accepted=True,
-            analysis={
-                "intent": intent,
-                "confidence_score": confidence,
-                "operation_mode": "information",
-                "customer_tone": None,
-                "mixed_request": False,
-                "out_of_scope": False,
-            },
-        )
-
-    monkeypatch.setattr("src.agents.analyzer.decision_service.classify_ticket", decide)
 
 
 # --- 保修记录查询：模型判成通用咨询后不调保修 Tool，回答“没有保修记录” ---
@@ -67,87 +40,17 @@ def test_warranty_policy_question_is_not_a_record_lookup(text):
     assert requested_record_tool(text) is None
 
 
-@pytest.mark.asyncio
-async def test_warranty_status_lookup_is_kept_even_if_jev_says_information(
-    monkeypatch,
-):
-    # 第 20 条：类别听 Jev；但“要查哪类记录”是单独的结论，Resolver 据此
-    # 发现保修没查到时如实说明无法确认并转人工（第 10 条），不会编造。
-    _jev(monkeypatch, IntentType.INFORMATION_REQUEST)
-    state = await ticket_analyzer_agent.analyze(
-        {
-            "subject": "保修",
-            "description": "我买的网关设备还在保修期内吗？",
-            "customer_id": "cust_202",
-        }
-    )
-    assert state["intent"] is IntentType.INFORMATION_REQUEST
-    assert state["classification"]["record_tool"] == "warranty.get_entitlements"
 
 
-@pytest.mark.asyncio
-async def test_device_fault_override_only_applies_to_llm_fallback(monkeypatch):
-    # Jev 有把握时听 Jev；设备故障纠正只在 Jev 不可用、规则也没结论的 LLM 兜底时用。
-    _jev(monkeypatch, IntentType.WARRANTY_CLAIM)
-    state = await ticket_analyzer_agent.analyze(
-        {
-            "subject": "断网",
-            "description": "我的网关设备最近老是断网",
-            "customer_id": "cust_202",
-        }
-    )
-    assert state["intent"] is IntentType.WARRANTY_CLAIM
-    assert state["classification"]["category_source"] == "jev"
-    assert (
-        TicketAnalyzerAgent._device_intent_override(
-            "我的网关设备最近老是断网", IntentType.OUTAGE_REPORT
-        )
-        is IntentType.WARRANTY_CLAIM
-    )
 
 
-@pytest.mark.parametrize(
-    "text",
-    [
-        "我们的 AWS Gateway 集群从早上开始就无法访问了，生产环境全挂了",
-        "Our API returns a 504 Gateway error. What should support verify first?",
-        "我们调用接口一直返回 429，应该怎么处理？",
-    ],
-)
-def test_api_incident_stays_outage(text):
-    assert (
-        TicketAnalyzerAgent._device_intent_override(text, IntentType.OUTAGE_REPORT)
-        is IntentType.OUTAGE_REPORT
-    )
 
 
 # --- 以监管、媒体相威胁的辱骂被自动回复，没有转人工 ---
 
 
-@pytest.mark.parametrize(
-    "text",
-    [
-        "你们这群骗子，垃圾公司，再不处理我就去消协和媒体曝光你们",
-        "this is unacceptable. i will report you to the consumer protection agency.",
-        "再不解决我就打 12315",
-    ],
-)
-def test_threat_of_regulator_or_media_is_a_complaint(text):
-    assert is_explicit_complaint(text)
 
 
-@pytest.mark.asyncio
-async def test_abusive_complaint_requires_human(monkeypatch):
-    _jev(monkeypatch, IntentType.INFORMATION_REQUEST)
-    state = await ticket_analyzer_agent.analyze(
-        {
-            "subject": "投诉",
-            "description": "你们这群骗子，垃圾公司，再不处理我就去消协和媒体曝光你们",
-            "customer_id": "cust_201",
-        }
-    )
-    assert state["priority"] == "high"
-    assert state["risk_requires_human"] is True
 
 
 # --- 范围外请求：写代码被照做，翻译被说成“无法查询天气” ---
@@ -311,46 +214,10 @@ def test_greeting_with_a_question_is_not_short_circuited(text):
 # --- 真实模型 100 条 Baseline 回放（2026-11-14）暴露的问题 ---
 
 
-@pytest.mark.asyncio
-@pytest.mark.parametrize(
-    "text",
-    [
-        "After an API error causes routing to switch, what client-side action is required?",
-        "What processing fee is deducted from a refund under corporate policy v2?",
-    ],
-)
-async def test_jev_category_is_not_overridden_by_rule_keywords(monkeypatch, text):
-    # 第 20 条：规则只在安全、明确范围外和明确办事说法三种情况说了算。
-    _jev(monkeypatch, IntentType.INFORMATION_REQUEST)
-    state = await ticket_analyzer_agent.analyze(
-        {"subject": text[:40], "description": text, "customer_id": "cust_101"}
-    )
-    assert state["intent"] is IntentType.INFORMATION_REQUEST
-    assert state["analyzer_strategy"] == "jev"
 
 
-@pytest.mark.asyncio
-async def test_rule_category_is_used_when_jev_is_unavailable():
-    # 第 21 条：Jev 不可用时规则有明确结论就用规则。
-    text = "API error 触发路由切换后，客户端是否需要清理缓存？"
-    state = await ticket_analyzer_agent.analyze(
-        {"subject": text[:40], "description": text, "customer_id": "cust_101"}
-    )
-    assert state["intent"] is IntentType.OUTAGE_REPORT
-    assert state["analyzer_strategy"] == "rule"
 
 
-@pytest.mark.asyncio
-async def test_model_can_still_move_between_other_intents(monkeypatch):
-    _jev(monkeypatch, IntentType.ACCOUNT_SUPPORT)
-    state = await ticket_analyzer_agent.analyze(
-        {
-            "subject": "登录",
-            "description": "我登录不了账号，提示密码错误",
-            "customer_id": "cust_201",
-        }
-    )
-    assert state["intent"] is IntentType.ACCOUNT_SUPPORT
 
 
 @pytest.mark.parametrize(

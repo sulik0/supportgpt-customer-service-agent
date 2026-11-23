@@ -150,8 +150,8 @@ async def test_providers_mocking(mocker):
         base_url="https://llm.example.com/v1",
         max_retries=0,
     )
-    analysis, _, _ = await op_provider.analyze_ticket("Hello")
-    assert analysis["sentiment"] == "positive"
+    analysis, _, _ = await op_provider.classify_message("Hello")
+    assert set(analysis) >= {"support_scope", "request", "intent"}
     await op_provider.generate_resolution("subject", "desc", "context")
     await op_provider.evaluate_qa("query", ["context"], "response")
     await op_provider.run_chat([{"role": "user", "content": "hi"}], "context")
@@ -162,8 +162,8 @@ async def test_providers_mocking(mocker):
 
     # Test Azure LLM provider methods
     az_provider = AzureOpenAILLMProvider()
-    az_analysis, _, _ = await az_provider.analyze_ticket("Hello")
-    assert az_analysis["sentiment"] == "positive"
+    az_analysis, _, _ = await az_provider.classify_message("Hello")
+    assert set(az_analysis) >= {"support_scope", "request", "intent"}
     await az_provider.generate_resolution("subject", "desc", "context")
     await az_provider.evaluate_qa("query", ["context"], "response")
     await az_provider.run_chat([{"role": "user", "content": "hi"}], "context")

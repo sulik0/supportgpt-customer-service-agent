@@ -41,7 +41,7 @@ def _escalation_reason(state: Dict[str, Any], reasons: tuple[str, ...]) -> str:
             else "human handling"
         )
         return (
-            f"Handling principle {classification.get('principle')} requires {mode}."
+            f"Handling table row {classification.get('principle')} requires {mode}."
         )
     return f"Risk Engine policy threshold: {', '.join(reasons) or 'unspecified'}."
 

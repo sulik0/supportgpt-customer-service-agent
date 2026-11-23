@@ -15,7 +15,6 @@ from src.agents.resolver import resolution_agent
 from src.agents.retriever import knowledge_retriever_agent
 from src.agents.tooling import tooling_agent
 from src.guardrails.qwen3_guard import Qwen3GuardResult, qwen3_guard
-from src.models.intents import IntentType
 from src.models.schemas import Citation
 from src.rag.vector_store import vector_store
 from src.tools.registry import tool_registry
@@ -29,22 +28,22 @@ async def test_analyzer_agent_logic():
         "subject": "Billing issue",
     }
     res = await ticket_analyzer_agent.analyze(state)
-    # 明确要求退款：按第 5 条转人工；没有情绪词，情绪为中性。
+    # Jev 关闭时 LLM（Mock）为主判断；要求退款按处理表第 3 行转人工。
     assert res["classification"]["handling"] == "human"
-    assert res["classification"]["principle"] == 5
+    assert res["classification"]["principle"] == 3
     assert res["sentiment"] == "neutral"
     assert res["priority"] == "high"
     assert res["department"] == "billing"
     assert res["analyzer_confidence"] == 0.95
     assert res["risk_level"] == "high"
 
-    # Jev 不可用时故障按第 21 条先答后审；不是大面积故障，优先级 high。
+    # 普通故障提问自动回答；不是大面积故障，优先级 high。
     state = {
         "description": "API is down with 504 errors.",
         "subject": "Connection timeout",
     }
     res = await ticket_analyzer_agent.analyze(state)
-    assert res["classification"]["handling"] == "answer_then_review"
+    assert res["classification"]["handling"] == "auto_answer"
     assert res["priority"] == "high"
     assert res["department"] == "technical"
 
@@ -60,70 +59,10 @@ async def test_analyzer_agent_logic():
     assert res_block["risk_block_automation"] is True
 
 
-@pytest.mark.asyncio
-async def test_analyzer_rule_match_skips_business_llm(monkeypatch):
-    async def unexpected_llm_call(text):
-        raise AssertionError("fixed intent should not call the business LLM")
-
-    monkeypatch.setattr(
-        "src.agents.analyzer.llm_provider.analyze_ticket", unexpected_llm_call
-    )
-    result = await ticket_analyzer_agent.analyze(
-        {"subject": "Refund", "description": "I need a refund for this charge."}
-    )
-
-    assert result["analyzer_strategy"] == "rule"
-    assert result["intent"] == "billing_dispute"
-    assert result.get("tokens_input", 0) == 0
 
 
-@pytest.mark.asyncio
-async def test_analyzer_keyword_miss_falls_back_to_llm(monkeypatch):
-    calls = []
-
-    async def classify(text):
-        calls.append(text)
-        return (
-            {
-                "intent": "order_status",
-                "priority": "medium",
-                "department": "shipping",
-                "sentiment": "negative",
-                "confidence_score": 0.9,
-            },
-            30,
-            10,
-        )
-
-    monkeypatch.setattr("src.agents.analyzer.llm_provider.analyze_ticket", classify)
-    # 不含任何业务关键词的订单问题，不能被规则直接判成通用咨询。
-    result = await ticket_analyzer_agent.analyze(
-        {"subject": "还没到", "description": "我上周买的东西到现在还没送来。"}
-    )
-
-    assert len(calls) == 1
-    assert result["analyzer_strategy"] == "llm"
-    assert result["intent"] == "order_status"
 
 
-@pytest.mark.asyncio
-async def test_analyzer_memory_continuation_still_skips_llm(monkeypatch):
-    async def unexpected_llm_call(text):
-        raise AssertionError("explicit continuation should stay deterministic")
-
-    monkeypatch.setattr(
-        "src.agents.analyzer.llm_provider.analyze_ticket", unexpected_llm_call
-    )
-    result = await ticket_analyzer_agent.analyze(
-        {
-            "subject": "",
-            "description": "那就帮我取消它",
-            "memory_active_entities": {"order_id": "ORD-7001"},
-        }
-    )
-
-    assert result["analyzer_strategy"] == "rule"
-    assert result["intent"] == "order_cancellation"
 
 
 @pytest.mark.asyncio
@@ -135,90 +74,40 @@ async def test_billing_policy_question_is_neutral_not_negative():
         }
     )
 
-    assert result["analyzer_strategy"] == "rule"
+    assert result["analyzer_strategy"] == "llm"
     assert result["intent"] == "billing_dispute"
     assert result["department"] == "billing"
     assert result["sentiment"] == "neutral"
 
 
 @pytest.mark.parametrize(
-    ("text", "expected"),
+    ("overrides", "expected"),
     [
-        ("退款政策和申请条件是什么？", "neutral"),
-        ("What are the refund policy requirements?", "neutral"),
-        ("我要申请退款。", "neutral"),
-        ("退款怎么这么慢？到底多久才能到账？", "negative"),
-        ("你们重复扣款，我要投诉。", "negative"),
+        ({}, "neutral"),
+        ({"request": "action"}, "neutral"),
+        ({"negative_emotion": True}, "negative"),
+        ({"complaint": True}, "negative"),
     ],
 )
-def test_sentiment_follows_language_not_intent(text, expected):
-    from src.agents.analyzer import is_explicit_complaint
-    from src.agents.classification import build_classification, sentiment_label
+def test_sentiment_follows_language_not_intent(overrides, expected):
+    from src.agents.classification import (
+        build_classification,
+        normalize_answers,
+        sentiment_label,
+    )
+    from tests.classification_helpers import answers
 
     classification = build_classification(
-        text=text,
-        category=IntentType.BILLING_DISPUTE,
-        category_source="rule",
-        jev_status="unavailable",
-        jev_analysis=None,
-        complaint_rule=is_explicit_complaint(text),
-        record_tool=None,
+        jev=normalize_answers(answers(intent="billing_dispute", **overrides)),
+        llm=None,
+        jev_status="accepted",
+        review_status="not_needed",
     )
     assert sentiment_label(classification) == expected
 
 
-@pytest.mark.asyncio
-async def test_analyzer_ambiguous_intent_falls_back_to_llm(monkeypatch):
-    called = False
-
-    async def classify(text):
-        nonlocal called
-        called = True
-        return (
-            {
-                "intent": "refund_after_delivery_issue",
-                "priority": "high",
-                "department": "billing",
-                "sentiment": "negative",
-                "confidence_score": 0.84,
-            },
-            80,
-            20,
-        )
-
-    monkeypatch.setattr("src.agents.analyzer.llm_provider.analyze_ticket", classify)
-    result = await ticket_analyzer_agent.analyze(
-        {
-            "subject": "Missing order and refund",
-            "description": "My order was not received and I also need a refund.",
-        }
-    )
-
-    assert called is True
-    assert result["analyzer_strategy"] == "llm"
-    assert result["intent"] == "information_request"
-    assert result["analyzer_confidence"] == 0.5
-    assert result["tokens_input"] == 80
-    assert result["department"] == "general"
 
 
-@pytest.mark.parametrize(
-    ("query", "intent", "department"),
-    [
-        ("Where can I update my account preferences?", "information_request", "general"),
-        ("What fee applies if I cancel an order before fulfillment?", "information_request", "general"),
-        ("What is the hardware warranty period?", "information_request", "general"),
-        ("Please cancel my order ORD-7001.", "order_cancellation", "shipping"),
-        ("The API returns 504 errors. What should I verify?", "outage_report", "technical"),
-        ("What invoice total is stored for ORD-7001?", "billing_dispute", "billing"),
-    ],
-)
-def test_analyzer_rule_taxonomy_boundaries(query, intent, department):
-    result = ticket_analyzer_agent._match_rule(query)
-
-    assert result is not None
-    assert result["intent"] == intent
-    assert result["department"] == department
 
 
 @pytest.mark.asyncio
@@ -935,24 +824,11 @@ def test_workflow_usage_uses_configured_model_name(monkeypatch):
 
 @pytest.mark.asyncio
 async def test_compiled_langgraph_flow(monkeypatch):
-    # E2E flow testing；Jev 判为“只是问”的账务政策咨询自动回答（第 6 条）。
-    from src.decision.models import DecisionResult, TicketIntentDecision
+    # E2E flow testing；Jev 和 LLM 复核都判为只问政策的账务咨询：自动回答（处理表第 7 行）。
+    from tests.classification_helpers import patch_jev, patch_llm
 
-    async def decide(_text):
-        return TicketIntentDecision(
-            result=DecisionResult(
-                enabled=False, available=True, provider="x", operation="o",
-                question_set_version="v", model="m",
-            ),
-            accepted=True,
-            analysis={
-                "intent": IntentType.BILLING_DISPUTE, "confidence_score": 0.95,
-                "operation_mode": "information", "customer_tone": "neutral",
-                "mixed_request": False, "out_of_scope": False,
-            },
-        )
-
-    monkeypatch.setattr("src.agents.analyzer.decision_service.classify_ticket", decide)
+    patch_jev(monkeypatch, intent="billing_dispute", request="information")
+    patch_llm(monkeypatch, intent="billing_dispute", request="information")
     initial_state = {
         "ticket_id": 99,
         "customer_id": "cust_101",

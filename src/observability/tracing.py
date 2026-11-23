@@ -247,7 +247,7 @@ def _llm_metric_model(operation: str) -> str:
     """返回当前 LLM 节点实际使用的模型名。"""
     provider = settings.LLM_PROVIDER.lower()
     if provider == "openai":
-        if operation.endswith("analyze_ticket"):
+        if operation.endswith("classify_message"):
             node_model = (
                 settings.LLM_ANALYZER_MODEL_NAME or settings.LLM_FAST_MODEL_NAME
             )
@@ -259,7 +259,7 @@ def _llm_metric_model(operation: str) -> str:
                 return node_model
         return settings.LLM_MODEL_NAME or "openai-compatible"
     if provider == "azure":
-        if operation.endswith("analyze_ticket") and settings.LLM_ANALYZER_MODEL_NAME:
+        if operation.endswith("classify_message") and settings.LLM_ANALYZER_MODEL_NAME:
             return settings.LLM_ANALYZER_MODEL_NAME
         if operation.endswith("evaluate_qa") and settings.LLM_QA_MODEL_NAME:
             return settings.LLM_QA_MODEL_NAME

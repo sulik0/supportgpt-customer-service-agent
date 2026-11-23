@@ -13,11 +13,7 @@ from src.decision.questions import (
     intent_questions,
     qa_questions,
 )
-from src.models.intents import IntentType, normalize_intent
-
-
-OPERATION_MODES = frozenset({"action", "information", "eligibility", "unclear"})
-CUSTOMER_TONES = frozenset({"neutral", "negative_emotion", "complaint"})
+from src.agents.classification import normalize_answers
 
 
 class DecisionService:
@@ -27,7 +23,7 @@ class DecisionService:
         self.provider = provider
 
     async def classify_ticket(self, text: str) -> TicketIntentDecision:
-        """只输出 Jev 的结论；最终分类由 Analyzer 的优先级表决定。"""
+        """只输出 Jev 的逐项答案；没把握的项为 None，处理结果由分类模块查表。"""
         result = await self.provider.evaluate(
             state={"current_ticket": text},
             questions=intent_questions(),
@@ -40,88 +36,36 @@ class DecisionService:
                 accepted=False,
                 fallback_reason=result.error_code or "provider_unavailable",
             )
-        answer = result.answers.get("intent")
-        operation_mode = result.answers.get("operation_mode")
-        needs_clarification = result.answers.get("needs_clarification")
-        if (
-            answer is None
-            or answer.kind != "choice"
-            or operation_mode is None
-            or operation_mode.kind != "choice"
-            or needs_clarification is None
-            or needs_clarification.kind != "noul"
-        ):
+        threshold = settings.JEV_INTENT_CONFIDENCE_THRESHOLD
+        noul_threshold = settings.JEV_NOUL_THRESHOLD
+        raw: dict[str, Any] = {}
+        for key, question in intent_questions().items():
+            answer = result.answers.get(key)
+            if answer is None or answer.kind != question["type"]:
+                continue
+            if answer.kind == "choice":
+                if float(answer.confidence or 0.0) >= threshold:
+                    raw[key] = str(answer.value)
+            elif answer.kind == "noul":
+                probability = _bounded(answer.value)
+                # 介于两个阈值之间算没把握。
+                if probability >= noul_threshold:
+                    raw[key] = True
+                elif probability <= 1.0 - noul_threshold:
+                    raw[key] = False
+        answers = normalize_answers(raw)
+        if all(value is None for value in answers.values()):
             return TicketIntentDecision(
                 result=result,
                 accepted=False,
                 fallback_reason="missing_intent_answers",
             )
-        raw_intent = str(answer.value)
-        if raw_intent not in IntentType.values():
-            return TicketIntentDecision(
-                result=result,
-                accepted=False,
-                fallback_reason="unknown_intent",
-            )
-        if str(operation_mode.value) not in OPERATION_MODES:
-            return TicketIntentDecision(
-                result=result,
-                accepted=False,
-                fallback_reason="unknown_operation_mode",
-            )
-        # “没把握”逐项算（原则第 21 条）：意图没把握只让业务类别兜底，
-        # 其余有把握的回答（办事还是问、语气、是否既问又办）照常采用。
-        threshold = settings.JEV_INTENT_CONFIDENCE_THRESHOLD
-        intent_confidence = float(answer.confidence or 0.0)
-        mode_confident = float(operation_mode.confidence or 0.0) >= threshold
-        intent = normalize_intent(raw_intent)
-        scope = result.answers.get("support_scope")
-        outside_support = bool(
-            intent == IntentType.INFORMATION_REQUEST
-            and mode_confident
-            and str(operation_mode.value) == "information"
-            and scope is not None
-            and scope.kind == "choice"
-            and scope.value == "benign_out_of_scope"
-            and float(scope.confidence or 0.0) >= threshold
-        )
-        tone = result.answers.get("customer_tone")
-        tone_value = (
-            str(tone.value)
-            if tone is not None
-            and tone.kind == "choice"
-            and str(tone.value) in CUSTOMER_TONES
-            and float(tone.confidence or 0.0) >= threshold
-            else None
-        )
-        mixed = result.answers.get("mixed_request")
-        mixed_value = (
-            _bounded(mixed.value) >= settings.JEV_NOUL_THRESHOLD
-            if mixed is not None and mixed.kind == "noul"
-            else None
-        )
-        if _bounded(needs_clarification.value) >= settings.JEV_NOUL_THRESHOLD:
-            intent_rejection = "needs_clarification"
-        elif intent_confidence < threshold:
-            intent_rejection = "low_confidence"
-        else:
-            intent_rejection = None
-        outside_support = outside_support and intent_rejection is None
+        unsure = [key for key, value in answers.items() if value is None]
         return TicketIntentDecision(
             result=result,
-            accepted=intent_rejection is None,
-            fallback_reason=intent_rejection,
-            analysis={
-                "intent": intent if intent_rejection is None else None,
-                "confidence_score": intent_confidence,
-                # 没把握时为 None，由分类优先级表按“说不清”处理。
-                "operation_mode": (
-                    str(operation_mode.value) if mode_confident else None
-                ),
-                "customer_tone": tone_value,
-                "mixed_request": mixed_value,
-                "out_of_scope": outside_support,
-            },
+            accepted=True,
+            fallback_reason=f"unsure:{','.join(unsure)}" if unsure else None,
+            analysis=answers,
         )
 
     async def judge_response(

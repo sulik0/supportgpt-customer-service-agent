@@ -4,6 +4,10 @@
 
 ## P0
 
+- [x] 2026-11-23 分类改造第二版（`docs/10_HANDLING_PRINCIPLES.md`）：Jev 回答 8 个分类问题（问题集 v2.0），重要情况 LLM 用同一组问题复核并取更严格的结果，Jev 不可用时 LLM 为主判断；删除规则对类别、意图、范围、投诉 / 情绪 / 被盗 / 影响面的判断和改判；处理表 14 条缩为 7 行，业务类别不参与是否转人工。新增 `CLASSIFICATION_REVIEW_ENABLED`（默认开）。
+- [ ] 分类第二版用真实 Jev 和 LLM 验证：按新原则建中英文分类题集（期望先经用户确认），重点看 Jev 判错时 LLM 复核能否兜住、复核调用比例和延迟。Mock 测试通过不代表真实模型下正确。
+- [ ] 重录 `evaluation/decision_recordings/` 的 Jev 录音（问题集已改为 v2.0，旧录音失配，回放时按 Jev 不可用处理）。
+- [ ] PromptOps Bundle 里的 `analyzer` 模板已不被使用（分类 Prompt 由 `src/decision/questions.py` 生成）；Registry 仍要求它存在，待决定删掉还是接回。
 - [x] 2026-11-23 固定 100 条 Baseline 移出 PR 和发布门禁（删除 `release-quality-gate.yml`，CD 改为手动触发），题目文件保留。原因：题目和答案冻结又要求全部通过，原则调整后只能改代码迎合旧答案。
 - [ ] 按处理原则重建评测题集：每题标明依据第几条原则，原则改了就按编号改期望；只检查处理结果和禁用工具，不检查中间分类；按层设通过率，只有安全层要求全对。重建前 PR 没有评测类门禁，只有 pytest。
 

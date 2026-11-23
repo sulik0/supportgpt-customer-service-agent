@@ -82,7 +82,7 @@ class Settings(BaseSettings):
     LLM_FAST_API_KEY: Optional[str] = Field(default=None)
     LLM_ANALYZER_MODEL_NAME: Optional[str] = Field(default=None)
     LLM_QA_MODEL_NAME: Optional[str] = Field(default=None)
-    LLM_ANALYZER_MAX_TOKENS: ClassVar[int] = 120
+    LLM_ANALYZER_MAX_TOKENS: ClassVar[int] = 400
     LLM_RESOLVER_MAX_TOKENS: int = Field(default=480, ge=64, le=2048)
     LLM_QA_MAX_TOKENS: int = Field(default=96, ge=32, le=512)
     LLM_RESOLVER_MAX_RAG_CHARS: ClassVar[int] = 5000
@@ -95,6 +95,8 @@ class Settings(BaseSettings):
     DECISION_PROVIDER: str = Field(
         default="disabled", pattern="^(disabled|jev|jev_replay)$"
     )
+    # Jev 结论没有直接转人工且涉及敏感类别、范围外或有项没把握时，再让 LLM 复核。
+    CLASSIFICATION_REVIEW_ENABLED: bool = Field(default=True)
     DECISION_REPLAY_PATH: str = Field(
         default="evaluation/decision_recordings/jev_baseline.json"
     )

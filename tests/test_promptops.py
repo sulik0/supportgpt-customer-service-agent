@@ -247,18 +247,20 @@ async def test_real_provider_methods_render_pinned_candidate_without_network(pro
 
     async def call(messages, **kwargs):
         calls.append((messages, kwargs))
-        if kwargs["operation"] == "analyze_ticket":
-            return '{"intent":"information_request"}', 10, 5
+        if kwargs["operation"] == "classify_message":
+            return '{"intent":{"answer":"information_request","sure":true}}', 10, 5
         if kwargs["operation"] == "evaluate_qa":
             return '{"score":1.0}', 10, 5
         return "回复", 10, 5
 
     provider._call_gpt = call
     with prompt_scope(bundle):
-        await provider.analyze_ticket("问题")
+        await provider.classify_message("问题")
         await provider.generate_resolution("主题", "描述", "证据")
         await provider.evaluate_qa("问题", ["证据"], "回复")
-    for (messages, _), node in zip(calls, ("analyzer", "resolver", "qa")):
+    # 分类问题和 Jev 共用一份定义，不走 PromptOps 模板。
+    assert "Candidate" not in calls[0][0][0]["content"]
+    for (messages, _), node in zip(calls[1:], ("resolver", "qa")):
         assert messages[0]["content"].endswith(f"Candidate {node}.")
     assert calls[1][1]["max_tokens"] == settings.LLM_RESOLVER_MAX_TOKENS
     assert calls[2][1]["json_mode"] is True

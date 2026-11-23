@@ -197,21 +197,19 @@ JEV_MAX_RETRIES=0
 <details>
 <summary>历史 V1 初始路由</summary>
 
-`DecisionProvider` 默认为 `disabled`。启用后，Analyzer 只在规则无法确定的歧义请求上调用 Jev；QA 只在确定性校验无法结论时调用。请求先脱敏、过滤密钥和业务标识，由 Resilience 统一处理超时、Retry 和 Circuit Breaker。Jev 不可用、响应非法或置信度不足时，分别回退原 Analyzer / QA LLM。
+`DecisionProvider` 默认为 `disabled`。启用后，Analyzer 对每条通过安全检查的消息调用 Jev 做分类；QA 只在确定性校验无法结论时调用。请求先脱敏、过滤密钥和业务标识，由 Resilience 统一处理超时、Retry 和 Circuit Breaker。Jev 不可用、响应非法或置信度不足时，分别回退原 Analyzer / QA LLM。
 
 </details>
 
-分类判断（2026-11-17 起，`src/agents/classification.py`）：每条消息只判一次，结论存进 State 的 `classification`（`category`、`mode`、`scope`、`record_tool`、`complaint`、`negative`、`mixed_request`、`wide_impact`、`account_compromised`，每项结论的来源，以及 `handling` / `principle` / `priority`）。Graph 路由（是否范围外）、Resolver（要查的记录）、公开回复（能否先答后审）、Risk Engine（是否转人工）都只读它，不再对原文重跑规则。优先级表写在该文件顶部（原则第 20、21 条）：
+分类判断（2026-11-23 第二版，`src/agents/classification.py`，依据 `docs/10_HANDLING_PRINCIPLES.md`）：每条消息只判一次，结论存进 State 的 `classification`（`category`、`mode`、`scope`、`record_tool`、各风险信号、`category_source`、`review_status`、`disagreement`、Jev 和 LLM 的原始答案，以及 `handling` / `principle`（处理表行号）/ `priority`）。Graph 路由、Resolver、公开回复、Risk Engine 都只读它。
 
-- 业务类别：Jev 有把握时听 Jev；Jev 不可用或对类别没把握时，规则有明确结论用规则，否则 LLM（LLM 兜底时才做设备故障纠正）。
-- 用户意图：Jev 有把握时听 Jev（`action` / `information` / `eligibility` / `unclear`）；原话命中 `ACTION_OR_DISPUTE`（明确办事、争议、越权说法）时规则改判为 `action`；Jev 没把握时，命中 `ELIGIBILITY_REQUEST` 按“问自己能不能办”，否则按“说不清”。
-- 范围外：规则命中明确范围外主题即范围外；否则 Jev 判 `benign_out_of_scope` 且原话不含售后词。
-- 投诉 / 负面情绪：规则或 Jev（`customer_tone`）任一命中即算。
-- “没把握”逐项算：`intent` 置信度不足只让类别兜底，`operation_mode`、`customer_tone` 有把握的照常采用。
+- 规则只做安全拦截、脱敏、能力说明的措辞（天气、写诗等，`out_of_scope_reason`），以及 Jev 和 LLM 都不可用时认出明显范围外请求。规则不判类别、意图、范围和风险信号。
+- Jev 问题集 `supportgpt-jev-intent-v2.0`（`src/decision/questions.py`）：`support_scope`、`request`（action / eligibility / record_lookup / information / unclear）、`complaint`、`account_security`、`urgent_outage`、`negative_emotion`、`answerable_question`、`intent`。choice 置信度低于 0.75、noul 介于 0.3 和 0.7 之间的项记为没把握（None）。
+- LLM 复核（`llm_provider.classify_message`，用同一组问题渲染的 Prompt，答案带 `sure`）：Jev 的结论没有直接转人工，且类别是账务 / 取消 / 账户 / 保修、或判范围外、或有项没把握时调用；`CLASSIFICATION_REVIEW_ENABLED=false` 可关闭。合并时 Jev 没把握的项用 LLM 的答案，再用两边答案各查一次处理表，取更严格的结果。Jev 不可用或调用异常时 LLM 为主判断；两者都不可用时，明显范围外给能力说明，其余先答后审。
+- 处理表（`decide_handling`，第一条命中即停）：1 范围外 → 能力说明；2 投诉 / 账户安全事件 / 紧急故障 → 转人工；3 要求实际办理 → 转人工，附带可答问题时先答后审；4 问自己能不能办 → 先答后审；5 负面情绪 → 先答后审；6 “要做什么”两边都没把握 → 先答后审；7 其余自动回答。业务类别不参与处理结果，只选 Skill 和查询工具；`request=record_lookup` 时按类别定必须成功的查询（`record_tool`）。
+- Risk Engine 对 `human` / `answer_then_review` 记 `handling_human` / `handling_answer_then_review`（0.78，high）；没有 `classification` 的旧 State 沿用旧打分。Mock LLM 的分类（`src/llm/mock_classifier.py`）用关键词近似回答，只服务于无 Key 的演示和测试。
 
-处理结果（`decide_handling`，按顺序取第一条命中）：范围外 → 能力说明（3）；投诉 → 转人工（16）；账户被盗 → 转人工（14）；大面积或影响业务的故障 → 转人工（12）；账务/取消/保修类要办事 → 转人工（5/11/13），同时有可回答的提问时先答后审（8）；账务/取消类问自己能不能办 → 先答后审（7）；负面情绪 → 先答后审（17）；“办事还是问”没有结论且属于账务/取消/故障 → 先答后审（21）；其余自动回答。Risk Engine 对 `human` / `answer_then_review` 记 `handling_human` / `handling_answer_then_review`（0.78，high），不再按优先级、情绪、业务域或 Analyzer 置信度打分；没有 `classification` 的旧 State 沿用旧打分。Escalation 只读 Risk Engine 的结论，优先级只换算 SLA。
-
-Jev 问题集 `supportgpt-jev-intent-v1.2`：`operation_mode` 增加 `eligibility`；新增 `customer_tone`（neutral / negative_emotion / complaint）和 `mixed_request`（既问又办）；`outage_report`、`warranty_claim` 的说明与原则文档的类别对齐（报错后的恢复步骤算故障；网关、路由器等实体设备故障和查自己设备的保修状态算保修与设备）。改问题集后要重录门禁录音。
+改 Jev 问题集后，`evaluation/decision_recordings/` 的录音会失配（回放按 Jev 不可用处理），需要重录。
 
 QA 路由不变：保留空回复、泄露、无权威证据等硬规则，将正向 Grounding 候选和其余非确定结论交给 Jev；Jev 不可用或置信度不足时回退 LLM Judge。
 
@@ -220,7 +218,7 @@ Jev 只用于线上封闭决策；当前不作为 Baseline、Ragas 或 DeepEval 
 回复语言兜底：Prompt 虽已要求跟随当前 Description 的语言，`deepseek-flash` 在工具结果和 RAG 多为中文时仍可能用中文回答。`src/llm/provider.py` 的 `resolution_language_directive` 按 CJK 字符占比（≥30% 判中文）或英文常用词（且无非 ASCII 字母）判断主要语言，在发给 Resolver 的用户消息末尾追加 `Respond in English.` / `Respond in Chinese.`。用户明确指定回复语言、或无法可靠判断（如法语）时不追加，交给 Prompt 规则。QA 和范围外固定回复本来就按 Description 的 CJK 判断语言，未改动。
 
 
-分类和 QA 的几条确定性兜底（2026-11-14，来自真实模型 100 条回放）：规则明确命中账务或故障域时，Jev 不能把意图降成 `information_request`（其他方向的改判仍听 Jev）；问保修期限（多久、几个月）时，检索到的文档必须含具体期限才算权威依据，否则 `response_requires_human=true`；QA 评判 Prompt 明确了分值含义（之前的 JSON 示例写死 `"score":0.0`，模型经常照抄 0 分，导致凡是走到模型评判的回复都被判低分转人工）；请求解释 AI/提示词概念或询问客服如何应对绕过控制的无害提问，按范围外 `ai_security_concepts` 礼貌说明服务范围（真正的攻击在此之前已被 Guardrail 拦截；“先问概念、再接越权指令”不享受知识性讨论豁免）；Analyzer 和 QA 使用独立快速端点时，该端点调用失败会退回主模型再试一次。
+分类和 QA 的几条确定性兜底（2026-11-14，来自真实模型 100 条回放）：（2026-11-23 起分类不再由规则改判，见上）问保修期限（多久、几个月）时，检索到的文档必须含具体期限才算权威依据，否则 `response_requires_human=true`；QA 评判 Prompt 明确了分值含义（之前的 JSON 示例写死 `"score":0.0`，模型经常照抄 0 分，导致凡是走到模型评判的回复都被判低分转人工）；请求解释 AI/提示词概念或询问客服如何应对绕过控制的无害提问，按范围外 `ai_security_concepts` 礼貌说明服务范围（真正的攻击在此之前已被 Guardrail 拦截；“先问概念、再接越权指令”不享受知识性讨论豁免）；Analyzer 和 QA 使用独立快速端点时，该端点调用失败会退回主模型再试一次。
 
 用户侧处理说明（`src/agents/public_reply.py`，文案跟随用户输入语言）：
 
