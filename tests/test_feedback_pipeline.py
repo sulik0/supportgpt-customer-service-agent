@@ -169,7 +169,7 @@ async def test_human_correction_and_evaluation_export_sft_dpo(
     assert run_detail.json()["skill_selection"]["skill_name"] == "refund_support"
     assert run_detail.json()["skill_selection"]["skill_version"] == "v1.1"
     snapshot = run_detail.json()["execution_snapshot"]
-    assert snapshot["analyzer_strategy"] == "rule"
+    assert snapshot["analyzer_strategy"] == "llm"
     assert snapshot["analyzer_result"] == {
         "intent": "billing_dispute",
         "department": "billing",
