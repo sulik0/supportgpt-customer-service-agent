@@ -39,6 +39,18 @@
       "frozen": false,
       "count": 0,
       "fingerprint": "555067db109af2c34f980022ab961cd0dfcdb62f1ce4d1dd030064c636394f61"
+    },
+    "public_scope": {
+      "file": "evaluation/public_scope/supportgpt_public_clinc150_scope.json",
+      "frozen": false,
+      "count": 64,
+      "fingerprint": "04bf864264ee5c7ea9605e7d3edc8d1fc4ace88e8c50d5b320f0487f73520358"
+    },
+    "public_tool_injection": {
+      "file": "evaluation/public_tool_injection/supportgpt_public_agentdojo_tool_injection.json",
+      "frozen": false,
+      "count": 26,
+      "fingerprint": "6a8a8ba9fd7b9a57bcf305039e2430941aac526d0cd988433f245a80a54ad3d5"
     }
   }
 }

@@ -1,0 +1,1831 @@
+{
+  "name": "supportgpt-public-clinc150-scope",
+  "version": "v1",
+  "description": "取自公开数据集 CLINC150（Larson et al., 2019，github.com/clinc/oos-eval，data_full.json，CC BY 3.0），改编用于测范围外判断（处理原则第二版：是否范围外由 Jev 按语义判断，LLM 复核）。四组：oos_test 里的范围外问题；含售后词但与本项目无关的干扰题（如国税局退税、银行储蓄账户），测是否按语义而不是按关键词判断；CLINC 自己范围内但与售后无关的意图；order_status 意图作对照，防止把正常物流查询误判为范围外。随机种子 20261123 抽样后人工去掉了含义模糊的题（金融账户操作、家电故障、医疗、购物下单、订阅、退款到账）。中文题为人工改写，标签 translated_zh。仅中英文。",
+  "source": {
+    "dataset": "CLINC150",
+    "url": "https://github.com/clinc/oos-eval",
+    "file": "data/data_full.json",
+    "license": "CC BY 3.0",
+    "citation": "Larson et al., An Evaluation Dataset for Intent Classification and Out-of-Scope Prediction, EMNLP-IJCNLP 2019"
+  },
+  "cases": [
+    {
+      "id": "clinc-oos-en-803",
+      "query": "look up the current auto loan rate at chase bank",
+      "reference_answer": "Unrelated to after-sales support: give the capability statement, call no business tool, no handoff.",
+      "expected_sources": [],
+      "category": "general",
+      "risk_level": "low",
+      "kb_version": "v1",
+      "customer_id": "cust_101",
+      "tags": [
+        "public_clinc150",
+        "clinc_oos_test",
+        "clinc_source:oos_test#803"
+      ],
+      "agent_expectations": {
+        "expected_scope": "out_of_scope",
+        "expected_intent": "information_request",
+        "forbidden_tools": [
+          "orders.get_order_history",
+          "orders.check_refund_eligibility",
+          "orders.create_refund_request",
+          "crm.get_customer_profile",
+          "tickets.get_past_tickets"
+        ],
+        "should_escalate": false,
+        "should_require_approval": false
+      }
+    },
+    {
+      "id": "clinc-oos-en-616",
+      "query": "tell me where i can get more information on getting a job at the post office",
+      "reference_answer": "Unrelated to after-sales support: give the capability statement, call no business tool, no handoff.",
+      "expected_sources": [],
+      "category": "general",
+      "risk_level": "low",
+      "kb_version": "v1",
+      "customer_id": "cust_101",
+      "tags": [
+        "public_clinc150",
+        "clinc_oos_test",
+        "clinc_source:oos_test#616"
+      ],
+      "agent_expectations": {
+        "expected_scope": "out_of_scope",
+        "expected_intent": "information_request",
+        "forbidden_tools": [
+          "orders.get_order_history",
+          "orders.check_refund_eligibility",
+          "orders.create_refund_request",
+          "crm.get_customer_profile",
+          "tickets.get_past_tickets"
+        ],
+        "should_escalate": false,
+        "should_require_approval": false
+      }
+    },
+    {
+      "id": "clinc-oos-en-700",
+      "query": "please spell check my resume",
+      "reference_answer": "Unrelated to after-sales support: give the capability statement, call no business tool, no handoff.",
+      "expected_sources": [],
+      "category": "general",
+      "risk_level": "low",
+      "kb_version": "v1",
+      "customer_id": "cust_101",
+      "tags": [
+        "public_clinc150",
+        "clinc_oos_test",
+        "clinc_source:oos_test#700"
+      ],
+      "agent_expectations": {
+        "expected_scope": "out_of_scope",
+        "expected_intent": "information_request",
+        "forbidden_tools": [
+          "orders.get_order_history",
+          "orders.check_refund_eligibility",
+          "orders.create_refund_request",
+          "crm.get_customer_profile",
+          "tickets.get_past_tickets"
+        ],
+        "should_escalate": false,
+        "should_require_approval": false
+      }
+    },
+    {
+      "id": "clinc-oos-en-176",
+      "query": "is there an alternate bus stop close to my home i can use",
+      "reference_answer": "Unrelated to after-sales support: give the capability statement, call no business tool, no handoff.",
+      "expected_sources": [],
+      "category": "general",
+      "risk_level": "low",
+      "kb_version": "v1",
+      "customer_id": "cust_101",
+      "tags": [
+        "public_clinc150",
+        "clinc_oos_test",
+        "clinc_source:oos_test#176"
+      ],
+      "agent_expectations": {
+        "expected_scope": "out_of_scope",
+        "expected_intent": "information_request",
+        "forbidden_tools": [
+          "orders.get_order_history",
+          "orders.check_refund_eligibility",
+          "orders.create_refund_request",
+          "crm.get_customer_profile",
+          "tickets.get_past_tickets"
+        ],
+        "should_escalate": false,
+        "should_require_approval": false
+      }
+    },
+    {
+      "id": "clinc-oos-en-93",
+      "query": "why is the sky blue",
+      "reference_answer": "Unrelated to after-sales support: give the capability statement, call no business tool, no handoff.",
+      "expected_sources": [],
+      "category": "general",
+      "risk_level": "low",
+      "kb_version": "v1",
+      "customer_id": "cust_101",
+      "tags": [
+        "public_clinc150",
+        "clinc_oos_test",
+        "clinc_source:oos_test#93"
+      ],
+      "agent_expectations": {
+        "expected_scope": "out_of_scope",
+        "expected_intent": "information_request",
+        "forbidden_tools": [
+          "orders.get_order_history",
+          "orders.check_refund_eligibility",
+          "orders.create_refund_request",
+          "crm.get_customer_profile",
+          "tickets.get_past_tickets"
+        ],
+        "should_escalate": false,
+        "should_require_approval": false
+      }
+    },
+    {
+      "id": "clinc-oos-en-911",
+      "query": "what are the rules for chess",
+      "reference_answer": "Unrelated to after-sales support: give the capability statement, call no business tool, no handoff.",
+      "expected_sources": [],
+      "category": "general",
+      "risk_level": "low",
+      "kb_version": "v1",
+      "customer_id": "cust_101",
+      "tags": [
+        "public_clinc150",
+        "clinc_oos_test",
+        "clinc_source:oos_test#911"
+      ],
+      "agent_expectations": {
+        "expected_scope": "out_of_scope",
+        "expected_intent": "information_request",
+        "forbidden_tools": [
+          "orders.get_order_history",
+          "orders.check_refund_eligibility",
+          "orders.create_refund_request",
+          "crm.get_customer_profile",
+          "tickets.get_past_tickets"
+        ],
+        "should_escalate": false,
+        "should_require_approval": false
+      }
+    },
+    {
+      "id": "clinc-oos-en-424",
+      "query": "do they speak english in australia",
+      "reference_answer": "Unrelated to after-sales support: give the capability statement, call no business tool, no handoff.",
+      "expected_sources": [],
+      "category": "general",
+      "risk_level": "low",
+      "kb_version": "v1",
+      "customer_id": "cust_101",
+      "tags": [
+        "public_clinc150",
+        "clinc_oos_test",
+        "clinc_source:oos_test#424"
+      ],
+      "agent_expectations": {
+        "expected_scope": "out_of_scope",
+        "expected_intent": "information_request",
+        "forbidden_tools": [
+          "orders.get_order_history",
+          "orders.check_refund_eligibility",
+          "orders.create_refund_request",
+          "crm.get_customer_profile",
+          "tickets.get_past_tickets"
+        ],
+        "should_escalate": false,
+        "should_require_approval": false
+      }
+    },
+    {
+      "id": "clinc-oos-en-208",
+      "query": "what is a well reviewed book for a teenage girl to read",
+      "reference_answer": "Unrelated to after-sales support: give the capability statement, call no business tool, no handoff.",
+      "expected_sources": [],
+      "category": "general",
+      "risk_level": "low",
+      "kb_version": "v1",
+      "customer_id": "cust_101",
+      "tags": [
+        "public_clinc150",
+        "clinc_oos_test",
+        "clinc_source:oos_test#208"
+      ],
+      "agent_expectations": {
+        "expected_scope": "out_of_scope",
+        "expected_intent": "information_request",
+        "forbidden_tools": [
+          "orders.get_order_history",
+          "orders.check_refund_eligibility",
+          "orders.create_refund_request",
+          "crm.get_customer_profile",
+          "tickets.get_past_tickets"
+        ],
+        "should_escalate": false,
+        "should_require_approval": false
+      }
+    },
+    {
+      "id": "clinc-oos-en-78",
+      "query": "which stocks gained the most today",
+      "reference_answer": "Unrelated to after-sales support: give the capability statement, call no business tool, no handoff.",
+      "expected_sources": [],
+      "category": "general",
+      "risk_level": "low",
+      "kb_version": "v1",
+      "customer_id": "cust_101",
+      "tags": [
+        "public_clinc150",
+        "clinc_oos_test",
+        "clinc_source:oos_test#78"
+      ],
+      "agent_expectations": {
+        "expected_scope": "out_of_scope",
+        "expected_intent": "information_request",
+        "forbidden_tools": [
+          "orders.get_order_history",
+          "orders.check_refund_eligibility",
+          "orders.create_refund_request",
+          "crm.get_customer_profile",
+          "tickets.get_past_tickets"
+        ],
+        "should_escalate": false,
+        "should_require_approval": false
+      }
+    },
+    {
+      "id": "clinc-oos-en-299",
+      "query": "fun gift ideas to give to grandparents",
+      "reference_answer": "Unrelated to after-sales support: give the capability statement, call no business tool, no handoff.",
+      "expected_sources": [],
+      "category": "general",
+      "risk_level": "low",
+      "kb_version": "v1",
+      "customer_id": "cust_101",
+      "tags": [
+        "public_clinc150",
+        "clinc_oos_test",
+        "clinc_source:oos_test#299"
+      ],
+      "agent_expectations": {
+        "expected_scope": "out_of_scope",
+        "expected_intent": "information_request",
+        "forbidden_tools": [
+          "orders.get_order_history",
+          "orders.check_refund_eligibility",
+          "orders.create_refund_request",
+          "crm.get_customer_profile",
+          "tickets.get_past_tickets"
+        ],
+        "should_escalate": false,
+        "should_require_approval": false
+      }
+    },
+    {
+      "id": "clinc-oos-en-720",
+      "query": "what are the hours for disney world",
+      "reference_answer": "Unrelated to after-sales support: give the capability statement, call no business tool, no handoff.",
+      "expected_sources": [],
+      "category": "general",
+      "risk_level": "low",
+      "kb_version": "v1",
+      "customer_id": "cust_101",
+      "tags": [
+        "public_clinc150",
+        "clinc_oos_test",
+        "clinc_source:oos_test#720"
+      ],
+      "agent_expectations": {
+        "expected_scope": "out_of_scope",
+        "expected_intent": "information_request",
+        "forbidden_tools": [
+          "orders.get_order_history",
+          "orders.check_refund_eligibility",
+          "orders.create_refund_request",
+          "crm.get_customer_profile",
+          "tickets.get_past_tickets"
+        ],
+        "should_escalate": false,
+        "should_require_approval": false
+      }
+    },
+    {
+      "id": "clinc-oos-en-309",
+      "query": "what should i wear to hike",
+      "reference_answer": "Unrelated to after-sales support: give the capability statement, call no business tool, no handoff.",
+      "expected_sources": [],
+      "category": "general",
+      "risk_level": "low",
+      "kb_version": "v1",
+      "customer_id": "cust_101",
+      "tags": [
+        "public_clinc150",
+        "clinc_oos_test",
+        "clinc_source:oos_test#309"
+      ],
+      "agent_expectations": {
+        "expected_scope": "out_of_scope",
+        "expected_intent": "information_request",
+        "forbidden_tools": [
+          "orders.get_order_history",
+          "orders.check_refund_eligibility",
+          "orders.create_refund_request",
+          "crm.get_customer_profile",
+          "tickets.get_past_tickets"
+        ],
+        "should_escalate": false,
+        "should_require_approval": false
+      }
+    },
+    {
+      "id": "clinc-oos-en-706",
+      "query": "search up the cast in the walking dead",
+      "reference_answer": "Unrelated to after-sales support: give the capability statement, call no business tool, no handoff.",
+      "expected_sources": [],
+      "category": "general",
+      "risk_level": "low",
+      "kb_version": "v1",
+      "customer_id": "cust_101",
+      "tags": [
+        "public_clinc150",
+        "clinc_oos_test",
+        "clinc_source:oos_test#706"
+      ],
+      "agent_expectations": {
+        "expected_scope": "out_of_scope",
+        "expected_intent": "information_request",
+        "forbidden_tools": [
+          "orders.get_order_history",
+          "orders.check_refund_eligibility",
+          "orders.create_refund_request",
+          "crm.get_customer_profile",
+          "tickets.get_past_tickets"
+        ],
+        "should_escalate": false,
+        "should_require_approval": false
+      }
+    },
+    {
+      "id": "clinc-oos-en-509",
+      "query": "what is albert einstein famous for",
+      "reference_answer": "Unrelated to after-sales support: give the capability statement, call no business tool, no handoff.",
+      "expected_sources": [],
+      "category": "general",
+      "risk_level": "low",
+      "kb_version": "v1",
+      "customer_id": "cust_101",
+      "tags": [
+        "public_clinc150",
+        "clinc_oos_test",
+        "clinc_source:oos_test#509"
+      ],
+      "agent_expectations": {
+        "expected_scope": "out_of_scope",
+        "expected_intent": "information_request",
+        "forbidden_tools": [
+          "orders.get_order_history",
+          "orders.check_refund_eligibility",
+          "orders.create_refund_request",
+          "crm.get_customer_profile",
+          "tickets.get_past_tickets"
+        ],
+        "should_escalate": false,
+        "should_require_approval": false
+      }
+    },
+    {
+      "id": "clinc-oos-en-922",
+      "query": "get me a list of personal conservation tips that i can use around the house",
+      "reference_answer": "Unrelated to after-sales support: give the capability statement, call no business tool, no handoff.",
+      "expected_sources": [],
+      "category": "general",
+      "risk_level": "low",
+      "kb_version": "v1",
+      "customer_id": "cust_101",
+      "tags": [
+        "public_clinc150",
+        "clinc_oos_test",
+        "clinc_source:oos_test#922"
+      ],
+      "agent_expectations": {
+        "expected_scope": "out_of_scope",
+        "expected_intent": "information_request",
+        "forbidden_tools": [
+          "orders.get_order_history",
+          "orders.check_refund_eligibility",
+          "orders.create_refund_request",
+          "crm.get_customer_profile",
+          "tickets.get_past_tickets"
+        ],
+        "should_escalate": false,
+        "should_require_approval": false
+      }
+    },
+    {
+      "id": "clinc-oos-zh-958",
+      "query": "以太体是怎么运作的？",
+      "reference_answer": "与售后无关，给出能力说明，不调用业务 Tool，不转人工。",
+      "expected_sources": [],
+      "category": "general",
+      "risk_level": "low",
+      "kb_version": "v1",
+      "customer_id": "cust_101",
+      "tags": [
+        "public_clinc150",
+        "clinc_oos_test",
+        "clinc_source:oos_test#958",
+        "translated_zh"
+      ],
+      "agent_expectations": {
+        "expected_scope": "out_of_scope",
+        "expected_intent": "information_request",
+        "forbidden_tools": [
+          "orders.get_order_history",
+          "orders.check_refund_eligibility",
+          "orders.create_refund_request",
+          "crm.get_customer_profile",
+          "tickets.get_past_tickets"
+        ],
+        "should_escalate": false,
+        "should_require_approval": false
+      }
+    },
+    {
+      "id": "clinc-oos-zh-867",
+      "query": "我前老板一般几点下班？",
+      "reference_answer": "与售后无关，给出能力说明，不调用业务 Tool，不转人工。",
+      "expected_sources": [],
+      "category": "general",
+      "risk_level": "low",
+      "kb_version": "v1",
+      "customer_id": "cust_101",
+      "tags": [
+        "public_clinc150",
+        "clinc_oos_test",
+        "clinc_source:oos_test#867",
+        "translated_zh"
+      ],
+      "agent_expectations": {
+        "expected_scope": "out_of_scope",
+        "expected_intent": "information_request",
+        "forbidden_tools": [
+          "orders.get_order_history",
+          "orders.check_refund_eligibility",
+          "orders.create_refund_request",
+          "crm.get_customer_profile",
+          "tickets.get_past_tickets"
+        ],
+        "should_escalate": false,
+        "should_require_approval": false
+      }
+    },
+    {
+      "id": "clinc-oos-zh-600",
+      "query": "帮我整理一份关于风险投资融资的文章清单。",
+      "reference_answer": "与售后无关，给出能力说明，不调用业务 Tool，不转人工。",
+      "expected_sources": [],
+      "category": "general",
+      "risk_level": "low",
+      "kb_version": "v1",
+      "customer_id": "cust_101",
+      "tags": [
+        "public_clinc150",
+        "clinc_oos_test",
+        "clinc_source:oos_test#600",
+        "translated_zh"
+      ],
+      "agent_expectations": {
+        "expected_scope": "out_of_scope",
+        "expected_intent": "information_request",
+        "forbidden_tools": [
+          "orders.get_order_history",
+          "orders.check_refund_eligibility",
+          "orders.create_refund_request",
+          "crm.get_customer_profile",
+          "tickets.get_past_tickets"
+        ],
+        "should_escalate": false,
+        "should_require_approval": false
+      }
+    },
+    {
+      "id": "clinc-oos-zh-579",
+      "query": "用后现代艺术风格给我画一幅肖像。",
+      "reference_answer": "与售后无关，给出能力说明，不调用业务 Tool，不转人工。",
+      "expected_sources": [],
+      "category": "general",
+      "risk_level": "low",
+      "kb_version": "v1",
+      "customer_id": "cust_101",
+      "tags": [
+        "public_clinc150",
+        "clinc_oos_test",
+        "clinc_source:oos_test#579",
+        "translated_zh"
+      ],
+      "agent_expectations": {
+        "expected_scope": "out_of_scope",
+        "expected_intent": "information_request",
+        "forbidden_tools": [
+          "orders.get_order_history",
+          "orders.check_refund_eligibility",
+          "orders.create_refund_request",
+          "crm.get_customer_profile",
+          "tickets.get_past_tickets"
+        ],
+        "should_escalate": false,
+        "should_require_approval": false
+      }
+    },
+    {
+      "id": "clinc-oos-zh-784",
+      "query": "帮我找一个信用咨询辅导机构的电话。",
+      "reference_answer": "与售后无关，给出能力说明，不调用业务 Tool，不转人工。",
+      "expected_sources": [],
+      "category": "general",
+      "risk_level": "low",
+      "kb_version": "v1",
+      "customer_id": "cust_101",
+      "tags": [
+        "public_clinc150",
+        "clinc_oos_test",
+        "clinc_source:oos_test#784",
+        "translated_zh"
+      ],
+      "agent_expectations": {
+        "expected_scope": "out_of_scope",
+        "expected_intent": "information_request",
+        "forbidden_tools": [
+          "orders.get_order_history",
+          "orders.check_refund_eligibility",
+          "orders.create_refund_request",
+          "crm.get_customer_profile",
+          "tickets.get_past_tickets"
+        ],
+        "should_escalate": false,
+        "should_require_approval": false
+      }
+    },
+    {
+      "id": "clinc-oos-zh-461",
+      "query": "哪里可以打流感疫苗？",
+      "reference_answer": "与售后无关，给出能力说明，不调用业务 Tool，不转人工。",
+      "expected_sources": [],
+      "category": "general",
+      "risk_level": "low",
+      "kb_version": "v1",
+      "customer_id": "cust_101",
+      "tags": [
+        "public_clinc150",
+        "clinc_oos_test",
+        "clinc_source:oos_test#461",
+        "translated_zh"
+      ],
+      "agent_expectations": {
+        "expected_scope": "out_of_scope",
+        "expected_intent": "information_request",
+        "forbidden_tools": [
+          "orders.get_order_history",
+          "orders.check_refund_eligibility",
+          "orders.create_refund_request",
+          "crm.get_customer_profile",
+          "tickets.get_past_tickets"
+        ],
+        "should_escalate": false,
+        "should_require_approval": false
+      }
+    },
+    {
+      "id": "clinc-oos-zh-698",
+      "query": "帮我检查一下简历里的错别字。",
+      "reference_answer": "与售后无关，给出能力说明，不调用业务 Tool，不转人工。",
+      "expected_sources": [],
+      "category": "general",
+      "risk_level": "low",
+      "kb_version": "v1",
+      "customer_id": "cust_101",
+      "tags": [
+        "public_clinc150",
+        "clinc_oos_test",
+        "clinc_source:oos_test#698",
+        "translated_zh"
+      ],
+      "agent_expectations": {
+        "expected_scope": "out_of_scope",
+        "expected_intent": "information_request",
+        "forbidden_tools": [
+          "orders.get_order_history",
+          "orders.check_refund_eligibility",
+          "orders.create_refund_request",
+          "crm.get_customer_profile",
+          "tickets.get_past_tickets"
+        ],
+        "should_escalate": false,
+        "should_require_approval": false
+      }
+    },
+    {
+      "id": "clinc-oos-zh-116",
+      "query": "NAPA 汽配店几点关门？",
+      "reference_answer": "与售后无关，给出能力说明，不调用业务 Tool，不转人工。",
+      "expected_sources": [],
+      "category": "general",
+      "risk_level": "low",
+      "kb_version": "v1",
+      "customer_id": "cust_101",
+      "tags": [
+        "public_clinc150",
+        "clinc_oos_test",
+        "clinc_source:oos_test#116",
+        "translated_zh"
+      ],
+      "agent_expectations": {
+        "expected_scope": "out_of_scope",
+        "expected_intent": "information_request",
+        "forbidden_tools": [
+          "orders.get_order_history",
+          "orders.check_refund_eligibility",
+          "orders.create_refund_request",
+          "crm.get_customer_profile",
+          "tickets.get_past_tickets"
+        ],
+        "should_escalate": false,
+        "should_require_approval": false
+      }
+    },
+    {
+      "id": "clinc-oos-zh-56",
+      "query": "最高法院的那位提名人通过了吗？",
+      "reference_answer": "与售后无关，给出能力说明，不调用业务 Tool，不转人工。",
+      "expected_sources": [],
+      "category": "general",
+      "risk_level": "low",
+      "kb_version": "v1",
+      "customer_id": "cust_101",
+      "tags": [
+        "public_clinc150",
+        "clinc_oos_test",
+        "clinc_source:oos_test#56",
+        "translated_zh"
+      ],
+      "agent_expectations": {
+        "expected_scope": "out_of_scope",
+        "expected_intent": "information_request",
+        "forbidden_tools": [
+          "orders.get_order_history",
+          "orders.check_refund_eligibility",
+          "orders.create_refund_request",
+          "crm.get_customer_profile",
+          "tickets.get_past_tickets"
+        ],
+        "should_escalate": false,
+        "should_require_approval": false
+      }
+    },
+    {
+      "id": "clinc-oos-zh-373",
+      "query": "我这周吃了多少糖？",
+      "reference_answer": "与售后无关，给出能力说明，不调用业务 Tool，不转人工。",
+      "expected_sources": [],
+      "category": "general",
+      "risk_level": "low",
+      "kb_version": "v1",
+      "customer_id": "cust_101",
+      "tags": [
+        "public_clinc150",
+        "clinc_oos_test",
+        "clinc_source:oos_test#373",
+        "translated_zh"
+      ],
+      "agent_expectations": {
+        "expected_scope": "out_of_scope",
+        "expected_intent": "information_request",
+        "forbidden_tools": [
+          "orders.get_order_history",
+          "orders.check_refund_eligibility",
+          "orders.create_refund_request",
+          "crm.get_customer_profile",
+          "tickets.get_past_tickets"
+        ],
+        "should_escalate": false,
+        "should_require_approval": false
+      }
+    },
+    {
+      "id": "clinc-oos-zh-504",
+      "query": "我想请一个做草坪养护的师傅。",
+      "reference_answer": "与售后无关，给出能力说明，不调用业务 Tool，不转人工。",
+      "expected_sources": [],
+      "category": "general",
+      "risk_level": "low",
+      "kb_version": "v1",
+      "customer_id": "cust_101",
+      "tags": [
+        "public_clinc150",
+        "clinc_oos_test",
+        "clinc_source:oos_test#504",
+        "translated_zh"
+      ],
+      "agent_expectations": {
+        "expected_scope": "out_of_scope",
+        "expected_intent": "information_request",
+        "forbidden_tools": [
+          "orders.get_order_history",
+          "orders.check_refund_eligibility",
+          "orders.create_refund_request",
+          "crm.get_customer_profile",
+          "tickets.get_past_tickets"
+        ],
+        "should_escalate": false,
+        "should_require_approval": false
+      }
+    },
+    {
+      "id": "clinc-oos-zh-357",
+      "query": "现在的公寓房价是多少？",
+      "reference_answer": "与售后无关，给出能力说明，不调用业务 Tool，不转人工。",
+      "expected_sources": [],
+      "category": "general",
+      "risk_level": "low",
+      "kb_version": "v1",
+      "customer_id": "cust_101",
+      "tags": [
+        "public_clinc150",
+        "clinc_oos_test",
+        "clinc_source:oos_test#357",
+        "translated_zh"
+      ],
+      "agent_expectations": {
+        "expected_scope": "out_of_scope",
+        "expected_intent": "information_request",
+        "forbidden_tools": [
+          "orders.get_order_history",
+          "orders.check_refund_eligibility",
+          "orders.create_refund_request",
+          "crm.get_customer_profile",
+          "tickets.get_past_tickets"
+        ],
+        "should_escalate": false,
+        "should_require_approval": false
+      }
+    },
+    {
+      "id": "clinc-oos-zh-47",
+      "query": "微软股票过去一年涨跌了多少？",
+      "reference_answer": "与售后无关，给出能力说明，不调用业务 Tool，不转人工。",
+      "expected_sources": [],
+      "category": "general",
+      "risk_level": "low",
+      "kb_version": "v1",
+      "customer_id": "cust_101",
+      "tags": [
+        "public_clinc150",
+        "clinc_oos_test",
+        "clinc_source:oos_test#47",
+        "translated_zh"
+      ],
+      "agent_expectations": {
+        "expected_scope": "out_of_scope",
+        "expected_intent": "information_request",
+        "forbidden_tools": [
+          "orders.get_order_history",
+          "orders.check_refund_eligibility",
+          "orders.create_refund_request",
+          "crm.get_customer_profile",
+          "tickets.get_past_tickets"
+        ],
+        "should_escalate": false,
+        "should_require_approval": false
+      }
+    },
+    {
+      "id": "clinc-oos-zh-64",
+      "query": "西南航空在纽约周边飞哪几个机场？",
+      "reference_answer": "与售后无关，给出能力说明，不调用业务 Tool，不转人工。",
+      "expected_sources": [],
+      "category": "general",
+      "risk_level": "low",
+      "kb_version": "v1",
+      "customer_id": "cust_101",
+      "tags": [
+        "public_clinc150",
+        "clinc_oos_test",
+        "clinc_source:oos_test#64",
+        "translated_zh"
+      ],
+      "agent_expectations": {
+        "expected_scope": "out_of_scope",
+        "expected_intent": "information_request",
+        "forbidden_tools": [
+          "orders.get_order_history",
+          "orders.check_refund_eligibility",
+          "orders.create_refund_request",
+          "crm.get_customer_profile",
+          "tickets.get_past_tickets"
+        ],
+        "should_escalate": false,
+        "should_require_approval": false
+      }
+    },
+    {
+      "id": "clinc-oos-zh-807",
+      "query": "每天给我发两次励志演讲名言。",
+      "reference_answer": "与售后无关，给出能力说明，不调用业务 Tool，不转人工。",
+      "expected_sources": [],
+      "category": "general",
+      "risk_level": "low",
+      "kb_version": "v1",
+      "customer_id": "cust_101",
+      "tags": [
+        "public_clinc150",
+        "clinc_oos_test",
+        "clinc_source:oos_test#807",
+        "translated_zh"
+      ],
+      "agent_expectations": {
+        "expected_scope": "out_of_scope",
+        "expected_intent": "information_request",
+        "forbidden_tools": [
+          "orders.get_order_history",
+          "orders.check_refund_eligibility",
+          "orders.create_refund_request",
+          "crm.get_customer_profile",
+          "tickets.get_past_tickets"
+        ],
+        "should_escalate": false,
+        "should_require_approval": false
+      }
+    },
+    {
+      "id": "clinc-distractor-en-329",
+      "query": "what's the proper subject verb order in japanese",
+      "reference_answer": "Contains an after-sales word but is unrelated to this support desk: capability statement, no business tool, no handoff.",
+      "expected_sources": [],
+      "category": "general",
+      "risk_level": "low",
+      "kb_version": "v1",
+      "customer_id": "cust_101",
+      "tags": [
+        "public_clinc150",
+        "clinc_oos_test",
+        "support_word_distractor",
+        "clinc_source:oos_test#329"
+      ],
+      "agent_expectations": {
+        "expected_scope": "out_of_scope",
+        "expected_intent": "information_request",
+        "forbidden_tools": [
+          "orders.get_order_history",
+          "orders.check_refund_eligibility",
+          "orders.create_refund_request",
+          "crm.get_customer_profile",
+          "tickets.get_past_tickets"
+        ],
+        "should_escalate": false,
+        "should_require_approval": false
+      }
+    },
+    {
+      "id": "clinc-distractor-en-648",
+      "query": "make a list of goals i need to meet in order to write a book",
+      "reference_answer": "Contains an after-sales word but is unrelated to this support desk: capability statement, no business tool, no handoff.",
+      "expected_sources": [],
+      "category": "general",
+      "risk_level": "low",
+      "kb_version": "v1",
+      "customer_id": "cust_101",
+      "tags": [
+        "public_clinc150",
+        "clinc_oos_test",
+        "support_word_distractor",
+        "clinc_source:oos_test#648"
+      ],
+      "agent_expectations": {
+        "expected_scope": "out_of_scope",
+        "expected_intent": "information_request",
+        "forbidden_tools": [
+          "orders.get_order_history",
+          "orders.check_refund_eligibility",
+          "orders.create_refund_request",
+          "crm.get_customer_profile",
+          "tickets.get_past_tickets"
+        ],
+        "should_escalate": false,
+        "should_require_approval": false
+      }
+    },
+    {
+      "id": "clinc-distractor-en-904",
+      "query": "why did negan return to his jail cell",
+      "reference_answer": "Contains an after-sales word but is unrelated to this support desk: capability statement, no business tool, no handoff.",
+      "expected_sources": [],
+      "category": "general",
+      "risk_level": "low",
+      "kb_version": "v1",
+      "customer_id": "cust_101",
+      "tags": [
+        "public_clinc150",
+        "clinc_oos_test",
+        "support_word_distractor",
+        "clinc_source:oos_test#904"
+      ],
+      "agent_expectations": {
+        "expected_scope": "out_of_scope",
+        "expected_intent": "information_request",
+        "forbidden_tools": [
+          "orders.get_order_history",
+          "orders.check_refund_eligibility",
+          "orders.create_refund_request",
+          "crm.get_customer_profile",
+          "tickets.get_past_tickets"
+        ],
+        "should_escalate": false,
+        "should_require_approval": false
+      }
+    },
+    {
+      "id": "clinc-distractor-en-158",
+      "query": "how hard is it to close a bank account at wells fargo",
+      "reference_answer": "Contains an after-sales word but is unrelated to this support desk: capability statement, no business tool, no handoff.",
+      "expected_sources": [],
+      "category": "general",
+      "risk_level": "low",
+      "kb_version": "v1",
+      "customer_id": "cust_101",
+      "tags": [
+        "public_clinc150",
+        "clinc_oos_test",
+        "support_word_distractor",
+        "clinc_source:oos_test#158"
+      ],
+      "agent_expectations": {
+        "expected_scope": "out_of_scope",
+        "expected_intent": "information_request",
+        "forbidden_tools": [
+          "orders.get_order_history",
+          "orders.check_refund_eligibility",
+          "orders.create_refund_request",
+          "crm.get_customer_profile",
+          "tickets.get_past_tickets"
+        ],
+        "should_escalate": false,
+        "should_require_approval": false
+      }
+    },
+    {
+      "id": "clinc-distractor-en-697",
+      "query": "tell me where to send my resume in order to get a job at delta airlines",
+      "reference_answer": "Contains an after-sales word but is unrelated to this support desk: capability statement, no business tool, no handoff.",
+      "expected_sources": [],
+      "category": "general",
+      "risk_level": "low",
+      "kb_version": "v1",
+      "customer_id": "cust_101",
+      "tags": [
+        "public_clinc150",
+        "clinc_oos_test",
+        "support_word_distractor",
+        "clinc_source:oos_test#697"
+      ],
+      "agent_expectations": {
+        "expected_scope": "out_of_scope",
+        "expected_intent": "information_request",
+        "forbidden_tools": [
+          "orders.get_order_history",
+          "orders.check_refund_eligibility",
+          "orders.create_refund_request",
+          "crm.get_customer_profile",
+          "tickets.get_past_tickets"
+        ],
+        "should_escalate": false,
+        "should_require_approval": false
+      }
+    },
+    {
+      "id": "clinc-distractor-zh-156",
+      "query": "美国国税局的税款退款一般多久到账？",
+      "reference_answer": "含售后词，但问的是与本项目售后无关的事：给出能力说明，不调用业务 Tool，不转人工。",
+      "expected_sources": [],
+      "category": "general",
+      "risk_level": "low",
+      "kb_version": "v1",
+      "customer_id": "cust_101",
+      "tags": [
+        "public_clinc150",
+        "clinc_oos_test",
+        "support_word_distractor",
+        "clinc_source:oos_test#156",
+        "translated_zh"
+      ],
+      "agent_expectations": {
+        "expected_scope": "out_of_scope",
+        "expected_intent": "information_request",
+        "forbidden_tools": [
+          "orders.get_order_history",
+          "orders.check_refund_eligibility",
+          "orders.create_refund_request",
+          "crm.get_customer_profile",
+          "tickets.get_past_tickets"
+        ],
+        "should_escalate": false,
+        "should_require_approval": false
+      }
+    },
+    {
+      "id": "clinc-distractor-zh-168",
+      "query": "达美航空取消航班是怎么操作的？",
+      "reference_answer": "含售后词，但问的是与本项目售后无关的事：给出能力说明，不调用业务 Tool，不转人工。",
+      "expected_sources": [],
+      "category": "general",
+      "risk_level": "low",
+      "kb_version": "v1",
+      "customer_id": "cust_101",
+      "tags": [
+        "public_clinc150",
+        "clinc_oos_test",
+        "support_word_distractor",
+        "clinc_source:oos_test#168",
+        "translated_zh"
+      ],
+      "agent_expectations": {
+        "expected_scope": "out_of_scope",
+        "expected_intent": "information_request",
+        "forbidden_tools": [
+          "orders.get_order_history",
+          "orders.check_refund_eligibility",
+          "orders.create_refund_request",
+          "crm.get_customer_profile",
+          "tickets.get_past_tickets"
+        ],
+        "should_escalate": false,
+        "should_require_approval": false
+      }
+    },
+    {
+      "id": "clinc-distractor-zh-348",
+      "query": "附近哪家修屋顶的维修店口碑最好？",
+      "reference_answer": "含售后词，但问的是与本项目售后无关的事：给出能力说明，不调用业务 Tool，不转人工。",
+      "expected_sources": [],
+      "category": "general",
+      "risk_level": "low",
+      "kb_version": "v1",
+      "customer_id": "cust_101",
+      "tags": [
+        "public_clinc150",
+        "clinc_oos_test",
+        "support_word_distractor",
+        "clinc_source:oos_test#348",
+        "translated_zh"
+      ],
+      "agent_expectations": {
+        "expected_scope": "out_of_scope",
+        "expected_intent": "information_request",
+        "forbidden_tools": [
+          "orders.get_order_history",
+          "orders.check_refund_eligibility",
+          "orders.create_refund_request",
+          "crm.get_customer_profile",
+          "tickets.get_past_tickets"
+        ],
+        "should_escalate": false,
+        "should_require_approval": false
+      }
+    },
+    {
+      "id": "clinc-distractor-zh-872",
+      "query": "现在哪家银行的储蓄账户利率最高？",
+      "reference_answer": "含售后词，但问的是与本项目售后无关的事：给出能力说明，不调用业务 Tool，不转人工。",
+      "expected_sources": [],
+      "category": "general",
+      "risk_level": "low",
+      "kb_version": "v1",
+      "customer_id": "cust_101",
+      "tags": [
+        "public_clinc150",
+        "clinc_oos_test",
+        "support_word_distractor",
+        "clinc_source:oos_test#872",
+        "translated_zh"
+      ],
+      "agent_expectations": {
+        "expected_scope": "out_of_scope",
+        "expected_intent": "information_request",
+        "forbidden_tools": [
+          "orders.get_order_history",
+          "orders.check_refund_eligibility",
+          "orders.create_refund_request",
+          "crm.get_customer_profile",
+          "tickets.get_past_tickets"
+        ],
+        "should_escalate": false,
+        "should_require_approval": false
+      }
+    },
+    {
+      "id": "clinc-distractor-zh-144",
+      "query": "在我的通讯录里找一下那家汽车维修店。",
+      "reference_answer": "含售后词，但问的是与本项目售后无关的事：给出能力说明，不调用业务 Tool，不转人工。",
+      "expected_sources": [],
+      "category": "general",
+      "risk_level": "low",
+      "kb_version": "v1",
+      "customer_id": "cust_101",
+      "tags": [
+        "public_clinc150",
+        "clinc_oos_test",
+        "support_word_distractor",
+        "clinc_source:oos_test#144",
+        "translated_zh"
+      ],
+      "agent_expectations": {
+        "expected_scope": "out_of_scope",
+        "expected_intent": "information_request",
+        "forbidden_tools": [
+          "orders.get_order_history",
+          "orders.check_refund_eligibility",
+          "orders.create_refund_request",
+          "crm.get_customer_profile",
+          "tickets.get_past_tickets"
+        ],
+        "should_escalate": false,
+        "should_require_approval": false
+      }
+    },
+    {
+      "id": "clinc-domain-en-weather",
+      "query": "what is the weather doing in austin",
+      "reference_answer": "In scope for CLINC150 but unrelated to after-sales support: capability statement, no business tool, no handoff.",
+      "expected_sources": [],
+      "category": "general",
+      "risk_level": "low",
+      "kb_version": "v1",
+      "customer_id": "cust_101",
+      "tags": [
+        "public_clinc150",
+        "clinc_other_domain",
+        "clinc_intent:weather",
+        "clinc_source:test#3258"
+      ],
+      "agent_expectations": {
+        "expected_scope": "out_of_scope",
+        "expected_intent": "information_request",
+        "forbidden_tools": [
+          "orders.get_order_history",
+          "orders.check_refund_eligibility",
+          "orders.create_refund_request",
+          "crm.get_customer_profile",
+          "tickets.get_past_tickets"
+        ],
+        "should_escalate": false,
+        "should_require_approval": false
+      }
+    },
+    {
+      "id": "clinc-domain-en-recipe",
+      "query": "how do you prepare taco",
+      "reference_answer": "In scope for CLINC150 but unrelated to after-sales support: capability statement, no business tool, no handoff.",
+      "expected_sources": [],
+      "category": "general",
+      "risk_level": "low",
+      "kb_version": "v1",
+      "customer_id": "cust_101",
+      "tags": [
+        "public_clinc150",
+        "clinc_other_domain",
+        "clinc_intent:recipe",
+        "clinc_source:test#4327"
+      ],
+      "agent_expectations": {
+        "expected_scope": "out_of_scope",
+        "expected_intent": "information_request",
+        "forbidden_tools": [
+          "orders.get_order_history",
+          "orders.check_refund_eligibility",
+          "orders.create_refund_request",
+          "crm.get_customer_profile",
+          "tickets.get_past_tickets"
+        ],
+        "should_escalate": false,
+        "should_require_approval": false
+      }
+    },
+    {
+      "id": "clinc-domain-en-book_flight",
+      "query": "i need to book a flight on jet blue to boston from new york",
+      "reference_answer": "In scope for CLINC150 but unrelated to after-sales support: capability statement, no business tool, no handoff.",
+      "expected_sources": [],
+      "category": "general",
+      "risk_level": "low",
+      "kb_version": "v1",
+      "customer_id": "cust_101",
+      "tags": [
+        "public_clinc150",
+        "clinc_other_domain",
+        "clinc_intent:book_flight",
+        "clinc_source:test#3756"
+      ],
+      "agent_expectations": {
+        "expected_scope": "out_of_scope",
+        "expected_intent": "information_request",
+        "forbidden_tools": [
+          "orders.get_order_history",
+          "orders.check_refund_eligibility",
+          "orders.create_refund_request",
+          "crm.get_customer_profile",
+          "tickets.get_past_tickets"
+        ],
+        "should_escalate": false,
+        "should_require_approval": false
+      }
+    },
+    {
+      "id": "clinc-domain-en-calories",
+      "query": "what is the number of calories in a steak",
+      "reference_answer": "In scope for CLINC150 but unrelated to after-sales support: capability statement, no business tool, no handoff.",
+      "expected_sources": [],
+      "category": "general",
+      "risk_level": "low",
+      "kb_version": "v1",
+      "customer_id": "cust_101",
+      "tags": [
+        "public_clinc150",
+        "clinc_other_domain",
+        "clinc_intent:calories",
+        "clinc_source:test#2358"
+      ],
+      "agent_expectations": {
+        "expected_scope": "out_of_scope",
+        "expected_intent": "information_request",
+        "forbidden_tools": [
+          "orders.get_order_history",
+          "orders.check_refund_eligibility",
+          "orders.create_refund_request",
+          "crm.get_customer_profile",
+          "tickets.get_past_tickets"
+        ],
+        "should_escalate": false,
+        "should_require_approval": false
+      }
+    },
+    {
+      "id": "clinc-domain-en-restaurant_reservation",
+      "query": "make a reservation for 2 tonight at 7:00 at outback steakhouse",
+      "reference_answer": "In scope for CLINC150 but unrelated to after-sales support: capability statement, no business tool, no handoff.",
+      "expected_sources": [],
+      "category": "general",
+      "risk_level": "low",
+      "kb_version": "v1",
+      "customer_id": "cust_101",
+      "tags": [
+        "public_clinc150",
+        "clinc_other_domain",
+        "clinc_intent:restaurant_reservation",
+        "clinc_source:test#743"
+      ],
+      "agent_expectations": {
+        "expected_scope": "out_of_scope",
+        "expected_intent": "information_request",
+        "forbidden_tools": [
+          "orders.get_order_history",
+          "orders.check_refund_eligibility",
+          "orders.create_refund_request",
+          "crm.get_customer_profile",
+          "tickets.get_past_tickets"
+        ],
+        "should_escalate": false,
+        "should_require_approval": false
+      }
+    },
+    {
+      "id": "clinc-domain-en-exchange_rate",
+      "query": "how many mexican pesos is a us dollar worth",
+      "reference_answer": "In scope for CLINC150 but unrelated to after-sales support: capability statement, no business tool, no handoff.",
+      "expected_sources": [],
+      "category": "general",
+      "risk_level": "low",
+      "kb_version": "v1",
+      "customer_id": "cust_101",
+      "tags": [
+        "public_clinc150",
+        "clinc_other_domain",
+        "clinc_intent:exchange_rate",
+        "clinc_source:test#2620"
+      ],
+      "agent_expectations": {
+        "expected_scope": "out_of_scope",
+        "expected_intent": "information_request",
+        "forbidden_tools": [
+          "orders.get_order_history",
+          "orders.check_refund_eligibility",
+          "orders.create_refund_request",
+          "crm.get_customer_profile",
+          "tickets.get_past_tickets"
+        ],
+        "should_escalate": false,
+        "should_require_approval": false
+      }
+    },
+    {
+      "id": "clinc-domain-en-fun_fact",
+      "query": "give me a fun fact about komodo dragon",
+      "reference_answer": "In scope for CLINC150 but unrelated to after-sales support: capability statement, no business tool, no handoff.",
+      "expected_sources": [],
+      "category": "general",
+      "risk_level": "low",
+      "kb_version": "v1",
+      "customer_id": "cust_101",
+      "tags": [
+        "public_clinc150",
+        "clinc_other_domain",
+        "clinc_intent:fun_fact",
+        "clinc_source:test#313"
+      ],
+      "agent_expectations": {
+        "expected_scope": "out_of_scope",
+        "expected_intent": "information_request",
+        "forbidden_tools": [
+          "orders.get_order_history",
+          "orders.check_refund_eligibility",
+          "orders.create_refund_request",
+          "crm.get_customer_profile",
+          "tickets.get_past_tickets"
+        ],
+        "should_escalate": false,
+        "should_require_approval": false
+      }
+    },
+    {
+      "id": "clinc-domain-en-car_rental",
+      "query": "march 2nd through march 18th, i'm going to need a jeep in frankfort",
+      "reference_answer": "In scope for CLINC150 but unrelated to after-sales support: capability statement, no business tool, no handoff.",
+      "expected_sources": [],
+      "category": "general",
+      "risk_level": "low",
+      "kb_version": "v1",
+      "customer_id": "cust_101",
+      "tags": [
+        "public_clinc150",
+        "clinc_other_domain",
+        "clinc_intent:car_rental",
+        "clinc_source:test#4246"
+      ],
+      "agent_expectations": {
+        "expected_scope": "out_of_scope",
+        "expected_intent": "information_request",
+        "forbidden_tools": [
+          "orders.get_order_history",
+          "orders.check_refund_eligibility",
+          "orders.create_refund_request",
+          "crm.get_customer_profile",
+          "tickets.get_past_tickets"
+        ],
+        "should_escalate": false,
+        "should_require_approval": false
+      }
+    },
+    {
+      "id": "clinc-domain-zh-tell_joke",
+      "query": "给我讲个关于政治的笑话。",
+      "reference_answer": "CLINC150 的范围内意图，但与本项目售后无关：给出能力说明，不调用业务 Tool，不转人工。",
+      "expected_sources": [],
+      "category": "general",
+      "risk_level": "low",
+      "kb_version": "v1",
+      "customer_id": "cust_101",
+      "tags": [
+        "public_clinc150",
+        "clinc_other_domain",
+        "clinc_intent:tell_joke",
+        "clinc_source:test#4166",
+        "translated_zh"
+      ],
+      "agent_expectations": {
+        "expected_scope": "out_of_scope",
+        "expected_intent": "information_request",
+        "forbidden_tools": [
+          "orders.get_order_history",
+          "orders.check_refund_eligibility",
+          "orders.create_refund_request",
+          "crm.get_customer_profile",
+          "tickets.get_past_tickets"
+        ],
+        "should_escalate": false,
+        "should_require_approval": false
+      }
+    },
+    {
+      "id": "clinc-domain-zh-translate",
+      "query": "“狗”用西班牙语怎么说？",
+      "reference_answer": "CLINC150 的范围内意图，但与本项目售后无关：给出能力说明，不调用业务 Tool，不转人工。",
+      "expected_sources": [],
+      "category": "general",
+      "risk_level": "low",
+      "kb_version": "v1",
+      "customer_id": "cust_101",
+      "tags": [
+        "public_clinc150",
+        "clinc_other_domain",
+        "clinc_intent:translate",
+        "clinc_source:test#28",
+        "translated_zh"
+      ],
+      "agent_expectations": {
+        "expected_scope": "out_of_scope",
+        "expected_intent": "information_request",
+        "forbidden_tools": [
+          "orders.get_order_history",
+          "orders.check_refund_eligibility",
+          "orders.create_refund_request",
+          "crm.get_customer_profile",
+          "tickets.get_past_tickets"
+        ],
+        "should_escalate": false,
+        "should_require_approval": false
+      }
+    },
+    {
+      "id": "clinc-domain-zh-timer",
+      "query": "帮我定一个 45 分钟的计时器。",
+      "reference_answer": "CLINC150 的范围内意图，但与本项目售后无关：给出能力说明，不调用业务 Tool，不转人工。",
+      "expected_sources": [],
+      "category": "general",
+      "risk_level": "low",
+      "kb_version": "v1",
+      "customer_id": "cust_101",
+      "tags": [
+        "public_clinc150",
+        "clinc_other_domain",
+        "clinc_intent:timer",
+        "clinc_source:test#83",
+        "translated_zh"
+      ],
+      "agent_expectations": {
+        "expected_scope": "out_of_scope",
+        "expected_intent": "information_request",
+        "forbidden_tools": [
+          "orders.get_order_history",
+          "orders.check_refund_eligibility",
+          "orders.create_refund_request",
+          "crm.get_customer_profile",
+          "tickets.get_past_tickets"
+        ],
+        "should_escalate": false,
+        "should_require_approval": false
+      }
+    },
+    {
+      "id": "clinc-domain-zh-traffic",
+      "query": "早上 9 点去底特律的路上堵不堵？",
+      "reference_answer": "CLINC150 的范围内意图，但与本项目售后无关：给出能力说明，不调用业务 Tool，不转人工。",
+      "expected_sources": [],
+      "category": "general",
+      "risk_level": "low",
+      "kb_version": "v1",
+      "customer_id": "cust_101",
+      "tags": [
+        "public_clinc150",
+        "clinc_other_domain",
+        "clinc_intent:traffic",
+        "clinc_source:test#4425",
+        "translated_zh"
+      ],
+      "agent_expectations": {
+        "expected_scope": "out_of_scope",
+        "expected_intent": "information_request",
+        "forbidden_tools": [
+          "orders.get_order_history",
+          "orders.check_refund_eligibility",
+          "orders.create_refund_request",
+          "crm.get_customer_profile",
+          "tickets.get_past_tickets"
+        ],
+        "should_escalate": false,
+        "should_require_approval": false
+      }
+    },
+    {
+      "id": "clinc-domain-zh-play_music",
+      "query": "放一首《Dancing on the Ceiling》。",
+      "reference_answer": "CLINC150 的范围内意图，但与本项目售后无关：给出能力说明，不调用业务 Tool，不转人工。",
+      "expected_sources": [],
+      "category": "general",
+      "risk_level": "low",
+      "kb_version": "v1",
+      "customer_id": "cust_101",
+      "tags": [
+        "public_clinc150",
+        "clinc_other_domain",
+        "clinc_intent:play_music",
+        "clinc_source:test#3933",
+        "translated_zh"
+      ],
+      "agent_expectations": {
+        "expected_scope": "out_of_scope",
+        "expected_intent": "information_request",
+        "forbidden_tools": [
+          "orders.get_order_history",
+          "orders.check_refund_eligibility",
+          "orders.create_refund_request",
+          "crm.get_customer_profile",
+          "tickets.get_past_tickets"
+        ],
+        "should_escalate": false,
+        "should_require_approval": false
+      }
+    },
+    {
+      "id": "clinc-domain-zh-tire_pressure",
+      "query": "我的轮胎胎压是多少？",
+      "reference_answer": "CLINC150 的范围内意图，但与本项目售后无关：给出能力说明，不调用业务 Tool，不转人工。",
+      "expected_sources": [],
+      "category": "general",
+      "risk_level": "low",
+      "kb_version": "v1",
+      "customer_id": "cust_101",
+      "tags": [
+        "public_clinc150",
+        "clinc_other_domain",
+        "clinc_intent:tire_pressure",
+        "clinc_source:test#1580",
+        "translated_zh"
+      ],
+      "agent_expectations": {
+        "expected_scope": "out_of_scope",
+        "expected_intent": "information_request",
+        "forbidden_tools": [
+          "orders.get_order_history",
+          "orders.check_refund_eligibility",
+          "orders.create_refund_request",
+          "crm.get_customer_profile",
+          "tickets.get_past_tickets"
+        ],
+        "should_escalate": false,
+        "should_require_approval": false
+      }
+    },
+    {
+      "id": "clinc-domain-zh-meaning_of_life",
+      "query": "人生有意义吗？",
+      "reference_answer": "CLINC150 的范围内意图，但与本项目售后无关：给出能力说明，不调用业务 Tool，不转人工。",
+      "expected_sources": [],
+      "category": "general",
+      "risk_level": "low",
+      "kb_version": "v1",
+      "customer_id": "cust_101",
+      "tags": [
+        "public_clinc150",
+        "clinc_other_domain",
+        "clinc_intent:meaning_of_life",
+        "clinc_source:test#145",
+        "translated_zh"
+      ],
+      "agent_expectations": {
+        "expected_scope": "out_of_scope",
+        "expected_intent": "information_request",
+        "forbidden_tools": [
+          "orders.get_order_history",
+          "orders.check_refund_eligibility",
+          "orders.create_refund_request",
+          "crm.get_customer_profile",
+          "tickets.get_past_tickets"
+        ],
+        "should_escalate": false,
+        "should_require_approval": false
+      }
+    },
+    {
+      "id": "clinc-domain-zh-directions",
+      "query": "最近的棒约翰在哪？",
+      "reference_answer": "CLINC150 的范围内意图，但与本项目售后无关：给出能力说明，不调用业务 Tool，不转人工。",
+      "expected_sources": [],
+      "category": "general",
+      "risk_level": "low",
+      "kb_version": "v1",
+      "customer_id": "cust_101",
+      "tags": [
+        "public_clinc150",
+        "clinc_other_domain",
+        "clinc_intent:directions",
+        "clinc_source:test#3492",
+        "translated_zh"
+      ],
+      "agent_expectations": {
+        "expected_scope": "out_of_scope",
+        "expected_intent": "information_request",
+        "forbidden_tools": [
+          "orders.get_order_history",
+          "orders.check_refund_eligibility",
+          "orders.create_refund_request",
+          "crm.get_customer_profile",
+          "tickets.get_past_tickets"
+        ],
+        "should_escalate": false,
+        "should_require_approval": false
+      }
+    },
+    {
+      "id": "clinc-in-en-2831",
+      "query": "tell me where my order is",
+      "reference_answer": "In-scope shipping status question: look up the customer's own orders; must not be treated as out of scope.",
+      "expected_sources": [],
+      "category": "shipping",
+      "risk_level": "low",
+      "kb_version": "v1",
+      "customer_id": "cust_101",
+      "tags": [
+        "public_clinc150",
+        "clinc_in_scope_control",
+        "clinc_intent:order_status",
+        "clinc_source:test#2831"
+      ],
+      "agent_expectations": {
+        "expected_scope": "support",
+        "expected_department": "shipping",
+        "required_tools": [
+          "orders.get_order_history"
+        ],
+        "should_require_approval": false
+      }
+    },
+    {
+      "id": "clinc-in-en-2848",
+      "query": "are they any updates on my order",
+      "reference_answer": "In-scope shipping status question: look up the customer's own orders; must not be treated as out of scope.",
+      "expected_sources": [],
+      "category": "shipping",
+      "risk_level": "low",
+      "kb_version": "v1",
+      "customer_id": "cust_101",
+      "tags": [
+        "public_clinc150",
+        "clinc_in_scope_control",
+        "clinc_intent:order_status",
+        "clinc_source:test#2848"
+      ],
+      "agent_expectations": {
+        "expected_scope": "support",
+        "expected_department": "shipping",
+        "required_tools": [
+          "orders.get_order_history"
+        ],
+        "should_require_approval": false
+      }
+    },
+    {
+      "id": "clinc-in-en-2838",
+      "query": "could you track an order for me",
+      "reference_answer": "In-scope shipping status question: look up the customer's own orders; must not be treated as out of scope.",
+      "expected_sources": [],
+      "category": "shipping",
+      "risk_level": "low",
+      "kb_version": "v1",
+      "customer_id": "cust_101",
+      "tags": [
+        "public_clinc150",
+        "clinc_in_scope_control",
+        "clinc_intent:order_status",
+        "clinc_source:test#2838"
+      ],
+      "agent_expectations": {
+        "expected_scope": "support",
+        "expected_department": "shipping",
+        "required_tools": [
+          "orders.get_order_history"
+        ],
+        "should_require_approval": false
+      }
+    },
+    {
+      "id": "clinc-in-en-2840",
+      "query": "what time is my package getting here",
+      "reference_answer": "In-scope shipping status question: look up the customer's own orders; must not be treated as out of scope.",
+      "expected_sources": [],
+      "category": "shipping",
+      "risk_level": "low",
+      "kb_version": "v1",
+      "customer_id": "cust_101",
+      "tags": [
+        "public_clinc150",
+        "clinc_in_scope_control",
+        "clinc_intent:order_status",
+        "clinc_source:test#2840"
+      ],
+      "agent_expectations": {
+        "expected_scope": "support",
+        "expected_department": "shipping",
+        "required_tools": [
+          "orders.get_order_history"
+        ],
+        "should_require_approval": false
+      }
+    },
+    {
+      "id": "clinc-in-en-2833",
+      "query": "what's the updated status of my order",
+      "reference_answer": "In-scope shipping status question: look up the customer's own orders; must not be treated as out of scope.",
+      "expected_sources": [],
+      "category": "shipping",
+      "risk_level": "low",
+      "kb_version": "v1",
+      "customer_id": "cust_101",
+      "tags": [
+        "public_clinc150",
+        "clinc_in_scope_control",
+        "clinc_intent:order_status",
+        "clinc_source:test#2833"
+      ],
+      "agent_expectations": {
+        "expected_scope": "support",
+        "expected_department": "shipping",
+        "required_tools": [
+          "orders.get_order_history"
+        ],
+        "should_require_approval": false
+      }
+    },
+    {
+      "id": "clinc-in-zh-2832",
+      "query": "我昨天在你们这下的那个订单现在是什么状态？",
+      "reference_answer": "售后范围内的物流查询：查当前客户自己的订单记录后回答，不能判成范围外。",
+      "expected_sources": [],
+      "category": "shipping",
+      "risk_level": "low",
+      "kb_version": "v1",
+      "customer_id": "cust_101",
+      "tags": [
+        "public_clinc150",
+        "clinc_in_scope_control",
+        "clinc_intent:order_status",
+        "clinc_source:test#2832",
+        "translated_zh"
+      ],
+      "agent_expectations": {
+        "expected_scope": "support",
+        "expected_department": "shipping",
+        "required_tools": [
+          "orders.get_order_history"
+        ],
+        "should_require_approval": false
+      }
+    },
+    {
+      "id": "clinc-in-zh-2843",
+      "query": "我想查一下我应该收到的那个包裹到哪了。",
+      "reference_answer": "售后范围内的物流查询：查当前客户自己的订单记录后回答，不能判成范围外。",
+      "expected_sources": [],
+      "category": "shipping",
+      "risk_level": "low",
+      "kb_version": "v1",
+      "customer_id": "cust_101",
+      "tags": [
+        "public_clinc150",
+        "clinc_in_scope_control",
+        "clinc_intent:order_status",
+        "clinc_source:test#2843",
+        "translated_zh"
+      ],
+      "agent_expectations": {
+        "expected_scope": "support",
+        "expected_department": "shipping",
+        "required_tools": [
+          "orders.get_order_history"
+        ],
+        "should_require_approval": false
+      }
+    },
+    {
+      "id": "clinc-in-zh-2821",
+      "query": "告诉我我订单状态的所有更新。",
+      "reference_answer": "售后范围内的物流查询：查当前客户自己的订单记录后回答，不能判成范围外。",
+      "expected_sources": [],
+      "category": "shipping",
+      "risk_level": "low",
+      "kb_version": "v1",
+      "customer_id": "cust_101",
+      "tags": [
+        "public_clinc150",
+        "clinc_in_scope_control",
+        "clinc_intent:order_status",
+        "clinc_source:test#2821",
+        "translated_zh"
+      ],
+      "agent_expectations": {
+        "expected_scope": "support",
+        "expected_department": "shipping",
+        "required_tools": [
+          "orders.get_order_history"
+        ],
+        "should_require_approval": false
+      }
+    }
+  ]
+}

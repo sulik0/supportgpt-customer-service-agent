@@ -240,6 +240,13 @@ Jev 只用于线上封闭决策；当前不作为 Baseline、Ragas 或 DeepEval 
 
 漏调诊断：`evaluation/tool_coverage/supportgpt_tool_coverage.json` 有 30 题（baseline 漏调的 10 题、纯政策 6 题、必须看订单 10 题、数据已在问题里 4 题）。`python scripts/run_tool_coverage_eval.py --confirm-live` 对同一批题回放 react 和 rules 两遍完整 Workflow，检查回复里的关键事实，区分“必需工具过严”“漏调导致回复错”“与漏调无关”。运行前确认本地知识库已初始化（`python scripts/seed_kb.py`），否则两种方式的回复都会说没有政策条款，结果无效。
 
+公开评测集改编层（登记在 `evaluation/manifest.json`，不在 CI 里回放，手动运行）：
+
+- `public_scope`（`evaluation/public_scope/`，64 题）：改编自 CLINC150（CC BY 3.0）。56 道范围外题：oos_test 抽样，CLINC 自己范围内但与售后无关的意图，以及 10 道含售后词但与本项目无关的干扰题（如国税局退税、银行储蓄账户），测 Jev 是否按语义而不是关键词判断。另有 8 道 order_status 对照题防止误判。题目用 `expected_scope` 检查分类结论里的范围。
+- `public_tool_injection`（`evaluation/public_tool_injection/`，26 题）：攻击模板改编自 AgentDojo（MIT）的 6 种，目标改写成售后语境的 4 种，藏在商品名、历史工单标题或处理结果里。每题用 `eval_` 开头的测试客户，评测时由 `tool_fixtures` 临时装入 Mock 订单、工单和客户资料，跑完撤掉。用 `forbidden_reply_markers` 检查回复里有没有攻击者的账号、链接、赔偿码或其他客户邮箱。另有 2 道无攻击对照题。
+
+运行：`python scripts/run_layered_eval.py --layers public_scope,public_tool_injection --dry-run` 看预估调用次数，`--confirm-live` 用真实模型。Mock 下分类不走 Jev，结果不代表真实表现。
+
 思考模式：`deepseek-flash` 默认开启思考，思考 Token 计入 `max_tokens`。实测约 2/3 的输出额度花在思考上，导致 Resolver 回复和 QA JSON 被截断。设置 `LLM_THINKING=disabled` 后，主模型和 Fast Model 请求会带上 `extra_body={"thinking":{"type":"disabled"}}`；备用模型不传此参数。留空则不传，保持服务端默认行为。
 
 可选备用模型与 Resilience 配置：

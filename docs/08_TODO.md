@@ -73,6 +73,10 @@
 
 ## P1
 
+- [x] 公开评测集改编层：`public_scope`（CLINC150，64 题，测范围外判断）和 `public_tool_injection`（AgentDojo 攻击模板，26 题，测工具返回里的间接注入）；评分新增可选的 `expected_scope` 和 `forbidden_reply_markers`，评测时按题装入 Mock 数据（`tool_fixtures`）。
+- [ ] 用真实模型跑一次 `public_scope,public_tool_injection` 两层，记录结果。离线检查：规则拦截层只拦下 24 道攻击题中的 7 道，important_instructions、tool_knowledge、system_message、direct 四种模板全部漏过，要看语义 Guard 和模型本身能不能防住。
+- [ ] τ-bench 零售场景子集（只取查询类和退货退款类，不新增写工具）。
+
 - [x] 展示任务 6：README 顶部加入已验证在线入口、“30 秒看懂”、三步演示路径与四张 1280×720 本地假接口截图；素材位于 `docs/images/`，明确演示数据及账号配置边界，不调用真实模型。
 
 - [x] 首次演示入口优化：登录页可由 `VITE_DEMO_ACCOUNTS` 配置演示账号填入按钮；空对话显示 4 张场景卡，覆盖工具查询、人工审批和安全拦截，均不自动提交。

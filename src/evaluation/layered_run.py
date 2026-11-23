@@ -28,6 +28,7 @@ from src.evaluation.offline_rag import (
     collect_workflow_records,
     load_evaluation_dataset,
 )
+from src.evaluation.tool_fixtures import install_tool_fixtures
 from src.promptops.runtime import active_bundle, prompt_scope
 
 TOTAL_NOTE = "题数会变，不用于比较和门禁"
@@ -179,9 +180,10 @@ async def run_layered_evaluation(
         bundle = active_bundle()
         prompt_bundle = {"bundle_id": bundle.bundle_id, "version": bundle.version,
                          "node_hashes": bundle.metadata()["node_hashes"]}
-        records = await collect_workflow_records(
-            cases, workflow_runner, include_security_metadata=False
-        )
+        with install_tool_fixtures(cases):
+            records = await collect_workflow_records(
+                cases, workflow_runner, include_security_metadata=False
+            )
 
     case_rows = []
     for record in records:

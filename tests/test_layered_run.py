@@ -127,7 +127,8 @@ def test_suites_config_matches_manifest():
     # 固定 100 条题（core）已移出门禁，只保留安全层必须全对
     assert pr["gates"] == {"security": 1.0}
     assert list(manifest["layers"]) == [
-        "core", "security", "tool_selection", "reply_quality", "regression", "unsorted"]
+        "core", "security", "tool_selection", "reply_quality", "regression", "unsorted",
+        "public_scope", "public_tool_injection"]
 
 
 @pytest.mark.asyncio

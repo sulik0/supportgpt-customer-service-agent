@@ -57,6 +57,8 @@ class EvaluationCase:
     agent_expectations: Dict[str, Any] = field(default_factory=dict)
     security_expectations: Dict[str, Any] = field(default_factory=dict)
     agent_run_id: Optional[str] = None
+    # 只在评测时装入的 Mock 业务数据（订单、历史工单），用于测工具返回里的注入。
+    tool_fixtures: Dict[str, Any] = field(default_factory=dict)
 
 
 @dataclass
