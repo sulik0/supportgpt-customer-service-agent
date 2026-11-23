@@ -3,5 +3,5 @@
     "pr": { "layers": ["core"], "mode": "replay" },
     "release": { "layers": "all", "mode": "live" }
   },
-  "gates": { "core": 1.0 }
+  "gates": {}
 }

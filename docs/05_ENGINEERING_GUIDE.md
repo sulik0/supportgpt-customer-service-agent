@@ -189,7 +189,7 @@ JEV_BASE_URL=https://api.typesafe.ai
 JEV_MODEL=jev-1.13.0
 JEV_TIMEOUT_SECONDS=3
 JEV_MAX_RETRIES=0
-# 只供 PR 门禁和测试：读录好的 Jev 分类，生产环境禁止
+# 只供本机回放和测试：读录好的 Jev 分类，生产环境禁止
 # DECISION_PROVIDER=jev_replay
 # DECISION_REPLAY_PATH=evaluation/decision_recordings/jev_baseline.json
 ```
@@ -441,7 +441,7 @@ python -m pytest tests/test_agents.py tests/test_rag.py -q
 
 测试使用内存 SQLite，不污染本地开发数据。覆盖率 90%+ 是生产化目标，不得表述为当前已强制达成。
 
-PR Agent Quality Gate：
+PR Agent Quality Gate（2026-11-23 起已移出 CI，只作本机参考，结果不阻止合并）：
 
 ```bash
 python scripts/run_ci_quality_gate.py
@@ -596,11 +596,9 @@ docker compose -f deployment/docker-compose.yml up --build
 
 ## CI/CD
 
-- `.github/workflows/ci.yml`：PR/Push 必跑全量 Backend Tests、Frontend Build、100 Case Mock Workflow Gate，并在全部通过后验证 Backend 镜像可构建。
-- `.github/workflows/release-quality-gate.yml`：仅手动触发；必须勾选付费调用确认，通过 `release-quality-gate` GitHub Environment 读取真实模型 Secrets，运行同一固定 100 条 Baseline 和 Release Profile。
-- `.github/workflows/cd.yml`：只监听成功的 `Release Quality Gate`，检出其 `head_sha`，构建并发布 `latest` 与不可变 `sha-<commit>` 镜像到 GHCR，同时生成 Build Provenance Attestation。
-
-仓库需要在 GitHub `release-quality-gate` Environment 配置 `LLM_BASE_URL`、`LLM_API_KEY`、`LLM_MODEL_NAME`；Fast Model Secrets 可选。建议为该 Environment 设置 Required Reviewer，避免无意触发真实模型成本。CD 当前完成的是经过质量门禁的容器交付，未获得具体集群凭据，因此不会自动修改 Kubernetes 集群。
+- `.github/workflows/ci.yml`：PR/Push 必跑全量 Backend Tests（含评测题集清单检查）、Frontend Build、PostgreSQL 演练，并在全部通过后验证 Backend 镜像可构建。
+- 固定 100 条 Baseline 已于 2026-11-23 移出 PR 和发布门禁：题目和答案冻结、又要求全部通过，原则一变只能改代码迎合旧答案。原 `release-quality-gate.yml` 已删除，GitHub 上 `release-quality-gate` Environment 的 Secrets 不再被使用。题目文件保留，`run_ci_quality_gate.py`、`run_baseline_eval.py`、`check_quality_gate.py` 仍可本机手动运行作参考。
+- `.github/workflows/cd.yml`：改为手动触发（只允许 main），构建并发布 `latest` 与不可变 `sha-<commit>` 镜像到 GHCR，同时生成 Build Provenance Attestation。线上部署由 Railway / Vercel 监听 GitHub 推送，与 GHCR 镜像无关。CD 未获得具体集群凭据，不会自动修改 Kubernetes 集群。
 
 ## PostgreSQL OMS 参考服务
 

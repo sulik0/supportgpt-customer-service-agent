@@ -295,7 +295,7 @@ Redis 是可选组件，不是系统启动或处理工单的强依赖。
 | 当前通过阈值 | 综合质量分数 `>= 0.75` 且 Hallucination Rate `< 0.35` |
 | 报告 | 统一生成 JSON / Markdown 的 RAG + Agent + Security Evaluation 报告，并记录 Trace ID |
 
-当前有 13 条 Synthetic Golden Dataset，并有一组 100 条 Baseline Dataset，其中 14 条攻击样本和 86 条非攻击样本可形成安全混淆矩阵；非攻击样本中包含 6 条安全语义 hard negative。统一报告包含 citation hit rate、RAG 指标、Agent 行为指标、安全检测与处置指标、用例 Pass/Fail、Workflow Path 与 Trace ID。Baseline V1 已建立可执行的 PR/Release 质量阈值，但尚无人工标注的生产标准答案或真实线上评测数据。无 API Key 时的本地 RAG / Agent 评测是确定性启发式降级，安全指标本身为确定性断言。
+当前有 13 条 Synthetic Golden Dataset，并有一组 100 条 Baseline Dataset，其中 14 条攻击样本和 86 条非攻击样本可形成安全混淆矩阵；非攻击样本中包含 6 条安全语义 hard negative。统一报告包含 citation hit rate、RAG 指标、Agent 行为指标、安全检测与处置指标、用例 Pass/Fail、Workflow Path 与 Trace ID。Baseline V1 曾作为 PR/Release 质量门禁；2026-11-23 起移出门禁，原因是题目和答案冻结又要求全部通过，处理原则调整后代码只能迎合旧答案。题目文件和下文历史成绩保留，新题集待按处理原则重建。目前没有人工标注的生产标准答案或真实线上评测数据。无 API Key 时的本地 RAG / Agent 评测是确定性启发式降级，安全指标本身为确定性断言。
 
 Baseline V1 是独立的真实回放报告：固定读取上述 100 条数据，逐条构造完整 Ticket State，Case Pass 只检查 Intent、Department、Required/Forbidden Tool、HITL 和 Approval。reference answer、expected priority、expected nodes、安全标签等字段原样保留但不参与本版判定。性能数据与当前 OTel / LangSmith Trace 同源，包含端到端及五个关键节点的 Average / P50 / P95、Input / Output / Total Token、模型、Analyzer Rule Hit Rate、LLM 调用次数和每条 Case 的 Agent Trace ID。
 

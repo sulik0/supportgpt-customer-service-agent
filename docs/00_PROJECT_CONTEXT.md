@@ -58,7 +58,7 @@ README 顶部提供在线演示入口、三步路径与四张本地假接口截�
 11. **可观测性**：使用 OpenTelemetry 统一采集 Trace 与 Metrics；Collector 将 Trace 转发 LangSmith，并通过 Prometheus exporter 提供指标，由 Grafana 展示。
 12. **离线评测适配**：提供 RAGAS、DeepEval 和本地确定性指标的统一评测入口。
 13. **Durable Execution**：使用 SQLite / PostgreSQL Checkpointer、稳定 `thread_id`、`AgentExecution` 业务元数据和数据库恢复租约，支持 `interrupt` / `Command(resume=...)`、重启恢复和幂等重试。
-14. **DecisionProvider**：以可替换接口封装 Jev System One；启用后由 Jev 为主判断业务类别、用户意图和是否范围外，规则只在安全拦截、明确范围外主题、明确办事说法三种情况说了算，Jev 不可用或没把握时规则/LLM 兜底；QA 正向 Grounding 与非确定评判也由 Jev 承担。PR 门禁读录好的 Jev 分类（`jev_replay`）。
+14. **DecisionProvider**：以可替换接口封装 Jev System One；启用后由 Jev 为主判断业务类别、用户意图和是否范围外，规则只在安全拦截、明确范围外主题、明确办事说法三种情况说了算，Jev 不可用或没把握时规则/LLM 兜底；QA 正向 Grounding 与非确定评判也由 Jev 承担。本机回放 100 条 Baseline 时读录好的 Jev 分类（`jev_replay`）。
 
 ## 技术栈
 
@@ -352,7 +352,7 @@ resolved / closed --reopen--> in_progress
 - Baseline V1 在同一次 OTel Trace 中采集端到端与 Analyzer / Tool / RAG / Resolver / QA 节点耗时、Token、模型、Analyzer 策略和 LLM 调用明细，报告汇总 Average、P50、P95、平均 Token 与 Rule Hit Rate，并关联实际 Agent Trace ID。
 - 每次 Baseline V1 正式运行同时保存带本地时间戳的不可变 JSON / Markdown 快照，`baseline_v1_latest.*` 以普通文件副本保留最新内容，兼容 Typora 等不打开符号链接的桌面工具；报告固定记录 Dataset SHA256、Evaluator 范围、Workflow/Prompt 版本、模型、生成限制、Risk 阈值与 Observability 配置。旧单条评测隔离到 `single_response/` 并最多保留 20 份，所有运行报告默认不提交 Git。
 - Baseline JSON 写入后会纯离线、确定性生成 `error_analysis_<run_id>.md` 与 `error_analysis_latest.md`，只分析 FAIL Case 的 Failure Breakdown、Intent Confusion Matrix、HITL/Approval mismatch、Tool 问题和逐 Case Expected/Actual/Trace，不重放 Workflow、不调用 LLM、不修改 Dataset 或 Agent。
-- PR Gate 使用 Mock Provider 在隔离 SQLite/Chroma 目录中回放同一固定 100 条 Workflow，Jev 分类读录好的回答（`evaluation/decision_recordings/jev_baseline.json`，`scripts/record_jev_decisions.py` 录制），对 Dataset Hash、录音 Hash、六项行为指标和新增失败 Case 执行免费、确定性门禁；缺录音直接失败。QA 评判不回放（门禁回复是 Mock 固定文案），仍走 Mock。Release Gate 必须显式确认付费调用，对真实 LLM 报告额外检查 P95、Token、LLM Calls 和 Analyzer Rule Hit Rate。
+- （2026-11-23 起 PR Gate 和 Release Gate 已移出 CI，以下为脚本本机运行时的行为。）PR Gate 使用 Mock Provider 在隔离 SQLite/Chroma 目录中回放同一固定 100 条 Workflow，Jev 分类读录好的回答（`evaluation/decision_recordings/jev_baseline.json`，`scripts/record_jev_decisions.py` 录制），对 Dataset Hash、录音 Hash、六项行为指标和新增失败 Case 执行免费、确定性门禁；缺录音直接失败。QA 评判不回放（门禁回复是 Mock 固定文案），仍走 Mock。Release Gate 必须显式确认付费调用，对真实 LLM 报告额外检查 P95、Token、LLM Calls 和 Analyzer Rule Hit Rate。
 - GitHub Actions `CI` 执行全量后端测试、前端构建、PR Gate 和镜像构建；仅当 `Release Quality Gate` 通过时，`CD` 才会将完全相同 Git SHA 的镜像发布到 GHCR。当前交付目标是镜像仓库，不代表已自动部署生产集群。
 - 正式离线报告同时输出 Faithfulness、Answer Relevancy、Context Precision、Context Recall、Agent 行为指标、Security Precision / Recall / F1 / 误报率、安全处置正确率、citation hit rate、Workflow Path 和 Trace ID。
 - 没有可用 API Key 时可显式选择 `local` 确定性指标进行 CI 烟测；正式 RAGAS / DeepEval 模式缺少依赖或密钥会直接失败，不会自动伪装为正式结果。
@@ -407,7 +407,7 @@ resolved / closed --reopen--> in_progress
 - **多轮记忆**：V1 已完成有界历史、实体续接、Prompt/Retrieval Context 和审批回写；尚无向量长期 Memory、语义摘要模型、多租户身份接入和专项多轮 Evaluation Gate。
 - **Tool Governance**：V2.2 的审批、执行、对账和补偿流程已实现，但目前退款、对账和补偿还在使用 Mock OMS 账本。项目尚未接入真实 OMS、验证跨服务调用约定，也未用生产 Alembic Migration 管理数据库变更。
 - **Trace**：核心 Span 与 OTLP Collector 已接入，当前 Collector 将 Trace 转发 LangSmith；尚未接入 Jaeger / Tempo。
-- **评测**：已具备 Golden Dataset、100 条 Workflow Replay Baseline、真实 LLM 运行入口、统一报告与两级 Quality Gate。2026-08-30 同一固定 Dataset 的 DeepSeek + Qwen 真实复测将 Case Pass Rate 从 `0.54` 提升到 `0.99`，平均耗时约 `1.62s`、P95 约 `3.24s`、平均总 Token `453.29`、LLM Calls `87`。PR Gate 要求 Mock 确定性回放 100% 通过，Release Gate 固化当前真实模型质量和性能阈值；语义回答质量与人工标注仍是后续评测范围。
+- **评测**：已具备 Golden Dataset、100 条 Workflow Replay Baseline、真实 LLM 运行入口、统一报告与两级 Quality Gate。2026-08-30 同一固定 Dataset 的 DeepSeek + Qwen 真实复测将 Case Pass Rate 从 `0.54` 提升到 `0.99`，平均耗时约 `1.62s`、P95 约 `3.24s`、平均总 Token `453.29`、LLM Calls `87`。2026-11-23 起这 100 条题移出 PR 和发布门禁（题目和答案冻结又要求全部通过，导致代码为迎合旧答案反复打补丁），题目文件和历史成绩保留，新题集待重建；语义回答质量与人工标注仍是后续评测范围。
 - **Feedback Pipeline**：第一阶段采集和候选导出已实现，尚未接入标注平台、训练任务、Dataset Registry 和模型发布门禁。
 - **部署**：本地 Docker Compose 和 Kubernetes 模板已存在，但不代表已在真实生产环境部署。
 - **前端**：React 已拆分连续会话式用户咨询页与客服员工后台；用户窗口使用浏览器保存的最多 50 个不可预测 Session ID 作为能力凭据，从 SQL 加载这些 Session 最近 7 天的安全历史。正常回复、风险核验、质量复核和处理异常都会返回可见状态，待审/拒绝草稿只显示安全状态。自动回复后可提交关联 AgentRun / Trace 的一次性评价。员工后台仅处理待审批异常工单，支持原样批准、人工修改和拒绝，并保留 Agent Run / LangSmith 可观测入口。尚未接入真实终端用户身份、Prometheus 真实趋势指标、内嵌 Span 时间轴和异步消息通知。

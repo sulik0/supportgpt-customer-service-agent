@@ -124,7 +124,8 @@ def test_suites_config_matches_manifest():
     pr, release = load_suite("pr"), load_suite("release")
     assert select_layers(manifest, pr["layers"]) == ["core"] and pr["mode"] == "replay"
     assert select_layers(manifest, release["layers"]) == list(manifest["layers"])
-    assert pr["gates"] == {"core": 1.0}
+    # 固定 100 条题已移出门禁：任何层都不设通过率阈值
+    assert pr["gates"] == {}
 
 
 @pytest.mark.asyncio

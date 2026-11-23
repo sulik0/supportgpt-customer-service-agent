@@ -16,7 +16,7 @@ SupportGPT：售后客服 Agent 后端（FastAPI + LangGraph）加 React 前端�
    - 改动只要新增或修改了环境变量、外部服务、密钥或 CORS，就要明确列出 Railway 和 Vercel 上各需要改哪些配置，并同步 `.env.example`。
    - 本地通过不代表线上可用。没有在线上验证过，就不要说“已部署成功”或“线上正常”。
    - `/health` 只表示进程存活，不检查数据库、模型、Redis、向量库和遥测。遥测失败不影响主流程，所以 LangSmith 鉴权失败不会报错，只会没有 Trace。
-2. **测试没有调用真实模型，导致很多问题上线后才发现、需要返工。** pytest 和 PR 门禁的 LLM 全部使用 Mock Provider；PR 门禁的 Jev 分类读录好的真实回答（`evaluation/decision_recordings/jev_baseline.json`），QA 评判和回复仍是 Mock。因此：
+2. **测试没有调用真实模型，导致很多问题上线后才发现、需要返工。** pytest 的 LLM 全部使用 Mock Provider。固定 100 条 Baseline 已于 2026-11-23 移出 PR 和发布门禁（见“必须保持的设计”第 6 条），PR 时只跑 pytest、编译检查、前端构建和 PostgreSQL 演练。因此：
    - 改动涉及 Prompt、Agent 节点、Tool 选择、意图识别或输出解析时，Mock 测试通过不能算验证完成，要明确告诉用户“真实模型下还没验证”。
    - 这类改动完成后，主动建议用真实模型验证（`scripts/run_real_llm_regression.py --suite regression`，先 `--dry-run` 看预估调用次数）。真实调用要花钱，运行前先问用户。
    - 因真实模型行为返工过的问题，建议补成回归用例。
@@ -55,7 +55,7 @@ python -m unittest discover -s tests/mcp -v
 评测和门禁：
 
 ```bash
-python scripts/run_ci_quality_gate.py            # PR 门禁：Mock Provider 回放固定 100 条 Baseline，Jev 分类读录音
+python scripts/run_ci_quality_gate.py            # 本机参考：Mock Provider 回放固定 100 条 Baseline，Jev 分类读录音（已不是门禁）
 python scripts/record_jev_decisions.py --dry-run # 改 Jev 分类问题集或题目后重录；--confirm-live 才调用 Jev（付费），录完更新门禁策略里的录音哈希
 python scripts/run_baseline_eval.py --dry-run    # --confirm-live 才会调用真实模型（付费）
 python scripts/run_post_deploy_smoke.py --api-url <Railway 域名> --frontend-url <Vercel 域名>   # 部署后冒烟；--with-chat 会建 1 张线上工单并调 1 次模型
@@ -63,7 +63,7 @@ python scripts/check_quality_gate.py --profile release --report evaluation/repor
 python scripts/run_postgres_tool_drill.py --confirm-isolated-database   # 需要 TOOL_DRILL_DATABASE_URL，库名必须以 _test 或 _drill 结尾
 ```
 
-`run_ci_quality_gate.py` 会覆盖本地 `.env` 的模型、Guard 和 OTel 配置（Jev 改为 `jev_replay`），并使用临时 SQLite/Chroma 目录；缺录音时门禁失败。带 `--confirm-live` 的脚本会产生真实模型费用，运行前先问用户。本机没有 PostgreSQL 时，不能把跳过演练说成演练通过，应看 CI 的实际结果。
+`run_ci_quality_gate.py` 会覆盖本地 `.env` 的模型、Guard 和 OTel 配置（Jev 改为 `jev_replay`），并使用临时 SQLite/Chroma 目录；缺录音时报失败。它和 `check_quality_gate.py` 只作本机参考，结果不阻止合并或发版。带 `--confirm-live` 的脚本会产生真实模型费用，运行前先问用户。本机没有 PostgreSQL 时，不能把跳过演练说成演练通过，应看 CI 的实际结果。
 
 测试用内存 SQLite，`tests/conftest.py` 在导入 `src` 之前强制设置环境变量（Mock LLM、`TOOL_SELECTION_MODE=rules`、关闭 Outbox Worker / OTel / DecisionProvider）。新测试如果依赖别的开关，要在用例内显式设置，不要依赖本机 `.env`。
 
@@ -116,12 +116,12 @@ analyzer → skill_selector → context_enrichment（tooling ∥ retriever）→
 3. 高风险写 Tool 不得加入 Agent 自动路由，不得恢复同步直调写 Handler。新增写 Tool 必须提供下游幂等键契约和 `reconciliation_handler`。
 4. 审批恢复必须从原 Checkpoint 继续，不能从头重跑。打开工单详情只读已保存的 AgentRun，不触发新 Workflow。
 5. DecisionProvider（Jev）和 LLM 的输出不是授权：Skill 选择、Tool 权限、Risk Engine、Approval Gate 保持确定性代码。
-6. 评测必须真实回放当前 Workflow；不得通过降低 `evaluation/baseline` 数据集的期望来提高通过率。数据集的 SHA256 固定在 `evaluation/quality_gate_policy.json`，改数据集门禁会失败。
+6. 评测必须真实回放当前 Workflow。固定 100 条 Baseline（`evaluation/baseline`）已于 2026-11-23 移出 PR 和发布门禁：题目和答案冻结、又要求全部通过，原则一变只能改代码迎合旧答案，导致反复打补丁。题目文件保留作历史成绩的依据，不删除；新题集重建前，不要为了让这 100 条通过而改代码。
 7. 审计表只存 payload HMAC、字段名和脱敏结果，不新增原始参数或异常正文字段。
 
 ## 改动后要同步的地方
 
-- 改 Agent 节点：同步 State、Trace 属性、Metrics、确定性测试，并跑一次 `run_ci_quality_gate.py` 确认 100 条 Baseline 没有新增失败。
+- 改 Agent 节点：同步 State、Trace 属性、Metrics、确定性测试，可以本机跑一次 `run_ci_quality_gate.py` 看哪些题结果变了，逐条判断变化对不对，不要求全部通过。
 - 改 API：同步 Pydantic Model、测试和 `docs/05_ENGINEERING_GUIDE.md` 的 API 表。
 - 改功能边界或完成状态：同步 `docs/00_PROJECT_CONTEXT.md`、`docs/03_INTERVIEW_CANON.md`、`docs/08_TODO.md`。
 - 新增 Skill 或 Tool：步骤见 `docs/05_ENGINEERING_GUIDE.md` 的“Skill Framework V1”和“开发约定”。

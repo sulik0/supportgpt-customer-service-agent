@@ -909,10 +909,10 @@ def build() -> str:
 
     facts = {
         "pytest": {"简介": "代码逻辑对不对：状态机、权限、Risk Engine、安全检测、RAG、API，全部 Mock，不判断回答好坏", "用例数": ptotal, "测试文件数": len(pfiles), "最近提交": rows_facts(pt_rows, ["tests"])},
-        "pr": {"简介": "用 Mock 模型和 Jev 录音跑固定 100 条考卷，检查分类、Tool、转人工、审批，每次 PR 自动跑", "考卷条数": len(bcases), "数据集哈希与策略一致": sha_ok, "Jev录音哈希与策略一致": rec_ok,
+        "pr": {"简介": "用 Mock 模型和 Jev 录音跑固定 100 条考卷，检查分类、Tool、转人工、审批。2026-11-23 起已移出门禁，只能本机手动跑", "考卷条数": len(bcases), "数据集哈希与策略一致": sha_ok, "Jev录音哈希与策略一致": rec_ok,
                "考卷最近提交": rows_facts(base_changes, [BASELINE]),
                "门禁策略和录音最近提交": rows_facts(recent_commits([POLICY, RECORDING, "scripts/run_ci_quality_gate.py"], 5), [POLICY, RECORDING, "scripts/run_ci_quality_gate.py"])},
-        "release": {"简介": "同样 100 条考卷换真实模型跑，发版前在 GitHub 手动触发，花钱", "最近提交": rows_facts(recent_commits([".github/workflows/release-quality-gate.yml", "scripts/run_baseline_eval.py"], 5), [".github/workflows/release-quality-gate.yml", "scripts/run_baseline_eval.py"])},
+        "release": {"简介": "同样 100 条考卷换真实模型跑，花钱。2026-11-23 起已移出门禁，GitHub 上的发布门禁已删除，只能本机手动跑", "最近提交": rows_facts(recent_commits([".github/workflows/release-quality-gate.yml", "scripts/run_baseline_eval.py"], 5), [".github/workflows/release-quality-gate.yml", "scripts/run_baseline_eval.py"])},
         "regress": {"简介": "线上出过问题的用例加精选考卷用例，用真实模型验证改动没有退化，手动跑，花钱", "用例数": reg_base + reg_online, "最近提交": rows_facts(dataset_changes(ONLINE_REG, 5), [ONLINE_REG])},
         "online": {"简介": "对已部署的线上服务发请求，检查状态、意图、语言、关键词，手动跑，花钱", "用例数": len(checks), "最近提交": rows_facts(dataset_changes(REPLY_CHECKS, 5), [REPLY_CHECKS])},
     }
@@ -932,14 +932,14 @@ def build() -> str:
 <p class="muted small">结果来源：pytest 和 PR 门禁取 GitHub CI 记录（PR 门禁另加本机运行）；其余取本机评测报告。本机只留最新一份的项目（真实问题回归、线上回复检查）从首次生成页面起逐次累积。{"<b class=bad>GitHub 记录读取失败，已略过。</b>" if R["_offline"] else ""}</p>
 <div class="intro">
 <h3>一共 5 项测试，分两层</h3>
-<p><b>不花钱，Mock 模型，改代码就能跑</b>：pytest 测代码逻辑；PR Mock 门禁用 100 条固定考卷测整条处理流程（分类、调 Tool、转人工、审批）。</p>
-<p><b>花钱，真实模型，手动跑</b>：手动真实门禁（同一份 100 条考卷）、真实问题回归（线上出过问题的用例）、线上回复检查（对已部署的服务发请求）。</p>
+<p><b>不花钱，Mock 模型，改代码就能跑</b>：pytest 测代码逻辑；100 条固定考卷可以本机手动跑，测整条处理流程（分类、调 Tool、转人工、审批），2026-11-23 起不再是门禁。</p>
+<p><b>花钱，真实模型，手动跑</b>：100 条固定考卷换真实模型跑、真实问题回归（线上出过问题的用例）、线上回复检查（对已部署的服务发请求）。</p>
 <p class="muted small">Mock 测试全过，不代表真实模型下也过。这是需要后面三项的原因。</p>
 <h3>什么时候跑哪个</h3>
 <div class="when">
-<b>改了代码逻辑</b><span>pytest；PR 时 PR Mock 门禁自动跑</span>
+<b>改了代码逻辑</b><span>pytest（PR 时自动跑）</span>
 <b>改了 Prompt / Agent / 意图</b><span>以上两项，再加真实问题回归</span>
-<b>准备发版</b><span>手动真实门禁</span>
+<b>准备发版</b><span>真实问题回归、部署后冒烟和线上回复检查</span>
 <b>部署之后</b><span>线上回复检查</span>
 </div></div>
 
@@ -949,11 +949,11 @@ def build() -> str:
 
 <h2>同一份 100 条考卷（Baseline）</h2>
 <div class="group">
-<p class="gt muted small">下面两项用的是同一份数据，只是模型不同，所以“PR 绿”不等于“真实门禁绿”。</p>
-{card("PR Mock 门禁", "用 Mock 模型和 Jev 录音跑 100 条，检查分类、Tool、转人工、审批。",
-      tag("Mock + 录音") + tag("免费", "free") + tag("每次 PR 自动"), len(bcases), "条", L("pr", t_last(base_changes)), S("pr") + results_block(R["pr"]) + pr_body, result_badge(R["pr"]))}
-{card("手动真实门禁", "同样 100 条，用真实模型跑。发版前的最后一关。",
-      tag("真实模型") + tag("花钱", "paid") + tag("发版前手动"), len(bcases), "条", L("release", t_last(recent_commits([".github/workflows/release-quality-gate.yml"], 1))), S("release") + results_block(rel_rows, "没有找到真实模型跑 100 条的记录。") + rel_body, result_badge(rel_rows))}
+<p class="gt muted small">下面两项用的是同一份数据，只是模型不同。2026-11-23 起两项都已移出门禁：固定题和答案冻结、又要求全部通过，导致代码为迎合旧答案反复打补丁。</p>
+{card("固定考卷 Mock 回放（已移出门禁）", "用 Mock 模型和 Jev 录音跑 100 条，检查分类、Tool、转人工、审批。",
+      tag("Mock + 录音") + tag("免费", "free") + tag("本机手动"), len(bcases), "条", L("pr", t_last(base_changes)), S("pr") + results_block(R["pr"]) + pr_body, result_badge(R["pr"]))}
+{card("固定考卷真实模型（已移出门禁）", "同样 100 条，用真实模型跑。",
+      tag("真实模型") + tag("花钱", "paid") + tag("本机手动"), len(bcases), "条", L("release", t_last(recent_commits([".github/workflows/release-quality-gate.yml"], 1))), S("release") + results_block(rel_rows, "没有找到真实模型跑 100 条的记录。") + rel_body, result_badge(rel_rows))}
 </div>
 
 <h2>补充用例（不属于考卷）</h2>
@@ -1011,8 +1011,8 @@ def _render_other(notes: dict, facts: dict) -> str:
               tag("无模型") + free + tag("本地手动"), mcp, "个用例",
               ["tests/mcp"], "python -m unittest discover -s tests/mcp -v",
               "tests/mcp/", "用独立轻量环境，不加载后端的 conftest；CI 里没有这一步。")
-        + row("PromptOps 对比实验", "PR 门禁里的一步：用 Mock 验证 Prompt 版本成对对比、晋级的流程是否能走通。",
-              tag("Mock") + free + tag("每次 PR 自动"), "", "",
+        + row("PromptOps 对比实验", "用 Mock 验证 Prompt 版本成对对比、晋级的流程是否能走通。基于 100 条固定考卷，2026-11-23 起随之移出 PR 门禁。",
+              tag("Mock") + free + tag("本机手动"), "", "",
               ["scripts/promptops.py"],
               "python scripts/promptops.py --registry <目录> evaluate --bundle default --environment staging --mock",
               "scripts/promptops.py")
@@ -1232,7 +1232,7 @@ def build_baseline_page() -> str:
 <p class="muted small">更新于 {datetime.now().strftime("%Y-%m-%d %H:%M")}，数据集 {esc(d['name'])} 版本 {esc(d['version'])}。统计每次生成时从数据集重新计算。点卡片看例子。</p>
 <div class="intro">
 <h3>这是什么</h3>
-<p>一份固定的 100 道客服问题，每道题都写好了“正确处理方式”：该不该转人工、要不要审批、该调哪个 Tool、该判成什么意图和部门。PR Mock 门禁和手动真实门禁都用这一份，只是跑的模型不同。</p>
+<p>一份固定的 100 道客服问题，每道题都写好了“正确处理方式”：该不该转人工、要不要审批、该调哪个 Tool、该判成什么意图和部门。原来 PR 门禁和发布门禁都用这一份；2026-11-23 起已移出门禁，题目文件保留，历史成绩可查。</p>
 <h3>每道题检查什么</h3>
 <p>意图和部门判对没有；该调的 Tool 调了没有、不该调的没调；该转人工的转了、不该转的没转；该审批的进了审批；处理流程走过了该走的步骤。检查的是<b>处理动作</b>，不是回答写得好不好。</p>
 <h3>整体构成</h3>

@@ -1,10 +1,9 @@
 name: CD
 
+# 原来监听 Release Quality Gate；固定 100 条题移出门禁后（2026-11-23）改为手动触发。
+# 线上部署由 Railway / Vercel 自己监听 GitHub 推送，与这里发布的 GHCR 镜像无关。
 on:
-  workflow_run:
-    workflows: ["Release Quality Gate"]
-    branches: ["main"]
-    types: [completed]
+  workflow_dispatch:
 
 permissions:
   contents: read
@@ -19,15 +18,15 @@ concurrency:
 jobs:
   publish-image:
     name: Publish Approved Image
-    if: github.event.workflow_run.conclusion == 'success'
+    if: github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
     timeout-minutes: 30
 
     steps:
-      - name: Checkout approved revision
+      - name: Checkout main
         uses: actions/checkout@v4
         with:
-          ref: ${{ github.event.workflow_run.head_sha }}
+          ref: ${{ github.sha }}
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
@@ -48,9 +47,9 @@ jobs:
           push: true
           tags: |
             ghcr.io/${{ github.repository }}:latest
-            ghcr.io/${{ github.repository }}:sha-${{ github.event.workflow_run.head_sha }}
+            ghcr.io/${{ github.repository }}:sha-${{ github.sha }}
           labels: |
-            org.opencontainers.image.revision=${{ github.event.workflow_run.head_sha }}
+            org.opencontainers.image.revision=${{ github.sha }}
             org.opencontainers.image.source=${{ github.server_url }}/${{ github.repository }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
