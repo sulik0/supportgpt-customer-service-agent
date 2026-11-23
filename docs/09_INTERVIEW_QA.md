@@ -157,7 +157,7 @@ State 包含：工单与客户标识、主题与描述、知识库版本；情�
 
 当前 Analyzer 只返回一个主要 intent 和一个 department，没有真正的多标签意图拆分。因此“订单没收到，而且我要投诉”可能只被主意图覆盖，投诉升级主要依赖情绪与优先级规则。
 
-这是现有限制。演进方案是输出 `intents[]`、主次意图和风险标签，并将物流调查与投诉升级拆成受控子任务；在实现前不能声称已支持多意图编排。
+这是现有限制。演进方案是输出 `intents[]`、主次意图和风险标签，并将物流调查与投诉升级拆成受控子任务。
 
 ### 23. 工单上下文补全怎么实现？
 
@@ -261,7 +261,7 @@ Tool 能访问客户、订单和工单事实，未来还可能产生退款、取
 
 ### 39. 如何记录工具调用审计？
 
-每次调用持久化工具/版本、调用角色、工单/Action、Request/Trace ID、是否允许、状态、尝试次数、耗时和 Mock 标记。为减少敏感数据副本，表中只保存 payload HMAC、字段名和脱敏结果，不保存原始参数与异常正文。主管可通过 `/tool-audits` 查询，OTel Span 关联 audit/action ID。这是项目级持久化审计，但不应夸大为已通过合规认证的企业审计平台。
+每次调用持久化工具/版本、调用角色、工单/Action、Request/Trace ID、是否允许、状态、尝试次数、耗时和 Mock 标记。为减少敏感数据副本，表中只保存 payload HMAC、字段名和脱敏结果，不保存原始参数与异常正文。主管可通过 `/tool-audits` 查询，OTel Span 关联 audit/action ID。这是项目级持久化审计。
 
 ## 六、RAG 知识库
 
@@ -541,7 +541,7 @@ Redis 是可选缓存，不是唯一事实源。
 
 这里要区分两类数据：当前系统创建的 Ticket 会通过 SQLAlchemy 持久化，在 Docker Compose 环境使用 PostgreSQL；Tooling 查询的“历史工单”目前来自 Mock Ticketing Adapter，不是从 PostgreSQL Ticket 表聚合出来的。
 
-生产上历史工单适合放关系数据库，因为需要事务、状态、客户关联、时间筛选和审批关系，但当前不能声称 Mock 历史工具已经改成 PostgreSQL 查询。
+生产上历史工单适合放关系数据库，因为需要事务、状态、客户关联、时间筛选和审批关系，当前历史工单工具是 Mock 实现。
 
 ### 84. 如何利用历史工单？
 
@@ -611,7 +611,7 @@ Agent 还需要注意不能把客户 PII、完整 Prompt 或敏感 Tool 参数�
 
 Counter 只累计增加，适合请求数、token、成本、违规和升级次数。Gauge 可增可减，适合当前活跃会话或队列长度。Histogram 将观测值放进 Bucket，并产生 count 与 sum，适合请求延迟、节点耗时和 QA 分布。
 
-当前项目定义了活跃会话 Gauge，但没有完整更新逻辑，不能声称已有可靠的活跃会话指标。
+当前项目定义了活跃会话 Gauge，但没有完整更新逻辑。
 
 ### 95. 为什么延迟用 Histogram？
 
@@ -635,7 +635,7 @@ API、SQLAlchemy Session、LangGraph 节点和 LLM Provider 采用 async。同�
 
 ### 98. 如何限制并发 LLM 请求？
 
-当前没有显式 Semaphore、Rate Limiter、队列或 Provider 级并发上限，因此不能声称已完成并发治理。
+当前没有显式 Semaphore、Rate Limiter、队列或 Provider 级并发上限。
 
 生产方案应按 Provider 和租户设置并发 Semaphore、请求队列、超时、429 退避、预算限制和熔断；写操作与 LLM 重试还要保证幂等。
 
@@ -681,7 +681,7 @@ API、SQLAlchemy Session、LangGraph 节点和 LLM Provider 采用 async。同�
 
 当前防线包括退款政策 citation、QA、幻觉检测、negative + high 升级、Manager 级退款初筛和人工审批。项目没有真实退款执行工具，因此错误文本不会直接产生资金动作。
 
-但要保证所有错误承诺都不外发，还需要增加 refund intent 的硬审批规则、禁止性输出规则和逐句 Claim-to-Citation 校验。当前不能声称已经百分之百阻止错误退款承诺。
+但要保证所有错误承诺都不外发，还需要增加 refund intent 的硬审批规则、禁止性输出规则和逐句 Claim-to-Citation 校验。
 
 ### 106. 如果 Agent 调用了错误工具怎么办？
 
@@ -705,7 +705,7 @@ API、SQLAlchemy Session、LangGraph 节点和 LLM Provider 采用 async。同�
 
 当前不能用真实线上数据证明，因为没有基准实验和 Golden Set。只能从能力上说明它比 FAQ 多了业务上下文、条件路由、Tool 治理、Hybrid RAG、citation、QA、HITL、状态机和可观测性。
 
-要形成证据，应建立同一测试集，对比 FAQ Baseline 与 Agent 在 citation hit rate、Context Recall、Answer Relevance、Faithfulness、人工审批召回、延迟和成本上的结果。完成前不应声称提升了具体百分比。
+要形成证据，应建立同一测试集，对比 FAQ Baseline 与 Agent 在 citation hit rate、Context Recall、Answer Relevance、Faithfulness、人工审批召回、延迟和成本上的结果。
 
 ### 110. 下一步你会怎么优化这个系统？
 

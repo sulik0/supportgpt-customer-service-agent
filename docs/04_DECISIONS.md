@@ -294,7 +294,7 @@ MCP 可以用一套统一协议连接外部工具、资源和 Prompt。当前项
 
 ### 工程权衡
 
-任何基于 Mock 的质量指标都不能当作生产结果；真实模型接入后需重新评估 Prompt、成本、延迟与 QA 阈值。
+真实模型接入后需重新评估 Prompt、成本、延迟与 QA 阈值。
 
 ## 决策 10：采用规则 + Qwen3Guard + Risk Engine 的分层 Guardrails
 
@@ -366,7 +366,7 @@ ChromaDB 满足本地 Demo、版本过滤、向量召回和持久化的需求，
 
 ### 工程权衡
 
-选择 ChromaDB 意味着向量数据与业务 SQL 数据分开管理；未来若需更高并发、统一存储或生产检索，可评估 pgvector 或 OpenSearch，但不能声称当前已使用 pgvector。
+选择 ChromaDB 意味着向量数据与业务 SQL 数据分开管理；未来若需更高并发、统一存储或生产检索，可评估 pgvector 或 OpenSearch。
 
 ## 决策 12：采用 Hybrid RAG，而非纯向量检索
 

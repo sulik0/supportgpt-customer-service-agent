@@ -29,7 +29,7 @@
 - RAG：ChromaDB + 关键词/向量 Hybrid Search + 轻量 rerank + version/category filter + citation。
 - Tool：Mock CRM/OMS/Ticket Adapter 通过 ToolRegistry 暴露；V2.2 为高风险写 Action 增加业务幂等、Transactional Outbox、Worker、unknown 自动对账、Retry/DLQ、补偿和 Policy 回放。
 - V2.3：同一客户/订单整单退款复用原 Action，参数变化拒绝新建；Worker 续租和领取版本保护全部状态写回；unknown/DLQ 关联独立的业务核实任务。主管确认只保存已核实的外部结果，绝不重新执行写 Tool 或修改回复审批。新表由 create_all 创建，旧 Action 通过兼容检查去重，启动时补齐旧核实任务。
-- PostgreSQL 故障演练：`scripts/run_postgres_tool_drill.py` 只接受显式确认的专用测试库，使用随机 schema 和持久化模拟 OMS。CI 已配置并发创建、跨进程续租、强杀后对账和旧 Worker 保护；未看到实际报告时不得声称已跑通，真实 OMS 仍未接入。
+- PostgreSQL 故障演练：`scripts/run_postgres_tool_drill.py` 只接受显式确认的专用测试库，使用随机 schema 和持久化模拟 OMS。CI 已配置并发创建、跨进程续租、强杀后对账和旧 Worker 保护；真实 OMS 仍未接入。
 - 故障治理：LLM/RAG/读 Tool 统一超时、有界 Retry、进程内 Circuit Breaker 与 Fallback；高风险写调用禁止重试，只 Retry 幂等对账查询。
 - 安全：确定性多层规则 + 可选 Qwen3Guard-Gen-0.6B + Risk Engine + 输出过滤 + HITL。
 - Memory V1：SQL 结构化会话是事实源，Redis 是可选 revision Cache；有界历史、摘要和实体进入 AgentState，待审草稿不进入 Prompt。
@@ -67,7 +67,7 @@
 范围外请求修复：Analyzer 的安全检查仍首先执行。天气等明确无关主题按规则识别，其他普通请求可由同一次 Jev 分类的 `support_scope` 判断。只有高置信度的普通信息请求可采用范围外结果，业务关键词、实际操作和不确定结果保留原路径。确认后从 Analyzer 直接进入 Resolver，隔离本轮 Memory，生成 `capability_boundary`，再经 QA、Escalation 和 Approval Gate 正常结束。不能给范围外标签增加跳过安全或业务风险检查的特权。
 
 1. 默认 Mock 模式必须能在无 API Key、无 Redis、无 Collector 时启动和测试。
-2. CRM、OMS、Ticketing 与 Refund 仍是 Mock Adapter，不得写成已接入真实企业系统。
+2. CRM、OMS、Ticketing 与 Refund 仍是 Mock Adapter。
 3. 所有业务 Tool 必须经过 ToolRegistry，不得从 Agent 直接调 Adapter。
 4. 工单状态只能经 TicketStateMachine 流转。
 5. Prompt Injection 或 Jailbreak 强命中必须短路 Tool/RAG/Resolver/QA，隔离不可信上下文并转人工。
@@ -126,7 +126,7 @@
 - Docker Compose/Kubernetes 是可复现模板，不代表生产上线。
 - Resilience 的通用 Circuit Breaker 仍为单进程 V1；Tool Governance V2.2 已有专用数据库 Outbox、Retry/DLQ、业务幂等和自动对账，但没有通用分布式消息平台，OMS 仍为 Mock。
 - Checkpoint 已覆盖审批暂停和跨重启恢复，但没有 TTL/归档、旧 Graph 多版本恢复或通用后台任务队列；相关 DDL 仍需纳入 Migration。
-- 真实 Baseline V1 用同一固定 100 条 Dataset 比较时，记录到的通过率为 0.99。这个结果只反映这组回放数据，不能当作生产业务指标。
+- 真实 Baseline V1 用同一固定 100 条 Dataset 比较时，记录到的通过率为 0.99。这个结果只反映这组回放数据。
 
 ## 当前优先级
 

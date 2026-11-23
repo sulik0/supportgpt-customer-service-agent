@@ -294,7 +294,7 @@ python scripts/run_postgres_tool_drill.py --confirm-isolated-database \
 
 覆盖：两个独立进程同时创建同一申请；调用长于租约期限时另一 Worker 不能接管；模拟 OMS 已提交后强杀 Worker，新进程只对账，写 Handler 总次数为 1；旧 fencing token 不能执行或写回。模拟 OMS 的账本独立存入 PostgreSQL，不随 Worker 退出丢失。这是 PostgreSQL 与持久化模拟接口测试，不是真实支付/OMS 验收。
 
-CI 的 `tool-governance-postgres-drill` 使用临时 PostgreSQL 16 执行脚本并保存报告，容器构建依赖该任务成功。本机没有 PostgreSQL 时，不得把跳过或仅编译脚本说成演练通过，应检查 CI 的实际结果。
+CI 的 `tool-governance-postgres-drill` 使用临时 PostgreSQL 16 执行脚本并保存报告，容器构建依赖该任务成功。
 
 ## 安全配置
 

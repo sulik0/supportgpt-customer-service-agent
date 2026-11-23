@@ -31,12 +31,6 @@ CRM、OMS、历史工单和退款资格初筛当前均通过本地 Mock Adapter 
 
 仓库与已确认项目资料**没有记录真实团队人数、成员名单、组织关系、协作方式或个人贡献占比**。
 
-因此，对外不得声称：
-
-- 这是多人团队项目，或具体说明团队人数。
-- 自己担任过不存在证据支持的职位，例如 Tech Lead、架构负责人或项目经理。
-- 自己独立完成了仓库中的全部代码，除非提问者本人能基于真实经历确认。
-
 可以准确说明：这是一个基于开源项目改造的客服 Agent 演示项目，现有仓库展示了客服 Agent、RAG、工具治理、审批和可观测性等能力。
 
 ## 5. 我参与的工作
@@ -154,13 +148,13 @@ Tool 选择有两种模式，由 `TOOL_SELECTION_MODE` 切换，默认 `rules`�
 - `rules`：按归一化意图确定性选择 Tool。
 - `react`（Tool Planner `react-v2`）：客户画像和历史工单由系统强制获取；其余候选为 Skill 白名单内、当前角色和意图允许的低风险只读 Tool，由 LLM 通过 function calling 选择，最多 3 步、5 次调用。Tool 无参数，`customer_id` 由系统绑定；写 Tool 与高风险 Tool 不暴露给模型；白名单外调用被拒绝，重复调用去重；Tool 结果命中注入检测时不回灌给模型；规划失败回退规则路由。没有可选 Tool 的 Skill 跳过规划。
 
-2026-10-27 用 DeepSeek 在同一 100 条 Baseline 上对比（详见 `docs/evidence/tool_selection_react_vs_rules.md`）：rules Case Pass `0.91`；react v1（全部交给模型）`0.32`；react v2 `0.84`，其中 7 条失败为不涉及订单的纯政策问题，模型未查订单而标注要求查询；除去这 7 条两者均为 84/93。react v2 无越权 Tool、无禁用 Tool 违规，平均多约 740 Token、1.6 秒。可以说“实现并量化评估了受控 ReAct Tool 选择”；不能说“ReAct 提升了质量”或“已在生产启用”。客户画像和历史工单在正常请求中调用；订单历史只在账单和订单意图下调用。新增工具分别按订单、账务、保修、API 故障意图选择，与已有查询并行执行，返回结果经过安全扫描后送入 Resolver。Skill 配置升级为 `v1.1`，只有对应 Skill 可以调用这些工具。每次调用经过 Schema、RBAC、策略门禁和 Resilience，并持久化脱敏审计。
+2026-10-27 用 DeepSeek 在同一 100 条 Baseline 上对比（详见 `docs/evidence/tool_selection_react_vs_rules.md`）：rules Case Pass `0.91`；react v1（全部交给模型）`0.32`；react v2 `0.84`，其中 7 条失败为不涉及订单的纯政策问题，模型未查订单而标注要求查询；除去这 7 条两者均为 84/93。react v2 无越权 Tool、无禁用 Tool 违规，平均多约 740 Token、1.6 秒。可以说“实现并量化评估了受控 ReAct Tool 选择”。客户画像和历史工单在正常请求中调用；订单历史只在账单和订单意图下调用。新增工具分别按订单、账务、保修、API 故障意图选择，与已有查询并行执行，返回结果经过安全扫描后送入 Resolver。Skill 配置升级为 `v1.1`，只有对应 Skill 可以调用这些工具。每次调用经过 Schema、RBAC、策略门禁和 Resilience，并持久化脱敏审计。
 
 高风险写 Tool 采用 Tool Governance V2.2：主状态机为 `proposed -> pending_approval -> approved/rejected -> queued -> executing -> succeeded/failed/unknown`。参数加密存储，payload 和创建时的 Policy 快照使用 HMAC 防篡改；每个写 Action 生成唯一业务幂等键；提议人不能自批；API 原子保存 `queued + Outbox`，Worker 使用数据库租约和乐观版本竞争消费。
 
 写调用超时或 Worker 中断不会直接重试，而是进入 `unknown`，按相同幂等键调用 Mock OMS 查询接口自动对账。确认结果后补写成功/失败状态事件；暂无结果时只 Retry 对账查询，耗尽进入 DLQ 并转人工。成功 Action 支持主管显式发起幂等补偿。Policy 回放是 deterministic 离线校验，不调用 Tool/LLM。上述能力仍基于 Mock OMS 契约，不代表真实资金系统集成或 exactly-once 保证。
 
-所有这些 Tool 当前均是本地 Mock Adapter。不得说成已经接入真实 CRM、OMS、工单系统，或能够执行真实退款、改订单、写 CRM 等操作。
+所有这些 Tool 当前均是本地 Mock Adapter。
 
 知识库初始化现在有 16 篇文档：原有 4 篇不变，新增 12 篇中文演示售后手册。新增内容覆盖退款资料和进度、支付发票、取消订单、物流延迟及未收到、保修与破损退换货、账户恢复、API 排查和资料补全。中文精确召回使用双字滑窗；部署后需显式执行 `scripts/seed_kb.py` 入库，不随应用启动自动导入。
 
@@ -192,7 +186,7 @@ Tool 选择有两种模式，由 `TOOL_SELECTION_MODE` 切换，默认 `rules`�
 | 安全 | 历史重新脱敏并检测 Injection；pending/rejected 草稿不进入 Prompt；Tool 仍重查实时业务事实 |
 | 当前限制 | 无向量长期记忆、用户偏好学习、真实多租户身份接入和多轮 Evaluation Gate |
 
-可以说“已实现受控的多轮短期 Memory”；不能说“已实现向量长期记忆”、“已完成多租户隔离”或“已通过真实多轮业务指标验证”。
+可以说“已实现受控的多轮短期 Memory”。
 
 ## 13. Prompt
 
@@ -225,13 +219,13 @@ Prompt Injection 不再只是英文关键词检测，当前实现为确定性多
 4. 在 `user_input`、`tool_result` 和 `rag_document` 三类信任边界执行，同时防护直接与间接 Prompt Injection。
 5. 返回 `risk_score`、`confidence`、`layers` 和不含敏感原文的 `signals`；命中后清空不可信上下文并直接转人工。
 
-确定性规则未命中时，可选调用独立 `Qwen3Guard-Gen-0.6B` OpenAI-compatible 端点。该 Adapter 已接入 `user_input`、`tool_result` 和 `rag_document`，并将 `Safe / Controversial / Unsafe`、Categories、延迟与降级状态写入 AgentState 和 OpenTelemetry。`Unsafe` 或 `Jailbreak` 类别阻断自动化；`Controversial` 默认进入 Risk Engine 并要求人工处理。Guard 服务默认关闭，不得宣称已有生产运行指标。
+确定性规则未命中时，可选调用独立 `Qwen3Guard-Gen-0.6B` OpenAI-compatible 端点。该 Adapter 已接入 `user_input`、`tool_result` 和 `rag_document`，并将 `Safe / Controversial / Unsafe`、Categories、延迟与降级状态写入 AgentState 和 OpenTelemetry。`Unsafe` 或 `Jailbreak` 类别阻断自动化；`Controversial` 默认进入 Risk Engine 并要求人工处理。Guard 服务默认关闭。
 
 是否转人工由 22 条处理原则（`docs/10_HANDLING_PRINCIPLES.md`）直接决定，优先级只决定处理时限。独立 `RiskEngine` 是唯一的转人工判断点，综合处理原则的结论、安全分数、依赖降级、QA、幻觉和 Workflow 错误；Escalation 只读它的结论。默认风险阈值为 `medium >= 0.4`、`high >= 0.7`、`critical >= 0.9`；Analyzer 低置信度阈值为 `0.65`，QA 阈值为 `0.8`。`high` / `critical` 要求人工处理，安全威胁额外阻断自动化。
 
 `/chat` 会返回 Analyzer 置信度、风险等级、分数和原因。Trace 和结构化日志记录风险字段，OpenTelemetry Metrics 记录最终风险评估数与分数分布。
 
-可以说已实现“确定性规则 + Qwen3Guard-Gen-0.6B + Risk Engine”可降级链路；不能说 Guard 已在生产强制启用、阈值已经真实数据校准，或已建成策略中心与持久化安全事件平台。
+可以说已实现“确定性规则 + Qwen3Guard-Gen-0.6B + Risk Engine”可降级链路。
 
 ## 15. 数据库
 
@@ -256,7 +250,7 @@ Redis 是可选组件，不是系统启动或处理工单的强依赖。
 - Redis 未配置、连接失败、Cache Miss 或 revision 不一致时，主流程继续运行并回退 SQL。
 - Docker Compose 会启动 Redis；本地默认配置不要求 Redis。
 
-不能说 Redis 是唯一的记忆存储，或说项目必须依赖 Redis。目前 Redis 不用来实现分布式锁、任务队列、Checkpoint 或限流。
+目前 Redis 不用来实现分布式锁、任务队列、Checkpoint 或限流。
 
 ## 17. Embedding
 
@@ -281,7 +275,7 @@ Redis 是可选组件，不是系统启动或处理工单的强依赖。
 
 当前默认分块参数为 600 字符、120 字符 overlap。ChromaDB 是当前向量数据库；系统没有使用 pgvector、OpenSearch、Elasticsearch、Milvus、Pinecone、Cross-encoder 或 LLM Reranker。
 
-可以说“实现 Hybrid RAG、版本/类别过滤、citation 与轻量 rerank”；不能说“已实现生产级搜索集群、多租户 RAG 隔离或训练型 Reranker”。
+可以说“实现 Hybrid RAG、版本/类别过滤、citation 与轻量 rerank”。
 
 ## 19. 评测体系
 
@@ -335,7 +329,7 @@ CI/CD 采用两级门禁：PR/Push 强制使用 Mock Provider 回放固定 100 �
 - 最终 Risk Engine 评估数和风险分数分布。
 - Feedback Event 和 SFT / DPO 候选导出计数。
 
-LLM 延迟、Agent 执行次数和活跃会话指标已定义，但当前没有完整的更新逻辑，不能当作可用的实测监控数据。
+LLM 延迟、Agent 执行次数和活跃会话指标已定义，但当前没有完整的更新逻辑。
 
 OpenTelemetry Span 覆盖 HTTP 请求、Agent Workflow、各 Agent 节点、工具调用、RAG 查询与回退、审批创建和审批处理。
 
@@ -359,31 +353,24 @@ React 前端已拆分为用户咨询页与客服员工后台。用户页采用�
 
 当前**没有上线指标**，原因是项目没有已证实的真实生产部署、真实客户流量、真实 SLA、真实工单量、真实审批率或真实业务转化数据。
 
-不得声称：
-
-- 已上线到真实客服中心。
-- 已服务真实客户或处理真实订单。
-- 提升了首问解决率、客服效率、满意度或人工成本。
-- 达到某个真实 SLA、可用性或业务增长指标。
-
 可以说：Docker Compose 和 Kubernetes manifests 提供了本地或生产风格部署基础，但不代表已生产发布。
 
 ## 23. 已知问题与解决方案
 
-| 已知问题 | 当前事实 | 当前解决方案 | 不应夸大的内容 |
-|---|---|---|---|
-| Python 3.13 下 pytest 崩溃 | 旧 `.venv` 曾混装 Evaluation 与不兼容 LangGraph 依赖，可以 `exit code 139` 退出 | 核心版本已固定；2026-09-08 当前环境 231 条全量测试通过，PR Agent Quality Gate 通过；CI / Docker 使用 Python 3.11 | 不要把旧环境崩溃解释为业务断言失败，也不要声称所有可选 Evaluation 依赖已完成全量兼容验证 |
-| ChromaDB 本地 schema 不兼容 | 其他 ChromaDB 大版本写入的旧持久化目录不能保证反向兼容 | 本地默认使用 `.runtime/chromadb-0.5` 版本化目录，必要时重新执行 `seed_kb.py` | 不要说 ChromaDB 任意版本间可原地升降级 |
-| Redis 不可用 | Redis 是可选组件 | 自动回退 SQL 历史 | 不要说 Redis 已高可用或具备集群容灾 |
-| 类别检索无结果 | 分类可能不完全匹配知识类别 | 保留版本，放宽类别回退一次 | 不要说已实现通用检索重试或生产级召回保证 |
-| 工具、LLM、RAG 或 QA 异常 | 外部能力或 Provider 可能失败 | 统一故障分类、有界 Retry、进程内 Circuit Breaker、LLM/RAG Fallback、安全降级与人工审批；高风险写调用不重试，专用 Tool Outbox 只 Retry 幂等对账 | 不要说已实现分布式 Breaker、通用消息平台或生产故障演练 |
-| Memory 上下文污染 | 历史可携带 PII、Injection 或未审草稿 | 重新脱敏/扫描，仅 final 消息入 Prompt，审批后幂等回写 | 不要把 Memory 当作可信指令或实时业务事实 |
-| Tool 高风险写入的不确定结果 | 写 Action、Outbox、调用审计和状态事件已持久化；不确定结果进入 `unknown` | 业务幂等键 + 自动 Reconciliation Worker 查询 Mock OMS，确认后补写状态；查询 Retry 耗尽进入 DLQ/人工 | 不要说已接真实 OMS、实现跨系统 exactly-once 或通用 Saga 平台 |
-| Collector 或下游不可用 | 应用通过 OTLP 统一上报 | 遥测 fail-open，业务继续；本地启动前检不可达时跳过 exporter，Collector 恢复后重启 Backend 恢复上报 | 不要说当前已有 Collector 高可用或 Trace 持久化兜底 |
-| Feedback 新表迁移 | 当前使用 SQLAlchemy `create_all` 创建新表 | 本地可直接运行；生产发布前补 Alembic migration | 不要说已经具备生产 Schema Migration |
-| 多层安全检测覆盖边界 | 确定性规范化、特征、启发式和编码载荷，再接 Qwen3Guard 语义分类 | 输入、Tool、RAG 命中 Unsafe 时阻断，Guard 失败时隔离外部上下文并转人工 | 不要说默认已启用 Guard 服务或已建成完整攻防平台 |
-| Risk Engine 阈值 | 默认阈值可通过环境变量配置，但尚无真实运营数据校准 | high / critical 保守转人工，安全威胁阻断自动化 | 不要说阈值已用生产样本训练或自适应调优 |
-| Jev DecisionProvider | 线上 Adapter、脱敏/限长、置信度门禁、Trace/Metrics 和 LLM Fallback 已实现 | 默认关闭，不可用时回退，业务授权仍为确定性策略 | 不要说已有生产准确率/延迟数据、已接入离线 Judge 或 Jev 可自主授权 Tool |
+| 已知问题 | 当前事实 | 当前解决方案 |
+|---|---|---|
+| Python 3.13 下 pytest 崩溃 | 旧 `.venv` 曾混装 Evaluation 与不兼容 LangGraph 依赖，可以 `exit code 139` 退出 | 核心版本已固定；2026-09-08 当前环境 231 条全量测试通过，PR Agent Quality Gate 通过；CI / Docker 使用 Python 3.11 |
+| ChromaDB 本地 schema 不兼容 | 其他 ChromaDB 大版本写入的旧持久化目录不能保证反向兼容 | 本地默认使用 `.runtime/chromadb-0.5` 版本化目录，必要时重新执行 `seed_kb.py` |
+| Redis 不可用 | Redis 是可选组件 | 自动回退 SQL 历史 |
+| 类别检索无结果 | 分类可能不完全匹配知识类别 | 保留版本，放宽类别回退一次 |
+| 工具、LLM、RAG 或 QA 异常 | 外部能力或 Provider 可能失败 | 统一故障分类、有界 Retry、进程内 Circuit Breaker、LLM/RAG Fallback、安全降级与人工审批；高风险写调用不重试，专用 Tool Outbox 只 Retry 幂等对账 |
+| Memory 上下文污染 | 历史可携带 PII、Injection 或未审草稿 | 重新脱敏/扫描，仅 final 消息入 Prompt，审批后幂等回写 |
+| Tool 高风险写入的不确定结果 | 写 Action、Outbox、调用审计和状态事件已持久化；不确定结果进入 `unknown` | 业务幂等键 + 自动 Reconciliation Worker 查询 Mock OMS，确认后补写状态；查询 Retry 耗尽进入 DLQ/人工 |
+| Collector 或下游不可用 | 应用通过 OTLP 统一上报 | 遥测 fail-open，业务继续；本地启动前检不可达时跳过 exporter，Collector 恢复后重启 Backend 恢复上报 |
+| Feedback 新表迁移 | 当前使用 SQLAlchemy `create_all` 创建新表 | 本地可直接运行；生产发布前补 Alembic migration |
+| 多层安全检测覆盖边界 | 确定性规范化、特征、启发式和编码载荷，再接 Qwen3Guard 语义分类 | 输入、Tool、RAG 命中 Unsafe 时阻断，Guard 失败时隔离外部上下文并转人工 |
+| Risk Engine 阈值 | 默认阈值可通过环境变量配置，但尚无真实运营数据校准 | high / critical 保守转人工，安全威胁阻断自动化 |
+| Jev DecisionProvider | 线上 Adapter、脱敏/限长、置信度门禁、Trace/Metrics 和 LLM Fallback 已实现 | 默认关闭，不可用时回退，业务授权仍为确定性策略 |
 
 ## 24. 未来规划
 
