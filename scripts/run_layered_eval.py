@@ -2,7 +2,7 @@
 
   --suite pr         读 evaluation/suites.json：pr 为离线回放（Mock 模型 + Jev 录音，免费）
   --suite release    全部层，真实模型，需要 --confirm-live
-  --layers core,injection / all    不走套件，直接指定层（默认 Mock，不产生费用）
+  --layers core,security / all    不走套件，直接指定层（默认 Mock，不产生费用）
 
 门禁按层判断，任何一层低于阈值，退出码为 1；合计分数不参与门禁。
 --dry-run 只估算真实模型调用次数。
@@ -54,7 +54,11 @@ async def main() -> int:
 
     from src.config import settings
     from src.database import init_db
-    from src.evaluation.layered_run import run_layered_evaluation, select_layers
+    from src.evaluation.layered_run import (
+        online_layers,
+        run_layered_evaluation,
+        select_layers,
+    )
     from src.evaluation.manifest import load_manifest
     from src.evaluation.offline_rag import load_evaluation_dataset
     from src.evaluation.real_llm_regression import (
@@ -68,6 +72,10 @@ async def main() -> int:
     wanted = suite["layers"] if suite else ("all" if args.layers == "all" else args.layers.split(","))
     layers = select_layers(manifest, wanted)
     gates = suite["gates"] if suite else None
+    with_online = online_layers(manifest)
+    if with_online:
+        print(f"层 {', '.join(with_online)} 的线上检查题不在本次回放里：部署后跑 "
+              "python scripts/run_online_reply_check.py --api-url <Railway 域名> --confirm-live")
     metadata = {"mode": "layered", "layers": layers}
     if suite:
         metadata["suite"] = suite["name"]

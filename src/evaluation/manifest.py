@@ -51,6 +51,14 @@ def read_cases(path: Path) -> List[Dict[str, Any]]:
     return cases
 
 
+def _sources(layer: Dict[str, Any]) -> List[tuple]:
+    """一层的题集文件：(标签, 文件, 题数键, 指纹键)。online_file 是线上检查题，不在本地回放。"""
+    items = [("", layer["file"], "count", "fingerprint")]
+    if layer.get("online_file"):
+        items.append(("线上 ", layer["online_file"], "online_count", "online_fingerprint"))
+    return items
+
+
 def validate_manifest(
     manifest_path: Path = MANIFEST_PATH,
     root: Path = PROJECT_ROOT,
@@ -63,33 +71,33 @@ def validate_manifest(
         layers = {name: layers[name] for name in only}
     seen_ids: Dict[str, str] = {}
     for name, layer in layers.items():
-        path = root / layer["file"]
-        if not path.is_file():
-            errors.append(f"[{name}] 文件不存在：{layer['file']}")
-            continue
-        cases = read_cases(path)
-        if len(cases) != layer["count"]:
-            errors.append(
-                f"[{name}] 题数不一致：清单 {layer['count']}，实际 {len(cases)}"
-            )
-        actual = file_fingerprint(path)
-        if actual != layer["fingerprint"]:
-            hint = (
-                "冻结层不允许修改，也没有更新命令"
-                if layer.get("frozen")
-                else f"题集有改动，确认后执行 update {name}"
-            )
-            errors.append(f"[{name}] 指纹不一致（{hint}）")
-        for case in cases:
-            case_id = case.get("id")
-            if not case_id:
-                errors.append(f"[{name}] 有题目缺少 id")
-            elif case_id in seen_ids:
+        for label, file, count_key, fp_key in _sources(layer):
+            path = root / file
+            if not path.is_file():
+                errors.append(f"[{name}] {label}文件不存在：{file}")
+                continue
+            cases = read_cases(path)
+            if len(cases) != layer[count_key]:
                 errors.append(
-                    f"id 重复：{case_id}（出现在 {seen_ids[case_id]} 和 {name}）"
+                    f"[{name}] {label}题数不一致：清单 {layer[count_key]}，实际 {len(cases)}"
                 )
-            else:
-                seen_ids[case_id] = name
+            if file_fingerprint(path) != layer[fp_key]:
+                hint = (
+                    "冻结层不允许修改，也没有更新命令"
+                    if layer.get("frozen")
+                    else f"题集有改动，确认后执行 update {name}"
+                )
+                errors.append(f"[{name}] {label}指纹不一致（{hint}）")
+            for case in cases:
+                case_id = case.get("id")
+                if not case_id:
+                    errors.append(f"[{name}] 有题目缺少 id")
+                elif case_id in seen_ids:
+                    errors.append(
+                        f"id 重复：{case_id}（出现在 {seen_ids[case_id]} 和 {name}）"
+                    )
+                else:
+                    seen_ids[case_id] = name
     return errors
 
 
@@ -103,9 +111,10 @@ def update_layer(
         raise KeyError(f"清单里没有这一层：{name}")
     if layer.get("frozen"):
         raise FrozenLayerError(f"{name} 是冻结层，不能更新。")
-    path = root / layer["file"]
-    layer["count"] = len(read_cases(path))
-    layer["fingerprint"] = file_fingerprint(path)
+    for _label, file, count_key, fp_key in _sources(layer):
+        path = root / file
+        layer[count_key] = len(read_cases(path))
+        layer[fp_key] = file_fingerprint(path)
     manifest_path.write_text(
         json.dumps(manifest, ensure_ascii=False, indent=2) + "\n", encoding="utf-8"
     )

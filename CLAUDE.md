@@ -125,3 +125,7 @@ analyzer → skill_selector → context_enrichment（tooling ∥ retriever）→
 - 新增 Skill 或 Tool：步骤见 `docs/05_ENGINEERING_GUIDE.md` 的“Skill Framework V1”和“开发约定”。
 - 线上测试（冒烟、回复质量检查、手工探测）请求公开入口时必须带请求头 `X-SupportGPT-Test`，并在结束后撤回工单；部署后除 CI 和冒烟外还要跑 `scripts/run_online_reply_check.py`。测试用例只用中文和英文。
 - 代码注释用简短中文。不提交 `.env`、`evaluation/reports/`、`.runtime/`、训练候选数据。
+
+## 可调用的外部模型
+
+需要第二意见时（评判回复是否正确、审阅方案、写说明文字），可以调用本机 codex 命令行里的 GPT-6.2-sol（模型名 `gpt-6.2-sol`）。调用方式参考 `scripts/judge_replies_with_codex.py`。

@@ -3,7 +3,7 @@
   "policy_name": "supportgpt-baseline-v1",
   "dataset": {
     "case_count": 100,
-    "sha256": "1c781827feec11c4afeed8118072a8ed139796e030e4f42e1053cabc273fd534",
+    "sha256": "5a22f3bbd0013e106b58a6bdca1269e85947da41aaa71458289d78d42dbf8dd8",
     "enabled_behavior_metrics": [
       "intent_accuracy",
       "department_accuracy",

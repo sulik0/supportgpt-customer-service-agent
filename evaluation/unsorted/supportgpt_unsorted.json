@@ -1,0 +1,6 @@
+{
+  "name": "supportgpt_unsorted",
+  "version": "1.0",
+  "description": "新发现、还没归类的题。归类后移到对应层的文件，并更新两边的清单。题号全局不能重复，只用中文和英文。",
+  "cases": []
+}

@@ -1,0 +1,137 @@
+{
+  "description": "评判模型校准样本：真实回复和人为改错的回复，expected 是人工确认的标准判断。",
+  "items": [
+    {
+      "source": "real",
+      "case": "coverage-g0-refund-v2-fee-calculation",
+      "mode": "rules",
+      "customer_id": "cust_101",
+      "kb_version": "v2",
+      "question": "For a 100 dollar refund under v2, what processing fee percentage applies?",
+      "reply": "Under Refund Policy V2, a 5% processing fee is deducted from all refund requests [S1]. For a $100 refund, that means a $20 fee, so $80 would be returned to your original payment card, typically within 3-5 business days [S1]. Refund requests can be filed up to 60 days from purchase [S1].",
+      "expected": "incorrect",
+      "note": "真实回复：5% 算成 20 美元"
+    },
+    {
+      "source": "real",
+      "case": "coverage-g2-zh-window-7001",
+      "mode": "react",
+      "customer_id": "cust_101",
+      "kb_version": "v1",
+      "question": "我的订单 ORD-7001 是多久前下的单？按 v1 还在退款窗口内吗？",
+      "reply": "您好，关于订单 ORD-7001，本轮尚未查询订单记录，因此暂时无法确认下单时间，也无法判断是否仍在退款窗口内。按 v1 政策，退款须在首次订阅付款后 30 天内申请，且账户不能有未解决的争议（S1、S2）。请提供付款时间，以便我们核对；如需正式判定，建议转人工复核。",
+      "expected": "not_answered",
+      "note": "真实回复：没查订单，如实说无法确认下单时间"
+    },
+    {
+      "source": "real",
+      "case": "coverage-g2-en-fee-7001",
+      "mode": "react",
+      "customer_id": "cust_101",
+      "kb_version": "v2",
+      "question": "I want to refund order ORD-7001 under policy v2. How much processing fee would be deducted, and how much would I get back?",
+      "reply": "Your order ORD-7001 is paid and delivered, with a total of $150.00 USD, and it falls within the 60-day window under policy V2 [S1]. A 5% processing fee applies, so $7.50 would be deducted and you would receive $142.50 back to your original payment card [S1]. Refunds typically take 3-5 business days to clear [S1].",
+      "expected": "correct",
+      "note": "真实回复：7.50 和 142.50"
+    },
+    {
+      "source": "real",
+      "case": "coverage-g2-zh-fee-9003",
+      "mode": "react",
+      "customer_id": "cust_103",
+      "kb_version": "v2",
+      "question": "订单 ORD-9003 按 v2 退款要扣多少手续费？",
+      "reply": "订单 ORD-9003 已支付 5400.00 USD，发票 INV-DEMO-9003 已开具，目前处于已交付状态。按 V2 退款政策，需扣除 5% 手续费，即 270.00 USD，实际退款金额为 5130.00 USD（来源：S1）。退款将退回原支付卡，通常需 3-5 个工作日到账（来源：S1）。如需发起退款，请回复确认。",
+      "expected": "correct",
+      "note": "真实回复：270 和 5130"
+    },
+    {
+      "source": "real",
+      "case": "coverage-g0-refund-v2-fee-calculation",
+      "mode": "react",
+      "customer_id": "cust_101",
+      "kb_version": "v2",
+      "question": "For a 100 dollar refund under v2, what processing fee percentage applies?",
+      "reply": "Under Refund Policy V2, a 5% processing fee is deducted from all refund requests, so a $100 refund would have $5 deducted ([S1]). V2 also allows refund requests up to 60 days from purchase, with refunds sent to the original payment card in 3–5 business days ([S1]). Please provide your order number so we can check your specific refund eligibility.",
+      "expected": "correct",
+      "note": "真实回复：5 美元"
+    },
+    {
+      "source": "real",
+      "case": "coverage-g0-refund-v2-version-isolation-dispute",
+      "mode": "react",
+      "customer_id": "cust_103",
+      "kb_version": "v2",
+      "question": "Does the seeded v2 refund policy say that an active dispute makes the account ineligible?",
+      "reply": "The supplied V2 refund policy excerpt does not mention disputes or account eligibility, so I can't confirm that an active dispute makes an account ineligible. It only covers the 60-day filing window, a 5% processing fee, and refunds to the original card in 3-5 business days [S1]. Please share the specific policy section or account details so this can be checked, or have a human reviewer confirm the eligibility rule.",
+      "expected": "correct",
+      "note": "真实回复：v2 摘录没提争议规则，没有把 v1 的规则搬进来"
+    },
+    {
+      "source": "real",
+      "case": "coverage-g1-zh-v2-window",
+      "mode": "react",
+      "customer_id": "cust_101",
+      "kb_version": "v2",
+      "question": "v2 退款政策的最长申请期限是多少？",
+      "reply": "根据 v2 退款政策，退款申请的最长申请期限为购买后 60 天内（S1）。需要注意，所有 v2 退款申请会扣除 5% 的处理费，退款将退回原支付卡，并在 3–5 个工作日内到账（S1）。如需核对具体订单是否符合期限，请提供订单号，我们会进一步查询确认。",
+      "expected": "correct",
+      "note": "真实回复：60 天、5%、3–5 个工作日"
+    },
+    {
+      "source": "synthetic",
+      "case": "coverage-g2-en-fee-7001",
+      "mode": null,
+      "customer_id": "cust_101",
+      "kb_version": "v2",
+      "question": "I want to refund order ORD-7001 under policy v2. How much processing fee would be deducted, and how much would I get back?",
+      "reply": "Your order ORD-7001 is paid and delivered, with a total of $150.00 USD, and it falls within the 60-day window under policy V2 [S1]. A 10% processing fee applies, so $15.00 would be deducted and you would receive $135.00 back to your original payment card [S1]. Refunds typically take 3-5 business days to clear [S1].",
+      "expected": "incorrect",
+      "note": "改错手续费比例"
+    },
+    {
+      "source": "synthetic",
+      "case": "coverage-g1-zh-v2-window",
+      "mode": null,
+      "customer_id": "cust_101",
+      "kb_version": "v2",
+      "question": "v2 退款政策的最长申请期限是多少？",
+      "reply": "根据 v2 退款政策，退款申请的最长申请期限为购买后 30 天内（S1）。需要注意，所有 v2 退款申请会扣除 5% 的处理费，退款将退回原支付卡，并在 3–5 个工作日内到账（S1）。如需核对具体订单是否符合期限，请提供订单号，我们会进一步查询确认。",
+      "expected": "incorrect",
+      "note": "改错期限"
+    },
+    {
+      "source": "synthetic",
+      "case": "coverage-g0-refund-v2-fee",
+      "mode": null,
+      "customer_id": "cust_103",
+      "kb_version": "v2",
+      "question": "What processing fee is deducted from a refund under corporate policy v2?",
+      "reply": "Under Corporate Refund Policy V2, a 5% processing fee is deducted from all V2 refund requests [S1]. Refunds go back to the original payment card and take 3–5 business days to clear [S1]. I don't have your order details in this turn, so please share the order number if you'd like the exact fee amount checked. I have also submitted your refund request and it has been approved.",
+      "expected": "incorrect",
+      "note": "编造已执行退款"
+    },
+    {
+      "source": "synthetic",
+      "case": "coverage-g2-en-status-8002",
+      "mode": null,
+      "customer_id": "cust_102",
+      "kb_version": "v1",
+      "question": "Has my order ORD-8002 been delivered yet, and how much did I pay?",
+      "reply": "Your order ORD-8002 was delivered on time by demo_carrier (tracking DEMO-8002) [S2]. Your order total was $25.00 USD. For the exact amount paid, the billing invoice still needs to be checked—please confirm if you'd like that looked up.",
+      "expected": "incorrect",
+      "note": "把运输中改成已送达"
+    },
+    {
+      "source": "synthetic",
+      "case": "coverage-g1-en-v2-fee",
+      "mode": null,
+      "customer_id": "cust_101",
+      "kb_version": "v2",
+      "question": "Is there any processing fee on refunds under policy v2, and how much?",
+      "reply": "Thanks for reaching out. I'm not able to confirm the details of this policy right now. Please contact our support team or provide more information so we can look into it.",
+      "expected": "not_answered",
+      "note": "泛泛的无法确认"
+    }
+  ]
+}
