@@ -238,7 +238,9 @@ Jev 只用于线上封闭决策；当前不作为 Baseline、Ragas 或 DeepEval 
 
 真实模型回归：`evaluation/online_regression/supportgpt_online_regression.json` 保存 5 条线上问题用例（投诉、重置密码、提示词泄露、英文订单查询、集群故障），不属于固定 SHA256 的 Baseline。`run_real_llm_regression.py` 默认合并该数据集，regression 套件自动包含这 5 条（预估 39 次调用，仍在默认上限 40 内）。英文回复语言需人工查看报告确认，Dataset 暂无语言断言。
 
-隐蔽注入评测：`evaluation/covert_injection/supportgpt_covert_injection.json` 有 28 条用例（24 条攻击加 4 条正常对照，中英文各半，不属于固定 SHA256 的 Baseline）。攻击不含明显攻击词，靠跨客户查询、冒称权限、直接要求退款、点名工具、指定客户编号、伪造系统通知诱导越权，都能绕过规则层前置检查，所以能走到“选工具”这一步。`python scripts/run_covert_injection_eval.py --mock` 离线验证格式；`--dry-run` 看预估调用次数；`--confirm-live` 用真实模型回放（会产生费用，要配合 `TOOL_SELECTION_MODE=react` 才是模型在选工具）。报告在 `evaluation/reports/covert_injection/`，分别统计“前置拦下”“模型想调禁用工具”“真正执行禁用工具”，门禁口径只看最后一项。Mock 模型不会乱选，全是 0 不代表真实模型安全。
+隐蔽注入评测：`evaluation/covert_injection/supportgpt_covert_injection.json` 有 76 条用例（68 条攻击加 8 条正常对照，中英文各半，不属于固定 SHA256 的 Baseline）。攻击不含明显攻击词，靠跨客户查询、冒称权限、直接要求退款、点名工具、指定客户编号、伪造通知、施压、链式调用、批量枚举诱导越权，都能绕过规则层前置检查，并且都设计在有工具可选的意图上（订单状态、订单取消、账单争议、故障报告、保修），才能真正测到规划模型。`python scripts/run_covert_injection_eval.py --mock` 离线验证格式；默认只回放“意图分类到选工具”（每题 1 到 2 次模型调用），`--full` 回放完整 Workflow；`--repeat N` 重复多轮；`--confirm-live` 用真实模型（会产生费用，要配合 `TOOL_SELECTION_MODE=react`）；`--as-controls --dataset <Baseline>` 把 Baseline 当正常请求，统计选错工具和必需工具缺失。禁用名单按系统实际判定的意图计算，意图偏离另行统计。报告在 `evaluation/reports/covert_injection/`，分别统计“模型想调禁用工具”“塞参数”“真正执行禁用工具”“传到工具的参数被换”，零事件时给 95% 置信上限。Mock 模型不会乱选，全是 0 不代表真实模型安全。
+
+漏调诊断：`evaluation/tool_coverage/supportgpt_tool_coverage.json` 有 30 题（baseline 漏调的 10 题、纯政策 6 题、必须看订单 10 题、数据已在问题里 4 题）。`python scripts/run_tool_coverage_eval.py --confirm-live` 对同一批题回放 react 和 rules 两遍完整 Workflow，检查回复里的关键事实，区分“必需工具过严”“漏调导致回复错”“与漏调无关”。运行前确认本地知识库已初始化（`python scripts/seed_kb.py`），否则两种方式的回复都会说没有政策条款，结果无效。
 
 思考模式：`deepseek-flash` 默认开启思考，思考 Token 计入 `max_tokens`。实测约 2/3 的输出额度花在思考上，导致 Resolver 回复和 QA JSON 被截断。设置 `LLM_THINKING=disabled` 后，主模型和 Fast Model 请求会带上 `extra_body={"thinking":{"type":"disabled"}}`；备用模型不传此参数。留空则不传，保持服务端默认行为。
 
@@ -294,7 +296,7 @@ python scripts/run_postgres_tool_drill.py --confirm-isolated-database \
 
 覆盖：两个独立进程同时创建同一申请；调用长于租约期限时另一 Worker 不能接管；模拟 OMS 已提交后强杀 Worker，新进程只对账，写 Handler 总次数为 1；旧 fencing token 不能执行或写回。模拟 OMS 的账本独立存入 PostgreSQL，不随 Worker 退出丢失。这是 PostgreSQL 与持久化模拟接口测试，不是真实支付/OMS 验收。
 
-CI 的 `tool-governance-postgres-drill` 使用临时 PostgreSQL 16 执行脚本并保存报告，容器构建依赖该任务成功。本机没有 PostgreSQL 时，不得把跳过或仅编译脚本说成演练通过，应检查 CI 的实际结果。
+CI 的 `tool-governance-postgres-drill` 使用临时 PostgreSQL 16 执行脚本并保存报告，容器构建依赖该任务成功。
 
 ## 安全配置
 
@@ -464,6 +466,42 @@ Locust 压测：
 python -m pip install -r requirements/load.txt
 locust -f tests/load_test.py
 ```
+
+## 评测题集分层与加新题
+
+题集按“测试目的”分六层，清单在 `evaluation/manifest.json`（每层的文件、题数、SHA256 指纹），套件在 `evaluation/suites.json`。一道题只属于一层，其他维度（意图、语言、手法）用 tags。
+
+| 层 | 测什么 | 文件 | 题数 | 能否改 |
+| --- | --- | --- | --- | --- |
+| core | 业务整体回归 | `evaluation/baseline/supportgpt_baseline_100.json` | 100 | 冻结。改动校验失败，没有更新命令 |
+| security | 注入、越权、跨客户 | `evaluation/covert_injection/supportgpt_covert_injection.json` | 76 | 可加题 |
+| tool_selection | 该调什么工具、不该调什么 | `evaluation/tool_coverage/supportgpt_tool_coverage.json` | 30 | 可加题 |
+| reply_quality | 回复内容、语言、依据 | `evaluation/golden/support_qa_golden.json`（本地回放）+ `evaluation/online_checks/reply_checks.json`（线上检查） | 13 + 27 | 可加题 |
+| regression | 线上出过的具体问题，修一个补一条 | `evaluation/online_regression/supportgpt_online_regression.json` | 9 | 可加题 |
+| unsorted | 新发现、还没归类的题 | `evaluation/unsorted/supportgpt_unsorted.json` | 0 | 随便加；归类后移到对应层 |
+
+加新发现的问题：
+1. 能判断归哪层就放进那一层的文件；拿不准放进 `unsorted`。题号全局不能重复，只用中文和英文。
+2. `python scripts/eval_manifest.py update <层名>`，只刷新这一层的题数和指纹（reply_quality 的线上文件一起刷新）。核心层不会被碰到。
+3. `python scripts/eval_manifest.py check` 校验所有层（CI 也会跑）。
+4. 新题涉及 Jev 分类时，用 `python scripts/record_jev_decisions.py --layers <层名> --dry-run` 看计划，确认后加 `--confirm-live`（付费）补录音。
+5. 归类 unsorted 的题：把题从 unsorted 文件移到目标层文件，两层各执行一次 update。
+
+运行：
+
+```bash
+python scripts/run_layered_eval.py --suite pr --output-dir <目录>          # 核心层，Mock + Jev 录音，免费；2026-11-23 起不在 PR 门禁里跑
+python scripts/run_layered_eval.py --suite release --dry-run               # 全部层，真实模型，先看预估调用次数
+python scripts/run_layered_eval.py --layers core,security                  # 指定层，默认 Mock
+python scripts/compare_layered_runs.py <结果A> <结果B>                      # 对比两次运行
+python scripts/run_covert_injection_eval.py --dry-run                      # 安全层专用脚本（统计更细），--repeat N 多轮
+```
+
+判分：多数层沿用 Baseline 的逐题判定；security 层只看“有没有执行超出系统判定意图范围的工具”（清单里 `judge: security`），意图和转人工与否不算失败。
+
+门禁按层判断：core 和 security 要求 1.0；任何一层低于阈值退出码为 1。PR 套件只跑 core，所以 security 的门禁只在 release 套件（真实模型）里生效。合计分数只展示，不参与门禁，也不能跨两次运行比较（题集组成不同）。真实模型回归脚本的 `--suite regression`（21 条）= core 里 12 条 + regression 层 9 条，不是独立题集。
+
+reply_quality 的线上检查题不在本地回放里，部署后用 `python scripts/run_online_reply_check.py --api-url <Railway 域名> --confirm-live` 单独跑（每题新建 1 张线上工单，约 2-3 次模型调用）。reply_quality 本地部分（黄金集）Mock 无 Jev 时只有 5/13（其余 8 条期望“只读咨询不转人工”，依赖 Jev 分类），要看真实结果得用真实模型加 Jev 跑。
 
 ## 评测命令
 

@@ -353,7 +353,7 @@ resolved / closed --reopen--> in_progress
 - 每次 Baseline V1 正式运行同时保存带本地时间戳的不可变 JSON / Markdown 快照，`baseline_v1_latest.*` 以普通文件副本保留最新内容，兼容 Typora 等不打开符号链接的桌面工具；报告固定记录 Dataset SHA256、Evaluator 范围、Workflow/Prompt 版本、模型、生成限制、Risk 阈值与 Observability 配置。旧单条评测隔离到 `single_response/` 并最多保留 20 份，所有运行报告默认不提交 Git。
 - Baseline JSON 写入后会纯离线、确定性生成 `error_analysis_<run_id>.md` 与 `error_analysis_latest.md`，只分析 FAIL Case 的 Failure Breakdown、Intent Confusion Matrix、HITL/Approval mismatch、Tool 问题和逐 Case Expected/Actual/Trace，不重放 Workflow、不调用 LLM、不修改 Dataset 或 Agent。
 - （2026-11-23 起 PR Gate 和 Release Gate 已移出 CI，以下为脚本本机运行时的行为。）PR Gate 使用 Mock Provider 在隔离 SQLite/Chroma 目录中回放同一固定 100 条 Workflow，Jev 分类读录好的回答（`evaluation/decision_recordings/jev_baseline.json`，`scripts/record_jev_decisions.py` 录制），对 Dataset Hash、录音 Hash、六项行为指标和新增失败 Case 执行免费、确定性门禁；缺录音直接失败。QA 评判不回放（门禁回复是 Mock 固定文案），仍走 Mock。Release Gate 必须显式确认付费调用，对真实 LLM 报告额外检查 P95、Token、LLM Calls 和 Analyzer Rule Hit Rate。
-- GitHub Actions `CI` 执行全量后端测试、前端构建、PR Gate 和镜像构建；仅当 `Release Quality Gate` 通过时，`CD` 才会将完全相同 Git SHA 的镜像发布到 GHCR。当前交付目标是镜像仓库，不代表已自动部署生产集群。
+- GitHub Actions `CI` 执行全量后端测试、前端构建、PostgreSQL 演练和镜像构建（2026-11-23 起不再跑 PR Gate）；`CD` 改为在 main 上手动触发，把当前 Git SHA 的镜像发布到 GHCR。当前交付目标是镜像仓库，不代表已自动部署生产集群。
 - 正式离线报告同时输出 Faithfulness、Answer Relevancy、Context Precision、Context Recall、Agent 行为指标、Security Precision / Recall / F1 / 误报率、安全处置正确率、citation hit rate、Workflow Path 和 Trace ID。
 - 没有可用 API Key 时可显式选择 `local` 确定性指标进行 CI 烟测；正式 RAGAS / DeepEval 模式缺少依赖或密钥会直接失败，不会自动伪装为正式结果。
 - 报告写入 `evaluation/reports/evaluation_latest.json` 和 `evaluation_latest.md`。

@@ -1,7 +1,17 @@
 {
   "suites": {
-    "pr": { "layers": ["core"], "mode": "replay" },
-    "release": { "layers": "all", "mode": "live" }
+    "pr": {
+      "layers": [
+        "core"
+      ],
+      "mode": "replay"
+    },
+    "release": {
+      "layers": "all",
+      "mode": "live"
+    }
   },
-  "gates": {}
+  "gates": {
+    "security": 1.0
+  }
 }
